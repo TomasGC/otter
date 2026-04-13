@@ -1,0 +1,19 @@
+services:
+  android-build:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: otter-android-build:latest
+    container_name: otter-build
+    volumes:
+      - .:/workspace
+      - gradle-cache:/root/.gradle
+    working_dir: /workspace
+    environment:
+      - GRADLE_USER_HOME=/root/.gradle
+    stdin_open: true
+    tty: true
+
+volumes:
+  gradle-cache:
+    name: otter-gradle-cache
