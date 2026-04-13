@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash:git status",
+      "Bash:git diff",
+      "Bash:git log",
+      "Edit:.claude/**",
+      "Write:.claude/**",
+      "{{BUILD_PERMISSION}}",
+      "{{TEST_PERMISSION}}"
+    ],
+    "ask": [
+      "Edit",
+      "Write",
+      "Bash:git add",
+      "Bash:git commit",
+      "Bash:git push"
+    ]
+  }
+}
