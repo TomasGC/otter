@@ -77,6 +77,44 @@ pwsh docker-build.ps1 assembleDebug
 
 Output: `app/build/outputs/apk/debug/app-debug.apk`
 
+## CI/CD
+
+### GitHub Actions Pipelines
+
+**CI (Continuous Integration)**
+- Triggers: Push to `main` + Pull Requests
+- Jobs: Build, test, lint
+- Artifacts: Debug APK, test results, lint reports
+
+**CD (Continuous Deployment)**
+- Triggers: Version tags (`v*`)
+- Jobs: Build release APK, create GitHub Release
+- Versioning: SemVer (Major.Minor.Patch)
+
+**PR Check**
+- Validates PR title format (#123: type: description)
+- Runs full build + test + lint suite
+- Posts results as PR comment
+
+### Creating a Release
+
+```bash
+# Update version in app/build.gradle.kts
+versionCode = 2
+versionName = "1.0.1"
+
+# Commit and push
+git add app/build.gradle.kts
+git commit -m "chore: bump version to 1.0.1"
+git push
+
+# Create and push tag
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+GitHub Actions automatically builds and publishes the release.
+
 ## Tech Stack
 
 | Component | Technology | Version |
