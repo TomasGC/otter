@@ -6,6 +6,37 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ## Work History
 
+2026-04-14 - #5 ZIP Extraction Implementation
+- Implemented complete ZIP extraction with MVVM + Clean Architecture
+- Created domain models (ArchiveType, ArchiveFile, ExtractionProgress, ExtractionResult)
+- Built ExtractArchiveUseCase with empty archive validation
+- Implemented ZipExtractor with path traversal protection (canonical path validation)
+- Created ArchiveRepositoryImpl with extractor selection logic
+- Set up Hilt DI with AppModule (wires extractors, repository, use case)
+- Wrote comprehensive test suite covering all layers:
+  - ArchiveTypeTest (7 tests): extension detection, edge cases
+  - ZipExtractorTest (8 tests): extraction, subdirectories, empty ZIP, corrupted ZIP, progress callbacks
+  - ArchiveRepositoryImplTest (6 tests): extractor selection, error handling, folder creation
+  - ExtractArchiveUseCaseTest (5 tests): validation, delegation, event propagation
+- Security: blocks path traversal attacks, handles corrupted archives gracefully
+- Build successful, all 26 tests passing (100% pass rate)
+- Code coverage: Domain + Data + DI layers fully tested
+tags: #zip #extraction #mvvm #clean-architecture #security #tdd #testing
+Ref: https://github.com/TomasGC/otter/issues/5
+Commit: a67a9c9
+
+2026-04-13 - #3 Create CI/CD Pipelines
+- Created CI workflow (build, test, lint on push/PR to main)
+- Created CD workflow (build release APK on version tags, create GitHub Release)
+- Created PR Check workflow (validate PR format, run tests, post status comment)
+- Implemented SemVer versioning (Major.Minor.Patch + manual versionCode)
+- Added artifact uploads (APK, test results, lint reports)
+- Documented workflows in .github/README.md
+- Updated main README with CI/CD section and release instructions
+tags: #cicd #github-actions #automation
+Ref: https://github.com/TomasGC/otter/issues/3
+Commit: 4d47d63
+
 2026-04-13 - #1 Project Setup
 - Initialized .claude/ directory with project structure
 - Created CLAUDE.md with Otter-specific instructions (build commands, architecture, dependencies)
