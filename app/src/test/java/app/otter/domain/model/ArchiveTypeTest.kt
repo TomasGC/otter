@@ -47,4 +47,28 @@ class ArchiveTypeTest {
         val result = ArchiveType.fromFileName("my.archive.file.zip")
         assertEquals(ArchiveType.ZIP, result)
     }
+
+    @Test
+    fun `should detect RAR from lowercase extension`() {
+        val result = ArchiveType.fromFileName("test.rar")
+        assertEquals(ArchiveType.RAR, result)
+    }
+
+    @Test
+    fun `should detect RAR from uppercase extension`() {
+        val result = ArchiveType.fromFileName("TEST.RAR")
+        assertEquals(ArchiveType.RAR, result)
+    }
+
+    @Test
+    fun `should detect RAR from mixed case extension`() {
+        val result = ArchiveType.fromFileName("MyFile.RaR")
+        assertEquals(ArchiveType.RAR, result)
+    }
+
+    @Test
+    fun `should detect RAR with path`() {
+        val result = ArchiveType.fromFileName("/path/to/archive.rar")
+        assertEquals(ArchiveType.RAR, result)
+    }
 }

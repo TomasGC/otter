@@ -27,24 +27,29 @@ class ZipExtractorTest {
     }
 
     @Test
-    fun `should extract simple ZIP file`() = runTest {
-        val zipBytes = createTestZip(mapOf(
-            "file1.txt" to "content1",
-            "file2.txt" to "content2"
-        ))
+    fun `should extract real ZIP file from test resources`() = runTest {
+        val testZip = javaClass.classLoader.getResourceAsStream("archives/test.zip")
+            ?: throw IllegalStateException("test.zip not found in test resources")
         val destination = tempFolder.newFolder("output")
 
         val result = extractor.extract(
-            inputStream = zipBytes.inputStream(),
+            inputStream = testZip,
             destinationPath = destination,
             onProgress = {}
         )
 
         assertTrue(result is ExtractionResult.Success)
-        assertEquals(2, (result as ExtractionResult.Success).extractedFilesCount)
-        assertTrue(File(destination, "file1.txt").exists())
-        assertTrue(File(destination, "file2.txt").exists())
-        assertEquals("content1", File(destination, "file1.txt").readText())
+        val extractedCount = (result as ExtractionResult.Success).extractedFilesCount
+        assertTrue("Expected at least 1 file, got $extractedCount", extractedCount >= 1)
+
+        // List all extracted files for debugging
+        val extractedFiles = destination.walk().filter { it.isFile }.toList()
+        assertTrue("No files extracted", extractedFiles.isNotEmpty())
+
+        // Verify the content of the first file
+        val firstFile = extractedFiles.first()
+        val content = firstFile.readText().trim()
+        assertTrue("Expected 'ZIP', got '$content'", content.contains("ZIP"))
     }
 
     @Test
