@@ -3,6 +3,7 @@ package app.otter.di
 import android.app.Application
 import android.content.Context
 import app.otter.data.extractor.ArchiveExtractor
+import app.otter.data.extractor.RarExtractor
 import app.otter.data.extractor.ZipExtractor
 import app.otter.data.repository.ArchiveRepositoryImpl
 import app.otter.domain.repository.ArchiveRepository
@@ -25,7 +26,8 @@ object AppModule {
     @Provides
     @Singleton
     fun provideExtractors(): List<ArchiveExtractor> = listOf(
-        ZipExtractor()
+        ZipExtractor(),
+        RarExtractor()
     )
 
     @Provides

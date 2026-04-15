@@ -1,7 +1,8 @@
 package app.otter.domain.model
 
 enum class ArchiveType(val extensions: List<String>) {
-    ZIP(listOf(".zip"));
+    ZIP(listOf(".zip")),
+    RAR(listOf(".rar"));
 
     companion object {
         fun fromFileName(name: String): ArchiveType? {

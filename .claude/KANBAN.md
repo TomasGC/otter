@@ -6,6 +6,21 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ## Work History
 
+2026-04-15 - #7 RAR Extraction Support
+- Implemented RarExtractor using 7-Zip-JBinding-4Android library (supports RAR4 and RAR5 formats)
+- Added two-tier testing strategy: unit tests (type support) + instrumented tests (full extraction with native libs)
+- Enhanced CI/CD with instrumented tests on Android emulator (API 29) using android-emulator-runner
+- Added AVD caching for faster CI runs (first run ~5-7 min, subsequent ~2-3 min)
+- Fixed ZipExtractor inputStream.reset() issue (read bytes into memory for two-pass approach)
+- Added JitPack repository for GitHub-hosted dependencies
+- Configured native library packaging (.so files) with useLegacyPackaging
+- Created test fixtures (test.rar, test.zip) for both unit and instrumented tests
+- Security: path traversal protection, progress tracking, proper resource cleanup
+- Build successful, all 37 tests passing (33 unit + 4 integration)
+tags: #rar #extraction #7zip #testing #ci-cd #emulator
+Ref: https://github.com/TomasGC/otter/issues/7
+Commit: f38ed34
+
 2026-04-14 - #5 ZIP Extraction Implementation
 - Implemented complete ZIP extraction with MVVM + Clean Architecture
 - Created domain models (ArchiveType, ArchiveFile, ExtractionProgress, ExtractionResult)
