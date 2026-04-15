@@ -22,9 +22,12 @@ class ZipExtractor @Inject constructor() : ArchiveExtractor {
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult = withContext(Dispatchers.IO) {
         try {
+            // Read entire stream into memory (required for two-pass approach)
+            val bytes = inputStream.readBytes()
+
             // First pass: count entries
             val entries = mutableListOf<ZipEntry>()
-            ZipInputStream(inputStream).use { zipStream ->
+            ZipInputStream(bytes.inputStream()).use { zipStream ->
                 var entry: ZipEntry? = zipStream.nextEntry
                 while (entry != null) {
                     if (!entry.isDirectory) {
@@ -38,8 +41,7 @@ class ZipExtractor @Inject constructor() : ArchiveExtractor {
             var extractedCount = 0
 
             // Second pass: extract files
-            inputStream.reset()
-            ZipInputStream(inputStream).use { zipStream ->
+            ZipInputStream(bytes.inputStream()).use { zipStream ->
                 var entry: ZipEntry? = zipStream.nextEntry
                 while (entry != null) {
                     // Process current entry
