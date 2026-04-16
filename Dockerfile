@@ -1,12 +1,19 @@
 # Android Build Environment
 FROM eclipse-temurin:17-jdk-jammy
 
-# Install dependencies
-RUN apt-get update && apt-get install -y \
-    wget \
-    unzip \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+# Install dependencies with retry logic for mirror sync issues
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    # Retry apt-get update up to 3 times with 5s delay
+    (apt-get update --fix-missing || \
+     (sleep 5 && apt-get update --fix-missing) || \
+     (sleep 10 && apt-get update --fix-missing)) && \
+    apt-get install -y --no-install-recommends \
+        wget \
+        unzip \
+        git \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Set environment variables
 ENV ANDROID_HOME=/opt/android-sdk

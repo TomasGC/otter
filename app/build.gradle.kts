@@ -132,14 +132,19 @@ tasks.register<JacocoReport>("jacocoTestReport") {
         "**/Hilt_*.class"
     )
 
-    val debugTree = fileTree("${buildDir}/tmp/kotlin-classes/debug") {
+    // Collect all compiled class directories (both Kotlin and Java)
+    val classDirectoriesTree = fileTree(buildDir) {
+        include(
+            "tmp/kotlin-classes/debug/**",
+            "intermediates/javac/debug/classes/**"
+        )
         exclude(fileFilter)
     }
 
     val mainSrc = "${project.projectDir}/src/main/java"
 
     sourceDirectories.setFrom(files(mainSrc))
-    classDirectories.setFrom(files(debugTree))
+    classDirectories.setFrom(files(classDirectoriesTree))
     executionData.setFrom(fileTree(buildDir) {
         include("jacoco/testDebugUnitTest.exec")
     })
