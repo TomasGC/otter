@@ -25,6 +25,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            enableAndroidTestCoverage = true
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -62,7 +65,16 @@ android {
     }
 
     testOptions {
-        unitTests.isReturnDefaultValues = true
+        unitTests {
+            isReturnDefaultValues = true
+            isIncludeAndroidResources = true
+            all {
+                it.extensions.configure(JacocoTaskExtension::class.java) {
+                    isIncludeNoLocationClasses = true
+                    excludes = listOf("jdk.internal.*")
+                }
+            }
+        }
     }
 }
 
@@ -110,7 +122,7 @@ kapt {
     correctErrorTypes = true
 }
 
-// Jacoco configuration for test coverage
+// Jacoco configuration for test coverage (unit + instrumented)
 tasks.register<JacocoReport>("jacocoTestReport") {
     dependsOn("testDebugUnitTest")
 
@@ -132,21 +144,26 @@ tasks.register<JacocoReport>("jacocoTestReport") {
         "**/Hilt_*.class"
     )
 
-    // Collect all compiled class directories (both Kotlin and Java)
-    val classDirectoriesTree = fileTree(buildDir) {
-        include(
-            "tmp/kotlin-classes/debug/**",
-            "intermediates/javac/debug/classes/**"
-        )
+    // Direct paths to compiled classes
+    val kotlinClasses = fileTree("${buildDir}/tmp/kotlin-classes/debug") {
+        exclude(fileFilter)
+    }
+
+    val javaClasses = fileTree("${buildDir}/intermediates/javac/debug/classes") {
         exclude(fileFilter)
     }
 
     val mainSrc = "${project.projectDir}/src/main/java"
 
     sourceDirectories.setFrom(files(mainSrc))
-    classDirectories.setFrom(files(classDirectoriesTree))
+    classDirectories.setFrom(files(kotlinClasses, javaClasses))
+
+    // Combine unit test + instrumented test coverage
     executionData.setFrom(fileTree(buildDir) {
-        include("jacoco/testDebugUnitTest.exec")
+        include(
+            "jacoco/testDebugUnitTest.exec",
+            "outputs/code_coverage/debugAndroidTest/connected/**/*.ec"
+        )
     })
 }
 

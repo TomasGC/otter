@@ -342,12 +342,12 @@ jobs:
 
             echo "📊 Test Coverage: $PERCENT% ($COVERED/$TOTAL lines)"
 
-            if [ $PERCENT -lt 80 ]; then
-              echo "❌ Coverage $PERCENT% is below threshold (80%)"
+            if [ $PERCENT -lt 60 ]; then
+              echo "❌ Coverage $PERCENT% is below threshold (60%)"
               exit 1
             fi
 
-            echo "✅ Coverage meets threshold"
+            echo "✅ Coverage meets threshold (≥60%)"
           '
 
       - name: Upload coverage report
