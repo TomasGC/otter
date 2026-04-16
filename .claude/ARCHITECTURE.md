@@ -525,4 +525,79 @@ suspend fun extract(uri: Uri, destination: File): Flow<ExtractionResult> = callb
 
 ---
 
+## CI/CD Pipeline
+
+**GitHub Actions workflows** (`.github/workflows/ci.yml`):
+
+### Build & Test Job
+- Docker-based build (reproducible environment)
+- Gradle assembly (debug APK)
+- Unit tests execution
+- Lint checks (Android Lint)
+- Artifact uploads (APK, test results, lint reports)
+
+### Code Quality Checks
+**ktlint** - Kotlin style enforcement
+- Reviewdog integration for PR comments
+- Non-blocking warnings (fail_on_error: false)
+- Version: 0.50.0
+
+**Detekt** - Kotlin static analysis
+- Complexity checks (ComplexMethod ≤15, LongMethod ≤60)
+- Potential bugs detection (UnreachableCode, UnsafeCast)
+- Style violations (MagicNumber, MaxLineLength: 120)
+- Naming conventions validation
+- Configuration: `detekt.yml`
+
+**Android Lint** - Android-specific issues
+- Resource optimization suggestions
+- API usage validation
+- Accessibility checks
+- Reviewdog PR review integration
+
+### Security & Compliance
+**OWASP Dependency Check**
+- Vulnerability scanning for dependencies
+- CVSS threshold: 7.0 (High/Critical only)
+- Automatic PR comments for findings
+- Suppressions file: `app/dependency-check-suppressions.xml`
+
+**TruffleHog** - Secret detection
+- Scans git history for exposed secrets
+- Verified secrets only (--only-verified)
+- Runs on every PR
+
+### Coverage & Quality Gates
+**Jacoco Test Coverage**
+- Minimum threshold: 80%
+- XML and HTML reports generated
+- Excludes generated code (Hilt, R.class, BuildConfig)
+- Fails build if below threshold
+
+**APK Size Check**
+- Maximum size: 50MB
+- Monitors app bloat
+- Alerts on threshold violations
+
+**Context File Validation**
+- Ensures KANBAN.md and ARCHITECTURE.md updated with code changes
+- Prevents stale documentation
+- Automatic PR comments for missing updates
+
+### PR Validation
+**Title format**: `#123: type: description`
+- Types: feat, fix, refactor, test, docs, chore, style, perf
+- Enforced via regex validation
+- Blocks merge on format violations
+
+### Instrumented Tests (Separate Job)
+- Android Emulator (API 29)
+- AVD caching for performance
+- RAR5 extraction validation (native .so libs)
+- Real device testing for file I/O
+
+**All checks run in parallel** with non-blocking failures to provide comprehensive feedback without preventing rapid iteration.
+
+---
+
 **End of Architecture Documentation**

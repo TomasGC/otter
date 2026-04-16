@@ -6,6 +6,18 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ## Work History
 
+2026-04-16 - #12 Add Automated Code Review to GitHub Actions
+- Integrated Reviewdog with ktlint for Kotlin style checking on PRs
+- Added Detekt static analysis for code quality (complexity, naming, potential bugs)
+- Implemented Jacoco test coverage verification with 80% threshold enforcement
+- Added OWASP Dependency Check for vulnerability scanning (CVSS ≥7.0)
+- Added APK size monitoring (50MB limit) and TruffleHog secret detection
+- Consolidated duplicate workflows (ci.yml and pr-check.yml merged)
+- Added context file validation to ensure KANBAN.md/ARCHITECTURE.md updated with code changes
+tags: #ci-cd #code-quality #reviewdog #security #testing
+Ref: https://github.com/TomasGC/otter/issues/12
+Commit: d3386a8
+
 2026-04-16 - #9 Auto Extraction Mode with Background Service
 - Implemented ExtractionService as foreground service with progress notifications (file counter, percentage)
 - Optimized ZIP extraction: direct stream + 256KB buffer (no temp file) for 3-5x faster performance

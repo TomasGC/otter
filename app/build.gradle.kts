@@ -3,6 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("com.google.dagger.hilt.android")
     id("kotlin-kapt")
+    id("jacoco")
+    id("org.owasp.dependencycheck") version "8.4.0"
 }
 
 android {
@@ -106,4 +108,46 @@ dependencies {
 
 kapt {
     correctErrorTypes = true
+}
+
+// Jacoco configuration for test coverage
+tasks.register<JacocoReport>("jacocoTestReport") {
+    dependsOn("testDebugUnitTest")
+
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+
+    val fileFilter = listOf(
+        "**/R.class",
+        "**/R$*.class",
+        "**/BuildConfig.*",
+        "**/Manifest*.*",
+        "**/*Test*.*",
+        "android/**/*.*",
+        "**/*_Hilt*.class",
+        "**/*_Factory.class",
+        "**/*_MembersInjector.class",
+        "**/Hilt_*.class"
+    )
+
+    val debugTree = fileTree("${buildDir}/tmp/kotlin-classes/debug") {
+        exclude(fileFilter)
+    }
+
+    val mainSrc = "${project.projectDir}/src/main/java"
+
+    sourceDirectories.setFrom(files(mainSrc))
+    classDirectories.setFrom(files(debugTree))
+    executionData.setFrom(fileTree(buildDir) {
+        include("jacoco/testDebugUnitTest.exec")
+    })
+}
+
+// Dependency check configuration
+dependencyCheck {
+    analyzers.assemblyEnabled = false
+    failBuildOnCVSS = 7.0f
+    suppressionFile = file("dependency-check-suppressions.xml").absolutePath
 }
