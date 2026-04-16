@@ -129,9 +129,9 @@ class ArchiveRepositoryImplTest {
     }
 
     @Test
-    fun `should create destination folder with archive name`() = runTest {
+    fun `should use destination path directly`() = runTest {
         val archive = createTestArchive()
-        val destinationUri = Uri.parse("file:///downloads")
+        val destinationUri = Uri.parse("file:///downloads/test")
         val inputStream = ByteArrayInputStream(byteArrayOf())
 
         every { contentResolver.openInputStream(archive.uri) } returns inputStream
@@ -139,7 +139,7 @@ class ArchiveRepositoryImplTest {
             zipExtractor.extract(any(), any(), any())
         } answers {
             val destinationPath = secondArg<File>()
-            assertTrue(destinationPath.path.contains("test"))
+            assertEquals("/downloads/test", destinationPath.path)
             ExtractionResult.Success(destinationPath.absolutePath, 3)
         }
 

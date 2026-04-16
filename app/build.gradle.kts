@@ -14,7 +14,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = "0.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -85,6 +85,9 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+
+    // DocumentFile for accessing parent folder
+    implementation("androidx.documentfile:documentfile:1.0.1")
 
     // 7-Zip for Android (supports RAR5 and all archive formats)
     implementation("com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.03")
