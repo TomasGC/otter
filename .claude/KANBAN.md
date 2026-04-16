@@ -7,16 +7,17 @@ Track of work sessions and completed tasks linked to GitHub issues.
 ## Work History
 
 2026-04-16 - #12 Add Automated Code Review to GitHub Actions
-- Integrated Reviewdog with ktlint for Kotlin style checking on PRs
+- Integrated Reviewdog with ktlint for Kotlin style checking on PRs (action-setup + official CLI)
 - Added Detekt static analysis for code quality (complexity, naming, potential bugs)
 - Implemented Jacoco test coverage verification with 80% threshold enforcement
 - Added OWASP Dependency Check for vulnerability scanning (CVSS ≥7.0)
 - Added APK size monitoring (50MB limit) and TruffleHog secret detection
 - Consolidated duplicate workflows (ci.yml and pr-check.yml merged)
 - Added context file validation to ensure KANBAN.md/ARCHITECTURE.md updated with code changes
+- Used official tools + reviewdog/action-setup (no third-party actions) for security/supply chain safety
 tags: #ci-cd #code-quality #reviewdog #security #testing
 Ref: https://github.com/TomasGC/otter/issues/12
-Commit: d3386a8
+Commit: 4f49938
 
 2026-04-16 - #9 Auto Extraction Mode with Background Service
 - Implemented ExtractionService as foreground service with progress notifications (file counter, percentage)
@@ -30,7 +31,7 @@ Commit: d3386a8
 - Performance: ZIP extraction reduced from 15+ min to 3-5 min for 2.6GB archives
 tags: #background-service #optimization #notifications #cancellation #logging
 Ref: https://github.com/TomasGC/otter/issues/9
-Commit: cc5da35
+Commit: 9ba1347
 
 2026-04-15 - #7 RAR Extraction Support
 - Implemented RarExtractor using 7-Zip-JBinding-4Android library (supports RAR4 and RAR5 formats)
@@ -45,7 +46,7 @@ Commit: cc5da35
 - Build successful, all 37 tests passing (33 unit + 4 integration)
 tags: #rar #extraction #7zip #testing #ci-cd #emulator
 Ref: https://github.com/TomasGC/otter/issues/7
-Commit: f38ed34
+Commit: 7e19250
 
 2026-04-14 - #5 ZIP Extraction Implementation
 - Implemented complete ZIP extraction with MVVM + Clean Architecture
@@ -64,7 +65,7 @@ Commit: f38ed34
 - Code coverage: Domain + Data + DI layers fully tested
 tags: #zip #extraction #mvvm #clean-architecture #security #tdd #testing
 Ref: https://github.com/TomasGC/otter/issues/5
-Commit: a67a9c9
+Commit: b3d6245
 
 2026-04-13 - #3 Create CI/CD Pipelines
 - Created CI workflow (build, test, lint on push/PR to main)
@@ -76,7 +77,7 @@ Commit: a67a9c9
 - Updated main README with CI/CD section and release instructions
 tags: #cicd #github-actions #automation
 Ref: https://github.com/TomasGC/otter/issues/3
-Commit: 4d47d63
+Commit: f65528c
 
 2026-04-13 - #1 Project Setup
 - Initialized .claude/ directory with project structure
@@ -93,7 +94,7 @@ Commit: 4d47d63
 - Created README with build commands and tech stack overview
 tags: #setup #docker #android
 Ref: https://github.com/TomasGC/otter/issues/1
-Commits: 9693b4f, f69dfa4
+Commits: 9693b4f, b233721
 
 ---
 
