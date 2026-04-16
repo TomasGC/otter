@@ -11,7 +11,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
-import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -36,12 +35,16 @@ class ExtractionDestinationResolverTest {
         val destination = resolver.createDestinationFolder(parentPath, fileName)
 
         // Then
-        assertEquals("Folder name should match archive name without extension",
+        assertEquals(
+            "Folder name should match archive name without extension",
             "archive",
-            destination.name)
-        assertEquals("Parent path should match",
+            destination.name,
+        )
+        assertEquals(
+            "Parent path should match",
             parentPath,
-            destination.parentFile?.absolutePath)
+            destination.parentFile?.absolutePath,
+        )
     }
 
     @Test
@@ -54,9 +57,11 @@ class ExtractionDestinationResolverTest {
         val destination = resolver.createDestinationFolder(parentPath, fileName)
 
         // Then
-        assertEquals("Should remove only last extension",
+        assertEquals(
+            "Should remove only last extension",
             "my.archive.v1.2",
-            destination.name)
+            destination.name,
+        )
     }
 
     @Test
@@ -69,9 +74,11 @@ class ExtractionDestinationResolverTest {
         val destination = resolver.createDestinationFolder(parentPath, fileName)
 
         // Then
-        assertEquals("Folder name should match file name",
+        assertEquals(
+            "Folder name should match file name",
             "archive_no_extension",
-            destination.name)
+            destination.name,
+        )
     }
 
     @Test
@@ -84,11 +91,15 @@ class ExtractionDestinationResolverTest {
 
         // Then
         assertNotNull("Destination should not be null", destination)
-        assertEquals("Folder name should match archive name",
+        assertEquals(
+            "Folder name should match archive name",
             "test",
-            destination.name)
-        assertTrue("Path should contain Download",
-            destination.absolutePath.contains("Download"))
+            destination.name,
+        )
+        assertTrue(
+            "Path should contain Download",
+            destination.absolutePath.contains("Download"),
+        )
     }
 
     @Test
@@ -101,9 +112,11 @@ class ExtractionDestinationResolverTest {
         val destination = resolver.createDestinationFolder(parentPath, fileName)
 
         // Then
-        assertEquals("Special characters should be preserved",
+        assertEquals(
+            "Special characters should be preserved",
             "my archive (2024) [v1]",
-            destination.name)
+            destination.name,
+        )
     }
 
     @Test
@@ -116,9 +129,11 @@ class ExtractionDestinationResolverTest {
         val destination = resolver.createDestinationFolder(parentPath, fileName)
 
         // Then
-        assertEquals("Unicode should be preserved",
+        assertEquals(
+            "Unicode should be preserved",
             "文件",
-            destination.name)
+            destination.name,
+        )
     }
 
     @Test
@@ -132,9 +147,11 @@ class ExtractionDestinationResolverTest {
         val destination = resolver.createDestinationFolder(parentPath, fileName)
 
         // Then
-        assertEquals("Long name should be preserved",
+        assertEquals(
+            "Long name should be preserved",
             longName,
-            destination.name)
+            destination.name,
+        )
     }
 
     @Test
@@ -163,11 +180,15 @@ class ExtractionDestinationResolverTest {
 
         // Then
         assertNotNull("Destination should not be null", destination)
-        assertTrue("Should fallback to Downloads",
-            destination.absolutePath.contains("Download"))
-        assertEquals("Folder name should be correct",
+        assertTrue(
+            "Should fallback to Downloads",
+            destination.absolutePath.contains("Download"),
+        )
+        assertEquals(
+            "Folder name should be correct",
             "test",
-            destination.name)
+            destination.name,
+        )
     }
 
     @Test
@@ -195,8 +216,10 @@ class ExtractionDestinationResolverTest {
         // substringBeforeLast(".zip", ".") returns "." (the part before last dot)
         // File(".") might normalize to current directory
         assertNotNull("Destination should not be null", destination)
-        assertTrue("Folder name should be . or normalized",
-            destination.name == "." || destination.name.isNotEmpty())
+        assertTrue(
+            "Folder name should be . or normalized",
+            destination.name == "." || destination.name.isNotEmpty(),
+        )
     }
 
     @Test
@@ -209,8 +232,10 @@ class ExtractionDestinationResolverTest {
         val destination = resolver.createDestinationFolder(parentPath, fileName)
 
         // Then
-        assertEquals("Parent should be nested path",
+        assertEquals(
+            "Parent should be nested path",
             parentPath,
-            destination.parentFile?.absolutePath)
+            destination.parentFile?.absolutePath,
+        )
     }
 }

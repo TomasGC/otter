@@ -122,9 +122,11 @@ class PathValidatorTest {
 
         // Then
         assertTrue("Output file should exist", outputFile.parentFile?.exists() ?: false)
-        assertEquals("File should be in correct location",
+        assertEquals(
+            "File should be in correct location",
             destination.absolutePath,
-            outputFile.parentFile?.parentFile?.parentFile?.absolutePath)
+            outputFile.parentFile?.parentFile?.parentFile?.absolutePath,
+        )
     }
 
     @Test
@@ -138,8 +140,10 @@ class PathValidatorTest {
             PathValidator.createSafeOutputFile(destination, entryName)
             assertTrue("Should throw SecurityException", false)
         } catch (e: SecurityException) {
-            assertTrue("Error should mention entry outside destination",
-                e.message?.contains("outside") ?: false)
+            assertTrue(
+                "Error should mention entry outside destination",
+                e.message?.contains("outside") ?: false,
+            )
         }
     }
 
