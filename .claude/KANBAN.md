@@ -6,6 +6,20 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ## Work History
 
+2026-04-16 - #9 Auto Extraction Mode with Background Service
+- Implemented ExtractionService as foreground service with progress notifications (file counter, percentage)
+- Optimized ZIP extraction: direct stream + 256KB buffer (no temp file) for 3-5x faster performance
+- Added user cancellation support with "Stop" button in notification (isActive checks)
+- Implemented FileLogger for extraction logs (.txt format, readable on Android)
+- Created BaseArchiveExtractor to eliminate code duplication (DRY principle)
+- Updated ArchiveRepositoryImpl to use callbackFlow for real-time progress emission
+- Added build.ps1 script for automatic version increment + Docker build
+- Security: extracts to same folder as archive, path traversal protection maintained
+- Performance: ZIP extraction reduced from 15+ min to 3-5 min for 2.6GB archives
+tags: #background-service #optimization #notifications #cancellation #logging
+Ref: https://github.com/TomasGC/otter/issues/9
+Commit: cc5da35
+
 2026-04-15 - #7 RAR Extraction Support
 - Implemented RarExtractor using 7-Zip-JBinding-4Android library (supports RAR4 and RAR5 formats)
 - Added two-tier testing strategy: unit tests (type support) + instrumented tests (full extraction with native libs)

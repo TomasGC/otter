@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- External files directory for extracted archives -->
+    <external-files-path
+        name="extracted"
+        path="extracted/" />
+</paths>
