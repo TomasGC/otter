@@ -538,6 +538,8 @@ suspend fun extract(uri: Uri, destination: File): Flow<ExtractionResult> = callb
 
 ### Code Quality Checks
 **ktlint** - Kotlin style enforcement
+- Official ktlint CLI + reviewdog/action-setup (no third-party actions)
+- Checkstyle format output piped to reviewdog
 - Reviewdog integration for PR comments
 - Non-blocking warnings (fail_on_error: false)
 - Version: 0.50.0
@@ -548,12 +550,14 @@ suspend fun extract(uri: Uri, destination: File): Flow<ExtractionResult> = callb
 - Style violations (MagicNumber, MaxLineLength: 120)
 - Naming conventions validation
 - Configuration: `detekt.yml`
+- XML report uploaded as artifact
 
 **Android Lint** - Android-specific issues
 - Resource optimization suggestions
 - API usage validation
 - Accessibility checks
-- Reviewdog PR review integration
+- Reviewdog integration with androidlint format
+- Uses official reviewdog/action-setup (supply chain security)
 
 ### Security & Compliance
 **OWASP Dependency Check**
