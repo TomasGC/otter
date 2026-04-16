@@ -3,7 +3,6 @@ package app.otter.util
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -154,9 +153,11 @@ class FileLoggerTest {
         // Then
         val logFilePath = FileLogger.getLogFilePath()!!
         val logFile = File(logFilePath)
-        assertEquals("Log file should be in parent directory",
+        assertEquals(
+            "Log file should be in parent directory",
             destinationFolder.parentFile?.absolutePath,
-            logFile.parentFile?.absolutePath)
+            logFile.parentFile?.absolutePath,
+        )
     }
 
     @Test
@@ -172,9 +173,11 @@ class FileLoggerTest {
         // Then
         val logContent = File(logFilePath).readText()
         // Timestamp format: HH:mm:ss.SSS (e.g., 14:30:25.123)
-        assertTrue("Log should contain timestamp",
+        assertTrue(
+            "Log should contain timestamp",
             logContent.contains("Timestamped message") &&
-            Regex("\\d{2}:\\d{2}:\\d{2}\\.\\d{3}").containsMatchIn(logContent))
+                Regex("\\d{2}:\\d{2}:\\d{2}\\.\\d{3}").containsMatchIn(logContent),
+        )
     }
 
     @Test
