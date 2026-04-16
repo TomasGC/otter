@@ -143,12 +143,16 @@ class ZipExtractorTest {
             onProgress = { progressEvents.add(it) }
         )
 
-        assertEquals(3, progressEvents.size)
-        progressEvents.forEachIndexed { index, progress ->
+        // With throttling (1 notification/second), small test files extract too fast
+        // for multiple notifications. Just verify callback is invoked at least once.
+        assertTrue("Progress callback should be called at least once", progressEvents.isNotEmpty())
+
+        progressEvents.forEach { progress ->
             assertTrue(progress is ExtractionProgress.Extracting)
             val extracting = progress as ExtractionProgress.Extracting
-            assertEquals(index + 1, extracting.extractedCount)
-            assertEquals(3, extracting.totalCount)
+            assertTrue("Should have extracted at least one file", extracting.extractedCount > 0)
+            assertEquals(0, extracting.totalCount) // Indeterminate progress (unknown total)
+            assertEquals(0f, extracting.progress) // Indeterminate progress
         }
     }
 

@@ -1,12 +1,15 @@
 package app.otter.data.extractor
 
+import android.util.Log
 import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
+import app.otter.util.FileLogger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
@@ -21,71 +24,96 @@ class ZipExtractor @Inject constructor() : ArchiveExtractor {
         destinationPath: File,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult = withContext(Dispatchers.IO) {
+        var extractedCount = 0
+
         try {
-            // Read entire stream into memory (required for two-pass approach)
-            val bytes = inputStream.readBytes()
+            FileLogger.log("Starting ZIP extraction (optimized: direct stream, 256KB buffer)", TAG)
+            Log.d(TAG, "Starting ZIP extraction")
 
-            // First pass: count entries
-            val entries = mutableListOf<ZipEntry>()
-            ZipInputStream(bytes.inputStream()).use { zipStream ->
+            // Pre-allocate large buffer (256 KB for optimal I/O)
+            val buffer = ByteArray(256 * 1024)
+
+            // Extract directly from input stream - no temp file needed!
+            ZipInputStream(inputStream).use { zipStream ->
                 var entry: ZipEntry? = zipStream.nextEntry
-                while (entry != null) {
+                var lastNotificationTime = 0L
+
+                while (entry != null && isActive) { // Check if coroutine is still active
                     if (!entry.isDirectory) {
-                        entries.add(entry)
-                    }
-                    entry = zipStream.nextEntry
-                }
-            }
+                        val outputFile = File(destinationPath, entry.name)
 
-            val totalCount = entries.size
-            var extractedCount = 0
+                        // Path traversal protection
+                        if (!outputFile.canonicalPath.startsWith(destinationPath.canonicalPath)) {
+                            val error = "Entry outside destination: ${entry.name}"
+                            FileLogger.logError(error, null, TAG)
+                            throw SecurityException(error)
+                        }
 
-            // Second pass: extract files
-            ZipInputStream(bytes.inputStream()).use { zipStream ->
-                var entry: ZipEntry? = zipStream.nextEntry
-                while (entry != null) {
-                    // Process current entry
-                    entry?.let { currentEntry ->
-                        if (!currentEntry.isDirectory) {
-                            val outputFile = File(destinationPath, currentEntry.name)
+                        // Create parent directories
+                        outputFile.parentFile?.mkdirs()
 
-                            // Path traversal protection
-                            if (!outputFile.canonicalPath.startsWith(destinationPath.canonicalPath)) {
-                                throw SecurityException("Zip entry outside destination: ${currentEntry.name}")
+                        // Simple buffered write with large buffer
+                        outputFile.outputStream().buffered(256 * 1024).use { output ->
+                            var bytesRead: Int
+                            while (zipStream.read(buffer).also { bytesRead = it } != -1 && isActive) {
+                                output.write(buffer, 0, bytesRead)
                             }
+                        }
 
-                            outputFile.parentFile?.mkdirs()
+                        // Check if cancelled during file extraction
+                        if (!isActive) {
+                            FileLogger.log("Extraction cancelled by user", TAG)
+                            break
+                        }
 
-                            FileOutputStream(outputFile).use { output ->
-                                zipStream.copyTo(output)
-                            }
+                        extractedCount++
 
-                            extractedCount++
+                        // Throttle notifications: update max every 1000ms (reduced notification overhead)
+                        val currentTime = System.currentTimeMillis()
+                        if (currentTime - lastNotificationTime > 1000) {
+                            lastNotificationTime = currentTime
                             onProgress(
                                 ExtractionProgress.Extracting(
-                                    currentFile = currentEntry.name,
+                                    currentFile = entry.name,
                                     extractedCount = extractedCount,
-                                    totalCount = totalCount,
-                                    progress = extractedCount.toFloat() / totalCount
+                                    totalCount = 0, // Unknown during extraction
+                                    progress = 0f // Indeterminate progress
                                 )
                             )
                         }
+
+                        // Minimal logging - every 500 files
+                        if (extractedCount % 500 == 0) {
+                            FileLogger.log("Extracted $extractedCount files", TAG)
+                        }
                     }
 
-                    // Move to next entry
                     entry = zipStream.nextEntry
                 }
             }
+
+            FileLogger.log("ZIP extraction completed: $extractedCount files", TAG)
+            Log.d(TAG, "Extraction completed: $extractedCount files")
 
             ExtractionResult.Success(
                 outputPath = destinationPath.absolutePath,
                 extractedFilesCount = extractedCount
             )
+        } catch (e: CancellationException) {
+            FileLogger.log("ZIP extraction cancelled: $extractedCount files extracted before cancellation", TAG)
+            Log.d(TAG, "Extraction cancelled: $extractedCount files extracted")
+            throw e // Re-throw to propagate cancellation
         } catch (e: Exception) {
+            FileLogger.logError("ZIP extraction failed: ${e.message}", e, TAG)
+            Log.e(TAG, "ZIP extraction failed", e)
             ExtractionResult.Failure(
                 errorMessage = "Extraction failed: ${e.message}",
                 cause = e
             )
         }
+    }
+
+    companion object {
+        private const val TAG = "ZipExtractor"
     }
 }
