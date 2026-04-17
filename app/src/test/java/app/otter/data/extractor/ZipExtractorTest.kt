@@ -177,15 +177,17 @@ class ZipExtractorTest {
     @Test
     fun `should handle very long file names`() = runTest {
         val longFileName = "a".repeat(200) + ".txt"
-        val zipBytes = createTestZip(mapOf(
-            longFileName to "content"
-        ))
+        val zipBytes = createTestZip(
+            mapOf(
+                longFileName to "content",
+            ),
+        )
         val destination = tempFolder.newFolder("output")
 
         val result = extractor.extract(
             inputStream = zipBytes.inputStream(),
             destinationPath = destination,
-            onProgress = {}
+            onProgress = {},
         )
 
         assertTrue(result is ExtractionResult.Success)
@@ -195,15 +197,17 @@ class ZipExtractorTest {
     @Test
     fun `should handle empty file names`() = runTest {
         // ZIP with directory entry (empty name after removing trailing /)
-        val zipBytes = createTestZip(mapOf(
-            "folder/" to ""
-        ))
+        val zipBytes = createTestZip(
+            mapOf(
+                "folder/" to "",
+            ),
+        )
         val destination = tempFolder.newFolder("output")
 
         val result = extractor.extract(
             inputStream = zipBytes.inputStream(),
             destinationPath = destination,
-            onProgress = {}
+            onProgress = {},
         )
 
         // Directory entries should be skipped
@@ -213,15 +217,17 @@ class ZipExtractorTest {
     @Test
     fun `should handle large file content`() = runTest {
         val largeContent = "x".repeat(1024 * 1024) // 1 MB
-        val zipBytes = createTestZip(mapOf(
-            "large.txt" to largeContent
-        ))
+        val zipBytes = createTestZip(
+            mapOf(
+                "large.txt" to largeContent,
+            ),
+        )
         val destination = tempFolder.newFolder("output")
 
         val result = extractor.extract(
             inputStream = zipBytes.inputStream(),
             destinationPath = destination,
-            onProgress = {}
+            onProgress = {},
         )
 
         assertTrue(result is ExtractionResult.Success)
@@ -231,15 +237,17 @@ class ZipExtractorTest {
 
     @Test
     fun `should handle multiple path separators`() = runTest {
-        val zipBytes = createTestZip(mapOf(
-            "folder//subfolder//file.txt" to "content"
-        ))
+        val zipBytes = createTestZip(
+            mapOf(
+                "folder//subfolder//file.txt" to "content",
+            ),
+        )
         val destination = tempFolder.newFolder("output")
 
         val result = extractor.extract(
             inputStream = zipBytes.inputStream(),
             destinationPath = destination,
-            onProgress = {}
+            onProgress = {},
         )
 
         assertTrue(result is ExtractionResult.Success)
@@ -306,14 +314,16 @@ class ZipExtractorTest {
 
     @Test
     fun `should handle mixed file and directory entries`() = runTest {
-        val zipBytes = createTestZip(mapOf(
-            "dir1/" to "",
-            "dir1/file1.txt" to "content1",
-            "dir2/" to "",
-            "dir2/subdir/" to "",
-            "dir2/subdir/file2.txt" to "content2",
-            "root.txt" to "root"
-        ))
+        val zipBytes = createTestZip(
+            mapOf(
+                "dir1/" to "",
+                "dir1/file1.txt" to "content1",
+                "dir2/" to "",
+                "dir2/subdir/" to "",
+                "dir2/subdir/file2.txt" to "content2",
+                "root.txt" to "root",
+            ),
+        )
         val destination = tempFolder.newFolder("output")
 
         val result = extractor.extract(

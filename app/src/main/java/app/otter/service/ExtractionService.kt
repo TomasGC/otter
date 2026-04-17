@@ -379,5 +379,11 @@ class ExtractionService : Service() {
                 putExtra(EXTRA_FILE_NAME, fileName)
             }
         }
+
+        fun newStopIntent(context: Context): Intent {
+            return Intent(context, ExtractionService::class.java).apply {
+                action = ACTION_STOP_EXTRACTION
+            }
+        }
     }
 }

@@ -188,7 +188,10 @@ style:
   ExpressionBodySyntax:
     active: false
   ForbiddenComment:
-    active: true
+    # Disabled: Team policy allows TODO comments when they reference tracked tasks
+    # Good: // TODO #123: Implement error handling
+    # Bad: // TODO: Fix this later
+    active: false
     values:
       - 'TODO:'
       - 'FIXME:'

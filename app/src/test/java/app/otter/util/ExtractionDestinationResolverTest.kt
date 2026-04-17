@@ -32,7 +32,10 @@ class ExtractionDestinationResolverTest {
         val fileName = "archive.zip"
 
         // When
-        val destination = resolver.createDestinationFolder(parentPath, fileName)
+        val destination = resolver.createDestinationFolder(
+            parentPath,
+            fileName,
+        )
 
         // Then
         assertEquals(
@@ -54,7 +57,10 @@ class ExtractionDestinationResolverTest {
         val fileName = "my.archive.v1.2.zip"
 
         // When
-        val destination = resolver.createDestinationFolder(parentPath, fileName)
+        val destination = resolver.createDestinationFolder(
+            parentPath,
+            fileName,
+        )
 
         // Then
         assertEquals(
@@ -71,7 +77,10 @@ class ExtractionDestinationResolverTest {
         val fileName = "archive_no_extension"
 
         // When
-        val destination = resolver.createDestinationFolder(parentPath, fileName)
+        val destination = resolver.createDestinationFolder(
+            parentPath,
+            fileName,
+        )
 
         // Then
         assertEquals(
@@ -87,7 +96,9 @@ class ExtractionDestinationResolverTest {
         val fileName = "test.zip"
 
         // When
-        val destination = resolver.createDownloadsDestination(fileName)
+        val destination = resolver.createDownloadsDestination(
+            fileName,
+        )
 
         // Then
         assertNotNull("Destination should not be null", destination)
@@ -109,7 +120,10 @@ class ExtractionDestinationResolverTest {
         val fileName = "my archive (2024) [v1].zip"
 
         // When
-        val destination = resolver.createDestinationFolder(parentPath, fileName)
+        val destination = resolver.createDestinationFolder(
+            parentPath,
+            fileName,
+        )
 
         // Then
         assertEquals(
@@ -126,7 +140,10 @@ class ExtractionDestinationResolverTest {
         val fileName = "文件.zip"
 
         // When
-        val destination = resolver.createDestinationFolder(parentPath, fileName)
+        val destination = resolver.createDestinationFolder(
+            parentPath,
+            fileName,
+        )
 
         // Then
         assertEquals(
@@ -144,7 +161,10 @@ class ExtractionDestinationResolverTest {
         val fileName = "$longName.zip"
 
         // When
-        val destination = resolver.createDestinationFolder(parentPath, fileName)
+        val destination = resolver.createDestinationFolder(
+            parentPath,
+            fileName,
+        )
 
         // Then
         assertEquals(
@@ -161,7 +181,10 @@ class ExtractionDestinationResolverTest {
         val fileName = ""
 
         // When
-        val destination = resolver.createDestinationFolder(parentPath, fileName)
+        val destination = resolver.createDestinationFolder(
+            parentPath,
+            fileName,
+        )
 
         // Then
         // substringBeforeLast on empty string returns empty string
@@ -210,7 +233,10 @@ class ExtractionDestinationResolverTest {
         val fileName = ".zip"
 
         // When
-        val destination = resolver.createDestinationFolder(parentPath, fileName)
+        val destination = resolver.createDestinationFolder(
+            parentPath,
+            fileName,
+        )
 
         // Then
         // substringBeforeLast(".zip", ".") returns "." (the part before last dot)
@@ -229,7 +255,10 @@ class ExtractionDestinationResolverTest {
         val fileName = "archive.zip"
 
         // When
-        val destination = resolver.createDestinationFolder(parentPath, fileName)
+        val destination = resolver.createDestinationFolder(
+            parentPath,
+            fileName,
+        )
 
         // Then
         assertEquals(
