@@ -44,8 +44,15 @@ COPY gradlew gradlew.bat gradle.properties settings.gradle.kts build.gradle.kts 
 # Make gradlew executable
 RUN chmod +x gradlew
 
-# Download Gradle dependencies (cache layer)
-RUN ./gradlew --version || true
+# Copy app build file for dependency resolution (better caching)
+COPY app/build.gradle.kts app/
+
+# Download Gradle wrapper and verify installation
+RUN ./gradlew --version --no-daemon
+
+# Pre-download all project dependencies (cache layer)
+# This layer only rebuilds when build.gradle.kts changes
+RUN ./gradlew dependencies --no-daemon || echo "Warning: Dependency resolution incomplete"
 
 # Default command
 CMD ["./gradlew", "tasks"]

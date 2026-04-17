@@ -146,6 +146,50 @@ class ArchiveRepositoryImplTest {
         repository.extractArchive(archive, destinationUri).toList()
     }
 
+    @Test
+    fun `should emit progress events during extraction`() = runTest {
+        val archive = createTestArchive()
+        val destinationUri = Uri.parse("file:///downloads")
+        val inputStream = ByteArrayInputStream(byteArrayOf())
+
+        every { contentResolver.openInputStream(archive.uri) } returns inputStream
+        coEvery {
+            zipExtractor.extract(any(), any(), any())
+        } answers {
+            val onProgress = thirdArg<(ExtractionProgress) -> Unit>()
+            // Simulate progress callbacks
+            onProgress(ExtractionProgress.Extracting("file1.txt", 1, 0, 0f))
+            onProgress(ExtractionProgress.Extracting("file2.txt", 2, 0, 0f))
+            ExtractionResult.Success("/downloads/test", 2)
+        }
+
+        val results = repository.extractArchive(archive, destinationUri).toList()
+
+        // Should emit: Idle, Extracting(1), Extracting(2), Success
+        assertTrue("Should have at least 4 events", results.size >= 4)
+        assertTrue("First event should be Idle", results[0] is ExtractionProgress.Idle)
+        assertTrue("Should contain Extracting events", results.any { it is ExtractionProgress.Extracting })
+        assertTrue("Last event should be Success", results.last() is ExtractionProgress.Success)
+    }
+
+    @Test
+    fun `should handle cancellation gracefully`() = runTest {
+        val archive = createTestArchive()
+        val destinationUri = Uri.parse("file:///downloads")
+        val inputStream = ByteArrayInputStream(byteArrayOf())
+
+        every { contentResolver.openInputStream(archive.uri) } returns inputStream
+        coEvery {
+            zipExtractor.extract(any(), any(), any())
+        } throws kotlinx.coroutines.CancellationException("Extraction cancelled")
+
+        val results = repository.extractArchive(archive, destinationUri).toList()
+
+        // Flow should close cleanly on cancellation (just Idle event)
+        assertTrue("Should emit Idle before cancellation", results.isNotEmpty())
+        assertTrue("First event should be Idle", results[0] is ExtractionProgress.Idle)
+    }
+
     private fun createTestArchive() = ArchiveFile(
         uri = Uri.parse("file:///test.zip"),
         name = "test.zip",

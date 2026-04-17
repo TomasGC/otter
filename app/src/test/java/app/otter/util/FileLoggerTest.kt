@@ -33,7 +33,10 @@ class FileLoggerTest {
         val archiveName = "test_archive.zip"
 
         // When
-        FileLogger.initialize(destinationFolder, archiveName)
+        FileLogger.initialize(
+            destinationFolder,
+            archiveName,
+        )
 
         // Then
         val logFilePath = FileLogger.getLogFilePath()
@@ -46,7 +49,10 @@ class FileLoggerTest {
     @Test
     fun `should write log messages to file`() {
         // Given
-        FileLogger.initialize(destinationFolder, "test.zip")
+        FileLogger.initialize(
+            destinationFolder,
+            "test.zip",
+        )
         val logFilePath = FileLogger.getLogFilePath()!!
 
         // When
@@ -65,12 +71,19 @@ class FileLoggerTest {
     @Test
     fun `should write error messages to file`() {
         // Given
-        FileLogger.initialize(destinationFolder, "test.zip")
+        FileLogger.initialize(
+            destinationFolder,
+            "test.zip",
+        )
         val logFilePath = FileLogger.getLogFilePath()!!
         val exception = RuntimeException("Test exception")
 
         // When
-        FileLogger.logError("Error message", exception, "ErrorTag")
+        FileLogger.logError(
+            "Error message",
+            exception,
+            "ErrorTag",
+        )
         FileLogger.close()
 
         // Then
@@ -83,7 +96,10 @@ class FileLoggerTest {
     @Test
     fun `should handle error without throwable`() {
         // Given
-        FileLogger.initialize(destinationFolder, "test.zip")
+        FileLogger.initialize(
+            destinationFolder,
+            "test.zip",
+        )
         val logFilePath = FileLogger.getLogFilePath()!!
 
         // When
@@ -98,12 +114,18 @@ class FileLoggerTest {
     @Test
     fun `should append to existing log file`() {
         // Given
-        FileLogger.initialize(destinationFolder, "test.zip")
+        FileLogger.initialize(
+            destinationFolder,
+            "test.zip",
+        )
         FileLogger.log("First message")
         FileLogger.close()
 
         // When - Reinitialize and log again
-        FileLogger.initialize(destinationFolder, "test.zip")
+        FileLogger.initialize(
+            destinationFolder,
+            "test.zip",
+        )
         FileLogger.log("Second message")
         FileLogger.close()
 
@@ -120,7 +142,10 @@ class FileLoggerTest {
         val archiveName = "archive_no_extension"
 
         // When
-        FileLogger.initialize(destinationFolder, archiveName)
+        FileLogger.initialize(
+            destinationFolder,
+            archiveName,
+        )
 
         // Then
         val logFilePath = FileLogger.getLogFilePath()
@@ -134,7 +159,10 @@ class FileLoggerTest {
         val archiveName = "my.archive.v1.2.zip"
 
         // When
-        FileLogger.initialize(destinationFolder, archiveName)
+        FileLogger.initialize(
+            destinationFolder,
+            archiveName,
+        )
 
         // Then
         val logFilePath = FileLogger.getLogFilePath()
@@ -148,7 +176,10 @@ class FileLoggerTest {
         val archiveName = "test.zip"
 
         // When
-        FileLogger.initialize(destinationFolder, archiveName)
+        FileLogger.initialize(
+            destinationFolder,
+            archiveName,
+        )
 
         // Then
         val logFilePath = FileLogger.getLogFilePath()!!
@@ -163,7 +194,10 @@ class FileLoggerTest {
     @Test
     fun `should include timestamp in log messages`() {
         // Given
-        FileLogger.initialize(destinationFolder, "test.zip")
+        FileLogger.initialize(
+            destinationFolder,
+            "test.zip",
+        )
         val logFilePath = FileLogger.getLogFilePath()!!
 
         // When
@@ -176,14 +210,17 @@ class FileLoggerTest {
         assertTrue(
             "Log should contain timestamp",
             logContent.contains("Timestamped message") &&
-                Regex("\\d{2}:\\d{2}:\\d{2}\\.\\d{3}").containsMatchIn(logContent),
+                    Regex("\\d{2}:\\d{2}:\\d{2}\\.\\d{3}").containsMatchIn(logContent),
         )
     }
 
     @Test
     fun `should return log file path after initialization`() {
         // When
-        FileLogger.initialize(destinationFolder, "test.zip")
+        FileLogger.initialize(
+            destinationFolder,
+            "test.zip",
+        )
         val logFilePath = FileLogger.getLogFilePath()
 
         // Then
@@ -196,7 +233,10 @@ class FileLoggerTest {
         val archiveName = "my archive (2024) [v1].zip"
 
         // When
-        FileLogger.initialize(destinationFolder, archiveName)
+        FileLogger.initialize(
+            destinationFolder,
+            archiveName,
+        )
 
         // Then
         val logFilePath = FileLogger.getLogFilePath()
@@ -207,7 +247,10 @@ class FileLoggerTest {
     @Test
     fun `should flush and close writer properly`() {
         // Given
-        FileLogger.initialize(destinationFolder, "test.zip")
+        FileLogger.initialize(
+            destinationFolder,
+            "test.zip",
+        )
         val logFilePath = FileLogger.getLogFilePath()!!
         FileLogger.log("Message before close")
 

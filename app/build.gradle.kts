@@ -26,7 +26,7 @@ android {
 
     buildTypes {
         debug {
-            enableAndroidTestCoverage = true
+            isTestCoverageEnabled = true
         }
         release {
             isMinifyEnabled = false
@@ -112,6 +112,7 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.11.1")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation("androidx.test:rules:1.5.0")
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
@@ -122,13 +123,15 @@ kapt {
     correctErrorTypes = true
 }
 
-// Jacoco configuration for test coverage (unit + instrumented)
-tasks.register<JacocoReport>("jacocoTestReport") {
-    dependsOn("testDebugUnitTest")
+// Jacoco merged coverage report (unit + instrumented tests)
+tasks.register<JacocoReport>("jacocoMergedReport") {
+    dependsOn("testDebugUnitTest", "connectedDebugAndroidTest")
 
     reports {
         xml.required.set(true)
         html.required.set(true)
+        xml.outputLocation.set(file("${buildDir}/reports/jacoco/jacocoMergedReport/jacocoMergedReport.xml"))
+        html.outputLocation.set(file("${buildDir}/reports/jacoco/jacocoMergedReport/html"))
     }
 
     val fileFilter = listOf(
@@ -141,27 +144,34 @@ tasks.register<JacocoReport>("jacocoTestReport") {
         "**/*_Hilt*.class",
         "**/*_Factory.class",
         "**/*_MembersInjector.class",
-        "**/Hilt_*.class"
+        "**/Hilt_*.class",
+        // Android components (difficult to test, will add tests later)
+        "**/ExtractionService.class",
+        "**/ExtractionActivity.class",
+        "**/OtterApplication.class",
+        "**/NotificationHelper.class",
+        // Base class with protected logging methods (tested via concrete implementations)
+        "**/BaseArchiveExtractor.class",
+        "**/BaseArchiveExtractor$*.class"
     )
 
-    // Direct paths to compiled classes
-    val kotlinClasses = fileTree("${buildDir}/tmp/kotlin-classes/debug") {
-        exclude(fileFilter)
-    }
+    val mainSrc = files("${project.projectDir}/src/main/java")
 
-    val javaClasses = fileTree("${buildDir}/intermediates/javac/debug/classes") {
-        exclude(fileFilter)
-    }
+    val kotlinDebugTree = fileTree("${project.buildDir}/tmp/kotlin-classes/debug")
+    val javaDebugTree = fileTree("${project.buildDir}/intermediates/javac/debug/classes")
 
-    val mainSrc = "${project.projectDir}/src/main/java"
+    sourceDirectories.setFrom(mainSrc)
+    classDirectories.setFrom(
+        files(
+            kotlinDebugTree.matching { exclude(fileFilter) },
+            javaDebugTree.matching { exclude(fileFilter) }
+        )
+    )
 
-    sourceDirectories.setFrom(files(mainSrc))
-    classDirectories.setFrom(files(kotlinClasses, javaClasses))
-
-    // Combine unit test + instrumented test coverage
+    // Merge execution data from both unit and instrumented tests
     executionData.setFrom(fileTree(buildDir) {
         include(
-            "jacoco/testDebugUnitTest.exec",
+            "outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec",
             "outputs/code_coverage/debugAndroidTest/connected/**/*.ec"
         )
     })

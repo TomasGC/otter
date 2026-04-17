@@ -92,7 +92,11 @@ class PathValidatorTest {
         val entryName = "file.txt"
 
         // When/Then - Should not throw
-        PathValidator.validatePath(outputFile, destination, entryName)
+        PathValidator.validatePath(
+            outputFile,
+            destination,
+            entryName,
+        )
     }
 
     @Test
@@ -104,7 +108,11 @@ class PathValidatorTest {
 
         // When/Then
         try {
-            PathValidator.validatePath(outsideFile, destination, entryName)
+            PathValidator.validatePath(
+                outsideFile,
+                destination,
+                entryName,
+            )
             assertTrue("Should throw SecurityException", false)
         } catch (e: SecurityException) {
             assertTrue("Error should mention entry name", e.message?.contains(entryName) ?: false)
@@ -118,7 +126,10 @@ class PathValidatorTest {
         val entryName = "folder1/folder2/file.txt"
 
         // When
-        val outputFile = PathValidator.createSafeOutputFile(destination, entryName)
+        val outputFile = PathValidator.createSafeOutputFile(
+            destination,
+            entryName,
+        )
 
         // Then
         assertTrue("Output file should exist", outputFile.parentFile?.exists() ?: false)
@@ -137,7 +148,10 @@ class PathValidatorTest {
 
         // When/Then
         try {
-            PathValidator.createSafeOutputFile(destination, entryName)
+            PathValidator.createSafeOutputFile(
+            destination,
+            entryName,
+        )
             assertTrue("Should throw SecurityException", false)
         } catch (e: SecurityException) {
             assertTrue(
@@ -154,7 +168,10 @@ class PathValidatorTest {
         val entryName = "a/b/c/d/e/file.txt"
 
         // When
-        val outputFile = PathValidator.createSafeOutputFile(destination, entryName)
+        val outputFile = PathValidator.createSafeOutputFile(
+            destination,
+            entryName,
+        )
 
         // Then
         assertTrue("All parent directories should be created", outputFile.parentFile?.exists() ?: false)
