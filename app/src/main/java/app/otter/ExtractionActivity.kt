@@ -97,10 +97,16 @@ class ExtractionActivity : ComponentActivity() {
     }
 
     private fun getFileName(uri: Uri): String? {
-        return contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            cursor.moveToFirst()
-            cursor.getString(nameIndex)
+        return try {
+            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                cursor.moveToFirst()
+                cursor.getString(nameIndex)
+            }
+        } catch (e: SecurityException) {
+            // Permission denied (e.g., in tests or missing ACTION_OPEN_DOCUMENT)
+            // Return null to use default filename
+            null
         }
     }
 }

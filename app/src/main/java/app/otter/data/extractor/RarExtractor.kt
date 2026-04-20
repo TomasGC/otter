@@ -3,6 +3,7 @@ package app.otter.data.extractor
 import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
+import app.otter.util.PathValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.sf.sevenzipjbinding.ExtractAskMode
@@ -71,14 +72,9 @@ class RarExtractor @Inject constructor() : ArchiveExtractor {
                     }
 
                     val path = inArchive?.getProperty(index, PropID.PATH) as? String ?: return null
-                    val outputFile = File(destinationPath, path)
 
-                    // Path traversal protection
-                    if (!outputFile.canonicalPath.startsWith(destinationPath.canonicalPath)) {
-                        throw SecurityException("RAR entry outside destination: $path")
-                    }
-
-                    outputFile.parentFile?.mkdirs()
+                    // Path traversal protection + directory creation
+                    val outputFile = PathValidator.createSafeOutputFile(destinationPath, path)
                     currentOutputStream = FileOutputStream(outputFile)
 
                     return ISequentialOutStream { data ->

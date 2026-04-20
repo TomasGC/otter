@@ -3,6 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("com.google.dagger.hilt.android")
     id("kotlin-kapt")
+    id("jacoco")
+    id("org.owasp.dependencycheck") version "8.4.0"
 }
 
 android {
@@ -23,6 +25,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            isTestCoverageEnabled = true
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -60,7 +65,16 @@ android {
     }
 
     testOptions {
-        unitTests.isReturnDefaultValues = true
+        unitTests {
+            isReturnDefaultValues = true
+            isIncludeAndroidResources = true
+            all {
+                it.extensions.configure(JacocoTaskExtension::class.java) {
+                    isIncludeNoLocationClasses = true
+                    excludes = listOf("jdk.internal.*")
+                }
+            }
+        }
     }
 }
 
@@ -98,6 +112,7 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.11.1")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation("androidx.test:rules:1.5.0")
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
@@ -106,4 +121,65 @@ dependencies {
 
 kapt {
     correctErrorTypes = true
+}
+
+// Jacoco merged coverage report (unit + instrumented tests)
+tasks.register<JacocoReport>("jacocoMergedReport") {
+    dependsOn("testDebugUnitTest", "connectedDebugAndroidTest")
+
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        xml.outputLocation.set(file("${buildDir}/reports/jacoco/jacocoMergedReport/jacocoMergedReport.xml"))
+        html.outputLocation.set(file("${buildDir}/reports/jacoco/jacocoMergedReport/html"))
+    }
+
+    val fileFilter = listOf(
+        "**/R.class",
+        "**/R$*.class",
+        "**/BuildConfig.*",
+        "**/Manifest*.*",
+        "**/*Test*.*",
+        "android/**/*.*",
+        "**/*_Hilt*.class",
+        "**/*_Factory.class",
+        "**/*_MembersInjector.class",
+        "**/Hilt_*.class",
+        // Android components (difficult to test, will add tests later)
+        "**/ExtractionService.class",
+        "**/ExtractionActivity.class",
+        "**/OtterApplication.class",
+        "**/NotificationHelper.class",
+        // Base class with protected logging methods (tested via concrete implementations)
+        "**/BaseArchiveExtractor.class",
+        "**/BaseArchiveExtractor$*.class"
+    )
+
+    val mainSrc = files("${project.projectDir}/src/main/java")
+
+    val kotlinDebugTree = fileTree("${project.buildDir}/tmp/kotlin-classes/debug")
+    val javaDebugTree = fileTree("${project.buildDir}/intermediates/javac/debug/classes")
+
+    sourceDirectories.setFrom(mainSrc)
+    classDirectories.setFrom(
+        files(
+            kotlinDebugTree.matching { exclude(fileFilter) },
+            javaDebugTree.matching { exclude(fileFilter) }
+        )
+    )
+
+    // Merge execution data from both unit and instrumented tests
+    executionData.setFrom(fileTree(buildDir) {
+        include(
+            "outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec",
+            "outputs/code_coverage/debugAndroidTest/connected/**/*.ec"
+        )
+    })
+}
+
+// Dependency check configuration
+dependencyCheck {
+    analyzers.assemblyEnabled = false
+    failBuildOnCVSS = 7.0f
+    suppressionFile = file("dependency-check-suppressions.xml").absolutePath
 }

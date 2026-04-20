@@ -5,6 +5,7 @@ import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
 import app.otter.util.FileLogger
+import app.otter.util.PathValidator
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
@@ -40,17 +41,8 @@ class ZipExtractor @Inject constructor() : ArchiveExtractor {
 
                 while (entry != null && isActive) { // Check if coroutine is still active
                     if (!entry.isDirectory) {
-                        val outputFile = File(destinationPath, entry.name)
-
-                        // Path traversal protection
-                        if (!outputFile.canonicalPath.startsWith(destinationPath.canonicalPath)) {
-                            val error = "Entry outside destination: ${entry.name}"
-                            FileLogger.logError(error, null, TAG)
-                            throw SecurityException(error)
-                        }
-
-                        // Create parent directories
-                        outputFile.parentFile?.mkdirs()
+                        // Path traversal protection + directory creation
+                        val outputFile = PathValidator.createSafeOutputFile(destinationPath, entry.name)
 
                         // Simple buffered write with large buffer
                         outputFile.outputStream().buffered(256 * 1024).use { output ->
