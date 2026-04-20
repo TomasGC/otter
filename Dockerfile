@@ -1,12 +1,19 @@
 # Android Build Environment
 FROM eclipse-temurin:17-jdk-jammy
 
-# Install dependencies
-RUN apt-get update && apt-get install -y \
-    wget \
-    unzip \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+# Install dependencies with retry logic for mirror sync issues
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    # Retry apt-get update up to 3 times with 5s delay
+    (apt-get update --fix-missing || \
+     (sleep 5 && apt-get update --fix-missing) || \
+     (sleep 10 && apt-get update --fix-missing)) && \
+    apt-get install -y --no-install-recommends \
+        wget \
+        unzip \
+        git \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Set environment variables
 ENV ANDROID_HOME=/opt/android-sdk
@@ -37,8 +44,15 @@ COPY gradlew gradlew.bat gradle.properties settings.gradle.kts build.gradle.kts 
 # Make gradlew executable
 RUN chmod +x gradlew
 
-# Download Gradle dependencies (cache layer)
-RUN ./gradlew --version || true
+# Copy app build file for dependency resolution (better caching)
+COPY app/build.gradle.kts app/
+
+# Download Gradle wrapper and verify installation
+RUN ./gradlew --version --no-daemon
+
+# Pre-download all project dependencies (cache layer)
+# This layer only rebuilds when build.gradle.kts changes
+RUN ./gradlew dependencies --no-daemon || echo "Warning: Dependency resolution incomplete"
 
 # Default command
 CMD ["./gradlew", "tasks"]

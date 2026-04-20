@@ -16,3 +16,4 @@ build/
 .claude/*.local.*
 .claude/tmpclaude/
 .claude/settings.local.json
+ktlint
