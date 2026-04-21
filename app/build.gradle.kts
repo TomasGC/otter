@@ -15,8 +15,8 @@ android {
         applicationId = "app.otter"
         minSdk = 26
         targetSdk = 34
-        versionCode = 36
-        versionName = "0.0.36"
+        versionCode = 37
+        versionName = "0.0.37"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -116,6 +116,9 @@ dependencies {
 
     // 7-Zip for Android (supports RAR5 and all archive formats)
     implementation("com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.03")
+
+    // Timber - Logging library
+    implementation("com.jakewharton.timber:timber:5.0.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.9")
