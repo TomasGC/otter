@@ -1,72 +1,36 @@
 package app.otter.util
 
+import android.content.Context
+import android.os.Environment
 import android.util.Log
 import java.io.File
-import java.io.FileWriter
-import java.io.PrintWriter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 object FileLogger {
-    private const val TAG = "FileLogger"
     private var logFile: File? = null
-    private var writer: PrintWriter? = null
+    private val timestampFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
+    private val filenameFormat = SimpleDateFormat("yyyy-MM-dd-HH-mm", Locale.US)
 
-    fun initialize(destinationFolder: File, archiveName: String) {
+    fun init(context: Context) {
+        val timestamp = filenameFormat.format(Date())
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        logFile = File(downloadsDir, "otter-log-$timestamp.txt")
+        logFile?.writeText("=== Otter Debug Log ===\n")
+        logFile?.appendText("Started at ${timestampFormat.format(Date())}\n\n")
+    }
+
+    fun log(tag: String, message: String) {
+        val timestamp = timestampFormat.format(Date())
+        val line = "[$timestamp] $tag: $message\n"
+        Log.d(tag, message)
         try {
-            val logFileName = "${archiveName.substringBeforeLast(".")}_extraction.txt"
-            logFile = File(destinationFolder.parentFile, logFileName)
-
-            writer = PrintWriter(FileWriter(logFile, true), true)
-            log("FileLogger initialized: ${logFile?.absolutePath}")
-            Log.i(TAG, "Log file created: ${logFile?.absolutePath}")
+            logFile?.appendText(line)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize file logger", e)
+            Log.e("FileLogger", "Failed to write to log file", e)
         }
     }
 
-    fun log(message: String, tag: String = "Otter") {
-        try {
-            val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date())
-            val logMessage = "$timestamp [$tag] $message"
-
-            // Write to file
-            writer?.println(logMessage)
-
-            // Also log to Logcat
-            Log.d(tag, message)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to write log", e)
-        }
-    }
-
-    fun logError(message: String, throwable: Throwable? = null, tag: String = "Otter") {
-        try {
-            val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date())
-            writer?.println("$timestamp [$tag] ERROR: $message")
-
-            if (throwable != null) {
-                writer?.println("Exception: ${throwable.message}")
-                throwable.printStackTrace(writer)
-            }
-
-            Log.e(tag, message, throwable)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to write error log", e)
-        }
-    }
-
-    fun close() {
-        try {
-            writer?.flush()
-            writer?.close()
-            writer = null
-            log("FileLogger closed")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to close file logger", e)
-        }
-    }
-
-    fun getLogFilePath(): String? = logFile?.absolutePath
+    fun getLogPath(): String? = logFile?.absolutePath
 }

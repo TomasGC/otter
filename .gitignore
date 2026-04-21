@@ -11,9 +11,13 @@ build/
 *.apk
 *.aab
 
+# Keystore (keep debug keystore for consistent signing)
+# keystore/*.keystore is intentionally tracked for debug builds
+
 # Claude Code
 .claude/**/*.local.*
 .claude/*.local.*
 .claude/tmpclaude/
 .claude/settings.local.json
+.claude/sessions/
 ktlint
