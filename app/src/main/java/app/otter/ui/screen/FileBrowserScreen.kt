@@ -57,7 +57,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.otter.domain.model.FileItem
 import app.otter.service.ExtractionEventBus
-import app.otter.service.ExtractionQueue
 import app.otter.service.ExtractionService
 import app.otter.ui.viewmodel.FileBrowserUiState
 import app.otter.ui.viewmodel.FileBrowserViewModel
@@ -86,10 +85,10 @@ fun FileBrowserScreen(
     var showConfirmDialog by remember { mutableStateOf(false) }
     var fileToExtract by remember { mutableStateOf<FileItem?>(null) }
 
-    // Collect extraction progress from EventBus
+    // Collect extraction progress from EventBus (injected via ViewModel)
     LaunchedEffect(Unit) {
         try {
-            ExtractionEventBus.progressEvents.collect { event ->
+            viewModel.eventBus.progressEvents.collect { event ->
                 try {
                     viewModel.updateExtractionProgress(
                         fileName = event.fileName,
@@ -109,7 +108,7 @@ fun FileBrowserScreen(
 
     LaunchedEffect(Unit) {
         try {
-            ExtractionEventBus.completeEvents.collect {
+            viewModel.eventBus.completeEvents.collect {
                 try {
                     viewModel.onExtractionComplete()
                 } catch (e: Exception) {
@@ -154,11 +153,14 @@ fun FileBrowserScreen(
             addAction(ExtractionService.ACTION_EXTRACTION_COMPLETE)
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            context.registerReceiver(receiver, filter)
-        }
+        // Register receiver with RECEIVER_NOT_EXPORTED flag (Android 13+)
+        // For older versions, ContextCompat handles compatibility
+        androidx.core.content.ContextCompat.registerReceiver(
+            context,
+            receiver,
+            filter,
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         onDispose {
             context.unregisterReceiver(receiver)
@@ -213,8 +215,7 @@ fun FileBrowserScreen(
                         // Select All button
                         TextButton(
                             onClick = {
-                                val archives = state.files.filter { it.isArchive }
-                                archives.forEach { viewModel.toggleFileSelection(it) }
+                                viewModel.selectAllArchives()
                             }
                         ) {
                             Text("Select All")
@@ -241,12 +242,12 @@ fun FileBrowserScreen(
 
                                     // Add all to queue
                                     val tasks = selected.map { file ->
-                                        ExtractionQueue.ExtractionTask(
+                                        app.otter.service.ExtractionQueue.ExtractionTask(
                                             archiveUri = file.uri,
                                             fileName = file.name
                                         )
                                     }
-                                    ExtractionQueue.enqueueAll(tasks)
+                                    viewModel.extractionQueue.enqueueAll(tasks)
 
                                     // Show extraction UI immediately
                                     viewModel.updateExtractionProgress(
@@ -258,7 +259,7 @@ fun FileBrowserScreen(
                                     )
 
                                     // Start processing queue
-                                    ExtractionQueue.processNext(context)
+                                    viewModel.extractionQueue.processNext(context)
 
                                     viewModel.exitSelectionMode()
                                 }

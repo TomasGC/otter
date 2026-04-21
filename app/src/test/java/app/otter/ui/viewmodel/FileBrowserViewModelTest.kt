@@ -26,6 +26,8 @@ import org.robolectric.annotation.Config
 class FileBrowserViewModelTest {
 
     private lateinit var browseFilesUseCase: BrowseFilesUseCase
+    private lateinit var eventBus: app.otter.service.ExtractionEventBus
+    private lateinit var extractionQueue: app.otter.service.ExtractionQueue
     private lateinit var viewModel: FileBrowserViewModel
     private val testDispatcher = UnconfinedTestDispatcher()
 
@@ -34,6 +36,8 @@ class FileBrowserViewModelTest {
         Dispatchers.setMain(testDispatcher)
 
         browseFilesUseCase = mockk()
+        eventBus = app.otter.service.ExtractionEventBus()
+        extractionQueue = app.otter.service.ExtractionQueue()
 
         // Mock default start directory
         val mockFiles = listOf(
@@ -43,7 +47,7 @@ class FileBrowserViewModelTest {
         )
         coEvery { browseFilesUseCase(any()) } returns Result.success(mockFiles)
 
-        viewModel = FileBrowserViewModel(browseFilesUseCase)
+        viewModel = FileBrowserViewModel(browseFilesUseCase, eventBus, extractionQueue)
     }
 
     @After

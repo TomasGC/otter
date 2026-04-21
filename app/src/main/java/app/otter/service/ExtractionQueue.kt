@@ -4,12 +4,15 @@ import android.content.Context
 import android.net.Uri
 import timber.log.Timber
 import java.util.concurrent.ConcurrentLinkedQueue
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
- * Singleton queue for managing sequential archive extraction.
+ * Queue for managing sequential archive extraction.
+ * Injectable via Hilt for proper test isolation.
  */
-object ExtractionQueue {
-    private const val TAG = "ExtractionQueue"
+@Singleton
+class ExtractionQueue @Inject constructor() {
     private val queue = ConcurrentLinkedQueue<ExtractionTask>()
     private var isExtracting = false
 
@@ -17,6 +20,10 @@ object ExtractionQueue {
         val archiveUri: Uri,
         val fileName: String
     )
+
+    companion object {
+        private const val TAG = "ExtractionQueue"
+    }
 
     /**
      * Adds archives to extraction queue.

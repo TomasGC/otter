@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.otter.domain.model.FileItem
 import app.otter.domain.usecase.BrowseFilesUseCase
+import app.otter.service.ExtractionEventBus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,8 @@ import javax.inject.Inject
 @HiltViewModel
 class FileBrowserViewModel @Inject constructor(
     private val browseFilesUseCase: BrowseFilesUseCase,
+    val eventBus: ExtractionEventBus,
+    val extractionQueue: app.otter.service.ExtractionQueue,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<FileBrowserUiState>(FileBrowserUiState.Loading)
@@ -166,6 +169,19 @@ class FileBrowserViewModel @Inject constructor(
      */
     fun getSelectedFiles(): List<FileItem> {
         return allFiles.filter { selectedFiles.contains(it.uri) }
+    }
+
+    /**
+     * Selects all archives (doesn't deselect if already selected).
+     */
+    fun selectAllArchives() {
+        val archives = allFiles.filter { it.isArchive }
+        archives.forEach { archive ->
+            if (!selectedFiles.contains(archive.uri)) {
+                selectedFiles.add(archive.uri)
+            }
+        }
+        applyFilterAndSort()
     }
 
     private fun browseDirectory(uri: Uri) {

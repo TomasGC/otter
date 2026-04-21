@@ -16,6 +16,7 @@ import timber.log.Timber
 import androidx.documentfile.provider.DocumentFile
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
+import app.otter.BuildConfig
 import app.otter.R
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
@@ -36,6 +37,12 @@ class ExtractionService : Service() {
 
     @Inject
     lateinit var extractArchiveUseCase: ExtractArchiveUseCase
+
+    @Inject
+    lateinit var eventBus: ExtractionEventBus
+
+    @Inject
+    lateinit var extractionQueue: ExtractionQueue
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private lateinit var notificationManager: NotificationManager
@@ -85,12 +92,12 @@ class ExtractionService : Service() {
 
             // Process remaining archives in queue
             while (true) {
-                ExtractionQueue.markComplete()
-                val task = ExtractionQueue.pollNext()
+                extractionQueue.markComplete()
+                val task = extractionQueue.pollNext()
                 if (task == null) {
                     // Queue empty, emit complete and stop
                     Timber.tag(TAG).d("Queue empty, stopping service")
-                    ExtractionEventBus.emitComplete()
+                    eventBus.emitComplete()
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
                     break
@@ -115,6 +122,7 @@ class ExtractionService : Service() {
     private suspend fun extractArchive(archiveUri: Uri, fileName: String) {
         var extractedFilesCount = 0
         var lastError: String? = null
+        var fileLoggingTree: app.otter.util.FileLoggingTree? = null
 
         try {
             val archiveFile = createArchiveFile(archiveUri, fileName)
@@ -125,7 +133,12 @@ class ExtractionService : Service() {
             destinationFolder.mkdirs()
             Timber.tag(TAG).d("Destination folder: ${destinationFolder.absolutePath}")
 
-            // Log extraction details
+            // Add file logging tree for this extraction (debug builds only)
+            if (BuildConfig.DEBUG) {
+                fileLoggingTree = app.otter.util.FileLoggingTree(this, destinationFolder)
+                Timber.plant(fileLoggingTree)
+                Timber.tag(TAG).d("File logging enabled at: ${fileLoggingTree.getLogPath()}")
+            }
 
             val destinationUri = Uri.fromFile(destinationFolder)
 
@@ -140,7 +153,7 @@ class ExtractionService : Service() {
 
                         // Send progress via EventBus (more reliable than broadcasts)
                         serviceScope.launch {
-                            ExtractionEventBus.emitProgress(
+                            eventBus.emitProgress(
                                 fileName = fileName,
                                 currentFile = progress.currentFile,
                                 extractedCount = progress.extractedCount,
@@ -173,12 +186,16 @@ class ExtractionService : Service() {
                         extractedFilesCount = progress.extractedCount
                         Timber.tag(TAG).d("Extraction success: $extractedFilesCount files")
 
+                        // Emit complete event for this file (for UI refresh)
+                        serviceScope.launch {
+                            eventBus.emitComplete()
+                        }
+
                         sendCompleteBroadcast()
                     }
                     is ExtractionProgress.Error -> {
                         lastError = progress.message
                         Timber.tag(TAG).e("Extraction error: $lastError")
-                        val exceptionMessage = progress.exception?.message ?: "No exception details"
                     }
                     is ExtractionProgress.Idle -> {}
                 }
@@ -206,6 +223,10 @@ class ExtractionService : Service() {
                 message = e.message ?: "Unknown error"
             )
         } finally {
+            // Remove file logging tree for this extraction
+            if (fileLoggingTree != null) {
+                Timber.uproot(fileLoggingTree)
+            }
         }
     }
 
@@ -430,6 +451,7 @@ class ExtractionService : Service() {
         progress: Float
     ) {
         val intent = Intent(ACTION_EXTRACTION_PROGRESS).apply {
+            setPackage(packageName)
             putExtra(EXTRA_FILE_NAME, fileName)
             putExtra(EXTRA_CURRENT_FILE, currentFile)
             putExtra(EXTRA_EXTRACTED_COUNT, extractedCount)
@@ -441,7 +463,9 @@ class ExtractionService : Service() {
     }
 
     private fun sendCompleteBroadcast() {
-        val intent = Intent(ACTION_EXTRACTION_COMPLETE)
+        val intent = Intent(ACTION_EXTRACTION_COMPLETE).apply {
+            setPackage(packageName)
+        }
         sendBroadcast(intent)
     }
 
