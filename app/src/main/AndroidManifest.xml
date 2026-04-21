@@ -11,26 +11,49 @@
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
+    <!-- All files access permission for Android 11+ -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
 
     <application
         android:name=".OtterApplication"
         android:allowBackup="true"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Otter">
+        android:theme="@style/Theme.Otter"
+        android:requestLegacyExternalStorage="true">
 
-        <!-- Main Activity -->
+        <!-- Otter - Auto-extraction activity -->
         <activity
             android:name=".ExtractionActivity"
             android:exported="true"
             android:theme="@style/Theme.Otter">
+            <!-- Intent filter for "Open with" archives - Auto-extraction -->
+            <intent-filter android:label="Otter (Extract here)">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/x-zip-compressed" />
+                <data android:mimeType="application/rar" />
+                <data android:mimeType="application/x-rar-compressed" />
+                <data android:mimeType="application/vnd.rar" />
+            </intent-filter>
+        </activity>
+
+        <!-- Otter - File browser activity (main) -->
+        <activity
+            android:name=".BrowserActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Otter">
+            <!-- Launcher intent to open the app -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Intent filter for "Open with" archives -->
-            <intent-filter>
+            <!-- Intent filter for "Open with" archives - Browse mode -->
+            <intent-filter android:label="Otter (Browse)">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="content" />

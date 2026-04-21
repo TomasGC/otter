@@ -20,13 +20,14 @@ import app.otter.R
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
 import app.otter.domain.usecase.ExtractArchiveUseCase
-import app.otter.util.FileLogger
+import app.otter.util.MimeTypeUtil
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import javax.inject.Inject
 
@@ -48,8 +49,7 @@ class ExtractionService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Handle stop action
         if (intent?.action == ACTION_STOP_EXTRACTION) {
-            Log.d(TAG, "Stop extraction requested")
-            FileLogger.log("Extraction cancelled by user", TAG)
+            Log.d(TAG, "Extraction cancelled by user")
             serviceScope.cancel()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -80,7 +80,26 @@ class ExtractionService : Service() {
         Log.d(TAG, "Foreground service started, notification ID: $NOTIFICATION_ID")
 
         serviceScope.launch {
+            // Extract this archive
             extractArchive(archiveUri, fileName)
+
+            // Process remaining archives in queue
+            while (true) {
+                ExtractionQueue.markComplete()
+                val task = ExtractionQueue.pollNext()
+                if (task == null) {
+                    // Queue empty, emit complete and stop
+                    Log.d(TAG, "Queue empty, stopping service")
+                    ExtractionEventBus.emitComplete()
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                    break
+                } else {
+                    // Extract next archive
+                    Log.d(TAG, "Processing next archive: ${task.fileName}")
+                    extractArchive(task.archiveUri, task.fileName)
+                }
+            }
         }
 
         return START_NOT_STICKY
@@ -106,19 +125,11 @@ class ExtractionService : Service() {
             destinationFolder.mkdirs()
             Log.d(TAG, "Destination folder: ${destinationFolder.absolutePath}")
 
-            // Initialize file logger
-            FileLogger.initialize(destinationFolder, fileName)
-            FileLogger.log("=== Otter Extraction Log ===", "ExtractionService")
-            FileLogger.log("Archive: $fileName", "ExtractionService")
-            FileLogger.log("Archive URI: $archiveUri", "ExtractionService")
-            FileLogger.log("Destination: ${destinationFolder.absolutePath}", "ExtractionService")
-            FileLogger.log("Archive type: ${archiveFile.type}", "ExtractionService")
-            FileLogger.log("Archive size: ${archiveFile.sizeBytes} bytes", "ExtractionService")
+            // Log extraction details
 
             val destinationUri = Uri.fromFile(destinationFolder)
 
             Log.d(TAG, "Starting extraction to: ${destinationFolder.absolutePath}")
-            FileLogger.log("Starting extraction...", "ExtractionService")
 
             extractArchiveUseCase(archiveFile, destinationUri).collect { progress ->
                 when (progress) {
@@ -126,7 +137,27 @@ class ExtractionService : Service() {
                         extractedFilesCount = progress.extractedCount
                         val progressPercent = (progress.progress * 100).toInt()
                         Log.d(TAG, "Extracting: ${progress.currentFile} ($progressPercent%)")
-                        FileLogger.log("Extracting: ${progress.currentFile} ($progressPercent%) - $extractedFilesCount/${progress.totalCount}", "ExtractionService")
+
+                        // Send progress via EventBus (more reliable than broadcasts)
+                        serviceScope.launch {
+                            ExtractionEventBus.emitProgress(
+                                fileName = fileName,
+                                currentFile = progress.currentFile,
+                                extractedCount = progress.extractedCount,
+                                totalCount = progress.totalCount,
+                                progress = progress.progress
+                            )
+                        }
+
+                        // Also send broadcast for backward compatibility
+                        sendProgressBroadcast(
+                            fileName = fileName,
+                            currentFile = progress.currentFile,
+                            extractedCount = progress.extractedCount,
+                            totalCount = progress.totalCount,
+                            progress = progress.progress
+                        )
+
                         notificationManager.notify(
                             NOTIFICATION_ID,
                             createProgressNotification(
@@ -141,12 +172,13 @@ class ExtractionService : Service() {
                     is ExtractionProgress.Success -> {
                         extractedFilesCount = progress.extractedCount
                         Log.d(TAG, "Extraction success: $extractedFilesCount files")
-                        FileLogger.log("Extraction completed successfully: $extractedFilesCount files", "ExtractionService")
+
+                        sendCompleteBroadcast()
                     }
                     is ExtractionProgress.Error -> {
                         lastError = progress.message
                         Log.e(TAG, "Extraction error: $lastError")
-                        FileLogger.logError("Extraction error: $lastError", progress.exception, "ExtractionService")
+                        val exceptionMessage = progress.exception?.message ?: "No exception details"
                     }
                     is ExtractionProgress.Idle -> {}
                 }
@@ -167,18 +199,13 @@ class ExtractionService : Service() {
                 )
             }
         } catch (e: Exception) {
-            FileLogger.logError("Fatal error during extraction", e, "ExtractionService")
+            Log.e(TAG, "Fatal error during extraction: ${e.message}", e)
             showCompletionNotification(
                 fileName = fileName,
                 success = false,
                 message = e.message ?: "Unknown error"
             )
         } finally {
-            FileLogger.log("=== Extraction finished ===", "ExtractionService")
-            FileLogger.log("Log file location: ${FileLogger.getLogFilePath()}", "ExtractionService")
-            FileLogger.close()
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
         }
     }
 
@@ -241,27 +268,57 @@ class ExtractionService : Service() {
     }
 
     private fun createArchiveFile(uri: Uri, fileName: String): app.otter.domain.model.ArchiveFile? {
-        val cursor = contentResolver.query(uri, null, null, null, null) ?: return null
+        return when (uri.scheme) {
+            "file" -> {
+                // Handle file:// URIs
+                val file = File(uri.path ?: return null)
+                if (!file.exists() || !file.isFile) {
+                    return null
+                }
 
-        return cursor.use {
-            if (!it.moveToFirst()) return null
+                val archiveType = app.otter.domain.model.ArchiveType.fromFileName(fileName)
+                    ?: return null
 
-            val sizeIndex = it.getColumnIndex(OpenableColumns.SIZE)
-            val size = if (sizeIndex != -1) it.getLong(sizeIndex) else 0L
+                app.otter.domain.model.ArchiveFile(
+                    uri = uri,
+                    name = fileName,
+                    sizeBytes = file.length(),
+                    mimeType = MimeTypeUtil.getMimeType(fileName),
+                    type = archiveType
+                )
+            }
+            "content" -> {
+                // Handle content:// URIs
+                val cursor = contentResolver.query(uri, null, null, null, null)
+                if (cursor == null) {
+                    return null
+                }
 
-            val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
-            val archiveType = app.otter.domain.model.ArchiveType.fromFileName(fileName)
-                ?: return null
+                cursor.use {
+                    if (!it.moveToFirst()) return null
 
-            app.otter.domain.model.ArchiveFile(
-                uri = uri,
-                name = fileName,
-                sizeBytes = size,
-                mimeType = mimeType,
-                type = archiveType
-            )
+                    val sizeIndex = it.getColumnIndex(OpenableColumns.SIZE)
+                    val size = if (sizeIndex != -1) it.getLong(sizeIndex) else 0L
+
+                    val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
+                    val archiveType = app.otter.domain.model.ArchiveType.fromFileName(fileName)
+                        ?: return null
+
+                    app.otter.domain.model.ArchiveFile(
+                        uri = uri,
+                        name = fileName,
+                        sizeBytes = size,
+                        mimeType = mimeType,
+                        type = archiveType
+                    )
+                }
+            }
+            else -> {
+                null
+            }
         }
     }
+
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -365,13 +422,42 @@ class ExtractionService : Service() {
         notificationManager.notify(COMPLETION_NOTIFICATION_ID, builder.build())
     }
 
+    private fun sendProgressBroadcast(
+        fileName: String,
+        currentFile: String,
+        extractedCount: Int,
+        totalCount: Int,
+        progress: Float
+    ) {
+        val intent = Intent(ACTION_EXTRACTION_PROGRESS).apply {
+            putExtra(EXTRA_FILE_NAME, fileName)
+            putExtra(EXTRA_CURRENT_FILE, currentFile)
+            putExtra(EXTRA_EXTRACTED_COUNT, extractedCount)
+            putExtra(EXTRA_TOTAL_COUNT, totalCount)
+            putExtra(EXTRA_PROGRESS, progress)
+        }
+        Log.d(TAG, "Sending broadcast: $ACTION_EXTRACTION_PROGRESS - $fileName ($extractedCount/$totalCount)")
+        sendBroadcast(intent)
+    }
+
+    private fun sendCompleteBroadcast() {
+        val intent = Intent(ACTION_EXTRACTION_COMPLETE)
+        sendBroadcast(intent)
+    }
+
     companion object {
         private const val TAG = "ExtractionService"
         private const val CHANNEL_ID = "extraction_channel"
         private const val NOTIFICATION_ID = 1001
         private const val COMPLETION_NOTIFICATION_ID = 1002
         private const val EXTRA_FILE_NAME = "extra_file_name"
+        private const val EXTRA_CURRENT_FILE = "extra_current_file"
+        private const val EXTRA_EXTRACTED_COUNT = "extra_extracted_count"
+        private const val EXTRA_TOTAL_COUNT = "extra_total_count"
+        private const val EXTRA_PROGRESS = "extra_progress"
         private const val ACTION_STOP_EXTRACTION = "app.otter.service.STOP_EXTRACTION"
+        const val ACTION_EXTRACTION_PROGRESS = "app.otter.service.EXTRACTION_PROGRESS"
+        const val ACTION_EXTRACTION_COMPLETE = "app.otter.service.EXTRACTION_COMPLETE"
 
         fun newIntent(context: Context, archiveUri: Uri, fileName: String): Intent {
             return Intent(context, ExtractionService::class.java).apply {
