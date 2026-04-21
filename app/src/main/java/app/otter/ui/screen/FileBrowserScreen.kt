@@ -6,7 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
-import android.util.Log
+import timber.log.Timber
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -99,11 +99,11 @@ fun FileBrowserScreen(
                         progress = event.progress
                     )
                 } catch (e: Exception) {
-                    Log.e("FileBrowserScreen", "Error updating progress", e)
+                    Timber.tag("FileBrowserScreen").e(e, "Error updating progress")
                 }
             }
         } catch (e: Exception) {
-            Log.e("FileBrowserScreen", "Error collecting progress", e)
+            Timber.tag("FileBrowserScreen").e(e, "Error collecting progress")
         }
     }
 
@@ -113,11 +113,11 @@ fun FileBrowserScreen(
                 try {
                     viewModel.onExtractionComplete()
                 } catch (e: Exception) {
-                    Log.e("FileBrowserScreen", "Error on extraction complete", e)
+                    Timber.tag("FileBrowserScreen").e(e, "Error on extraction complete")
                 }
             }
         } catch (e: Exception) {
-            Log.e("FileBrowserScreen", "Error collecting complete", e)
+            Timber.tag("FileBrowserScreen").e(e, "Error collecting complete")
         }
     }
 

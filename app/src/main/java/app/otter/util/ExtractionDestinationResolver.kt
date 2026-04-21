@@ -3,7 +3,7 @@ package app.otter.util
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
-import android.util.Log
+import timber.log.Timber
 import androidx.documentfile.provider.DocumentFile
 import java.io.File
 
@@ -37,13 +37,13 @@ class ExtractionDestinationResolver(private val context: Context) {
             // Try to get real path from parent URI
             val parentPath = getRealPathFromUri(parentUri)
             if (parentPath != null) {
-                Log.d(TAG, "Extracting to same folder as archive: $parentPath")
+                Timber.tag(TAG).d("Extracting to same folder as archive: $parentPath")
                 return createDestinationFolder(parentPath, fileName)
             }
         }
 
         // Fallback: Extract to Downloads folder
-        Log.d(TAG, "Could not determine archive folder, using Downloads")
+        Timber.tag(TAG).d("Could not determine archive folder, using Downloads")
         return createDownloadsDestination(fileName)
     }
 
@@ -115,7 +115,7 @@ class ExtractionDestinationResolver(private val context: Context) {
             }
             null
         } catch (e: Exception) {
-            Log.e(TAG, "Error getting real path from URI", e)
+            Timber.tag(TAG).e(e, "Error getting real path from URI")
             null
         }
     }

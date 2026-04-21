@@ -2,7 +2,7 @@ package app.otter.service
 
 import android.content.Context
 import android.net.Uri
-import android.util.Log
+import timber.log.Timber
 import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
@@ -23,7 +23,7 @@ object ExtractionQueue {
      */
     fun enqueueAll(tasks: List<ExtractionTask>) {
         queue.addAll(tasks)
-        Log.d(TAG, "Enqueued ${tasks.size} tasks. Total in queue: ${queue.size}")
+        Timber.tag(TAG).d("Enqueued ${tasks.size} tasks. Total in queue: ${queue.size}")
     }
 
     /**
@@ -31,17 +31,17 @@ object ExtractionQueue {
      */
     fun processNext(context: Context): Boolean {
         if (isExtracting) {
-            Log.d(TAG, "Already extracting, skipping")
+            Timber.tag(TAG).d("Already extracting, skipping")
             return false
         }
 
         val task = queue.poll()
         if (task == null) {
-            Log.d(TAG, "Queue empty")
+            Timber.tag(TAG).d("Queue empty")
             return false
         }
 
-        Log.d(TAG, "Processing: ${task.fileName}, remaining: ${queue.size}")
+        Timber.tag(TAG).d("Processing: ${task.fileName}, remaining: ${queue.size}")
         isExtracting = true
 
         val intent = ExtractionService.newIntent(
@@ -58,7 +58,7 @@ object ExtractionQueue {
      * Marks current extraction as complete.
      */
     fun markComplete() {
-        Log.d(TAG, "Marking current extraction as complete")
+        Timber.tag(TAG).d("Marking current extraction as complete")
         isExtracting = false
     }
 
@@ -68,10 +68,10 @@ object ExtractionQueue {
     fun pollNext(): ExtractionTask? {
         val task = queue.poll()
         if (task != null) {
-            Log.d(TAG, "Polled next task: ${task.fileName}, remaining: ${queue.size}")
+            Timber.tag(TAG).d("Polled next task: ${task.fileName}, remaining: ${queue.size}")
             isExtracting = true
         } else {
-            Log.d(TAG, "Queue empty")
+            Timber.tag(TAG).d("Queue empty")
         }
         return task
     }
@@ -82,7 +82,7 @@ object ExtractionQueue {
     fun clear() {
         queue.clear()
         isExtracting = false
-        Log.d(TAG, "Queue cleared")
+        Timber.tag(TAG).d("Queue cleared")
     }
 
     /**

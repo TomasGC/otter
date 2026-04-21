@@ -1,6 +1,6 @@
 package app.otter.data.extractor
 
-import android.util.Log
+import timber.log.Timber
 import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
@@ -34,13 +34,13 @@ class ZipExtractor @Inject constructor() : ArchiveExtractor {
             tempFile.outputStream().use { output ->
                 inputStream.copyTo(output)
             }
-            Log.d(TAG, "Created temp file: ${tempFile.absolutePath}, size: ${tempFile.length()}")
+            Timber.tag(TAG).d("Created temp file: ${tempFile.absolutePath}, size: ${tempFile.length()}")
 
             // Count total entries using ZipFile (allows random access)
             val totalCount = ZipFile(tempFile).use { zipFile ->
                 zipFile.entries().asSequence().count { !it.isDirectory }
             }
-            Log.d(TAG, "Total files in archive: $totalCount")
+            Timber.tag(TAG).d("Total files in archive: $totalCount")
 
             // Pre-allocate large buffer for optimal I/O
             val buffer = ByteArray(BUFFER_SIZE_BYTES)
@@ -96,7 +96,7 @@ class ZipExtractor @Inject constructor() : ArchiveExtractor {
         } catch (e: CancellationException) {
             throw e // Re-throw to propagate cancellation
         } catch (e: Exception) {
-            Log.e(TAG, "ZIP extraction failed: ${e.message}", e)
+            Timber.tag(TAG).e(e, "ZIP extraction failed: ${e.message}")
             ExtractionResult.Failure(
                 errorMessage = "Extraction failed: ${e.message}",
                 cause = e
