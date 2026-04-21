@@ -21,16 +21,17 @@ import org.robolectric.annotation.Config
 class ExtractionQueueTest {
 
     private lateinit var mockContext: Context
+    private lateinit var queue: ExtractionQueue
 
     @Before
     fun setup() {
         mockContext = mockk(relaxed = true)
-        ExtractionQueue.clear()
+        queue = ExtractionQueue()
     }
 
     @After
     fun tearDown() {
-        ExtractionQueue.clear()
+        queue.clear()
     }
 
     @Test
@@ -42,10 +43,10 @@ class ExtractionQueueTest {
         )
 
         // When
-        ExtractionQueue.enqueueAll(tasks)
+        queue.enqueueAll(tasks)
 
         // Then
-        assertEquals(2, ExtractionQueue.size())
+        assertEquals(2, queue.size())
     }
 
     @Test
@@ -54,13 +55,13 @@ class ExtractionQueueTest {
         val tasks = listOf(
             ExtractionQueue.ExtractionTask(Uri.parse("file:///archive1.zip"), "archive1.zip")
         )
-        ExtractionQueue.enqueueAll(tasks)
+        queue.enqueueAll(tasks)
 
         // When - First call starts extraction
-        val firstResult = ExtractionQueue.processNext(mockContext)
+        val firstResult = queue.processNext(mockContext)
 
         // Then - Second call should return false (already extracting)
-        val secondResult = ExtractionQueue.processNext(mockContext)
+        val secondResult = queue.processNext(mockContext)
 
         assertTrue(firstResult)
         assertFalse(secondResult)
@@ -69,28 +70,28 @@ class ExtractionQueueTest {
     @Test
     fun `processNext returns false when queue is empty`() {
         // When
-        val result = ExtractionQueue.processNext(mockContext)
+        val result = queue.processNext(mockContext)
 
         // Then
         assertFalse(result)
-        assertEquals(0, ExtractionQueue.size())
+        assertEquals(0, queue.size())
     }
 
     @Test
     fun `processNext starts service with correct intent`() {
         // Given
         val task = ExtractionQueue.ExtractionTask(Uri.parse("file:///test.zip"), "test.zip")
-        ExtractionQueue.enqueueAll(listOf(task))
+        queue.enqueueAll(listOf(task))
 
         every { mockContext.startService(any()) } returns mockk()
 
         // When
-        val result = ExtractionQueue.processNext(mockContext)
+        val result = queue.processNext(mockContext)
 
         // Then
         assertTrue(result)
         verify { mockContext.startService(any()) }
-        assertEquals(0, ExtractionQueue.size()) // Task removed from queue
+        assertEquals(0, queue.size()) // Task removed from queue
     }
 
     @Test
@@ -100,20 +101,20 @@ class ExtractionQueueTest {
             ExtractionQueue.ExtractionTask(Uri.parse("file:///archive1.zip"), "archive1.zip"),
             ExtractionQueue.ExtractionTask(Uri.parse("file:///archive2.zip"), "archive2.zip")
         )
-        ExtractionQueue.enqueueAll(tasks)
+        queue.enqueueAll(tasks)
 
         // When - Poll tasks
-        val first = ExtractionQueue.pollNext()
+        val first = queue.pollNext()
         assertNotNull(first)
         assertEquals("archive1.zip", first?.fileName)
-        assertEquals(1, ExtractionQueue.size())
+        assertEquals(1, queue.size())
 
         // Then - Mark complete and poll second
-        ExtractionQueue.markComplete()
-        val second = ExtractionQueue.pollNext()
+        queue.markComplete()
+        val second = queue.pollNext()
         assertNotNull(second)
         assertEquals("archive2.zip", second?.fileName)
-        assertEquals(0, ExtractionQueue.size())
+        assertEquals(0, queue.size())
     }
 
     @Test
@@ -123,25 +124,25 @@ class ExtractionQueueTest {
             ExtractionQueue.ExtractionTask(Uri.parse("file:///archive1.zip"), "archive1.zip"),
             ExtractionQueue.ExtractionTask(Uri.parse("file:///archive2.zip"), "archive2.zip")
         )
-        ExtractionQueue.enqueueAll(tasks)
-        ExtractionQueue.processNext(mockContext)
+        queue.enqueueAll(tasks)
+        queue.processNext(mockContext)
 
         // When
-        ExtractionQueue.clear()
+        queue.clear()
 
         // Then
-        assertEquals(0, ExtractionQueue.size())
+        assertEquals(0, queue.size())
 
         // Should be able to process again (extraction flag reset)
-        ExtractionQueue.enqueueAll(listOf(tasks.first()))
-        val result = ExtractionQueue.processNext(mockContext)
+        queue.enqueueAll(listOf(tasks.first()))
+        val result = queue.processNext(mockContext)
         assertTrue(result)
     }
 
     @Test
     fun `size returns correct number of remaining tasks`() {
         // Given
-        assertEquals(0, ExtractionQueue.size())
+        assertEquals(0, queue.size())
 
         val tasks = listOf(
             ExtractionQueue.ExtractionTask(Uri.parse("file:///archive1.zip"), "archive1.zip"),
@@ -150,12 +151,12 @@ class ExtractionQueueTest {
         )
 
         // When
-        ExtractionQueue.enqueueAll(tasks)
+        queue.enqueueAll(tasks)
 
         // Then
-        assertEquals(3, ExtractionQueue.size())
+        assertEquals(3, queue.size())
 
-        ExtractionQueue.processNext(mockContext)
-        assertEquals(2, ExtractionQueue.size())
+        queue.processNext(mockContext)
+        assertEquals(2, queue.size())
     }
 }

@@ -10,18 +10,24 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Timber Tree that logs to a file in Downloads directory.
+ * Timber Tree that logs to a file in specified directory.
  * Only used in DEBUG builds.
+ *
+ * @param logDirectory Directory where log file will be created. If null, uses app-specific cache directory.
  */
-class FileLoggingTree(context: Context) : Timber.Tree() {
+class FileLoggingTree(context: Context, logDirectory: File? = null) : Timber.Tree() {
     private val logFile: File
     private val timestampFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
 
     init {
         val filenameFormat = SimpleDateFormat("yyyy-MM-dd-HH-mm", Locale.US)
         val timestamp = filenameFormat.format(Date())
-        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        logFile = File(downloadsDir, "otter-log-$timestamp.txt")
+
+        // Use provided directory or fall back to app cache (for tests)
+        val targetDir = logDirectory ?: context.cacheDir
+        targetDir.mkdirs() // Ensure directory exists
+
+        logFile = File(targetDir, "otter-log-$timestamp.txt")
 
         try {
             logFile.writeText("=== Otter Debug Log ===\n")
