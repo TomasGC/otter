@@ -12,6 +12,8 @@ import androidx.activity.ComponentActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import app.otter.service.ExtractionService
+import app.otter.data.util.ResourcePathConverter
+import app.otter.domain.model.ResourcePath
 
 /**
  * Main activity that handles archive extraction in auto mode.
@@ -23,7 +25,7 @@ class ExtractionActivity : ComponentActivity() {
         const val REQUEST_NOTIFICATION_PERMISSION = 1001
     }
 
-    private var pendingArchiveUri: Uri? = null
+    private var pendingArchivePath: ResourcePath? = null
     private var pendingFileName: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,7 +38,8 @@ class ExtractionActivity : ComponentActivity() {
             return
         }
 
-        val fileName = getFileName(archiveUri) ?: "archive"
+        val archivePath = ResourcePathConverter.fromUri(archiveUri)
+        val fileName = getFileName(archivePath) ?: "archive"
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
@@ -44,10 +47,10 @@ class ExtractionActivity : ComponentActivity() {
                     Manifest.permission.POST_NOTIFICATIONS
                 ) == PackageManager.PERMISSION_GRANTED
             ) {
-                startExtractionService(archiveUri, fileName)
+                startExtractionService(archivePath, fileName)
                 finish()
             } else {
-                pendingArchiveUri = archiveUri
+                pendingArchivePath = archivePath
                 pendingFileName = fileName
                 ActivityCompat.requestPermissions(
                     this,
@@ -56,7 +59,7 @@ class ExtractionActivity : ComponentActivity() {
                 )
             }
         } else {
-            startExtractionService(archiveUri, fileName)
+            startExtractionService(archivePath, fileName)
             finish()
         }
     }
@@ -77,17 +80,17 @@ class ExtractionActivity : ComponentActivity() {
                 ).show()
             }
 
-            pendingArchiveUri?.let { uri ->
+            pendingArchivePath?.let { path ->
                 pendingFileName?.let { name ->
-                    startExtractionService(uri, name)
+                    startExtractionService(path, name)
                 }
             }
             finish()
         }
     }
 
-    private fun startExtractionService(archiveUri: Uri, fileName: String) {
-        val serviceIntent = ExtractionService.newIntent(this, archiveUri, fileName)
+    private fun startExtractionService(archivePath: ResourcePath, fileName: String) {
+        val serviceIntent = ExtractionService.newIntent(this, archivePath, fileName)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
         } else {
@@ -96,7 +99,8 @@ class ExtractionActivity : ComponentActivity() {
         Toast.makeText(this, "Extracting $fileName...", Toast.LENGTH_SHORT).show()
     }
 
-    private fun getFileName(uri: Uri): String? {
+    private fun getFileName(path: ResourcePath): String? {
+        val uri = ResourcePathConverter.toUri(path)
         return try {
             contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                 val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)

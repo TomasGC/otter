@@ -3,6 +3,8 @@ package app.otter.service
 import android.content.Context
 import android.net.Uri
 import timber.log.Timber
+import app.otter.data.util.ResourcePathConverter
+import app.otter.domain.model.ResourcePath
 import java.util.concurrent.ConcurrentLinkedQueue
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,7 +19,7 @@ class ExtractionQueue @Inject constructor() {
     private var isExtracting = false
 
     data class ExtractionTask(
-        val archiveUri: Uri,
+        val archiveUri: ResourcePath,
         val fileName: String
     )
 

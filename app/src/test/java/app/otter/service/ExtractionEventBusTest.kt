@@ -1,8 +1,8 @@
 package app.otter.service
 
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -31,18 +31,15 @@ class ExtractionEventBusTest {
         val totalCount = 10
         val progress = 0.5f
 
-        // When
+        var capturedEvent: ExtractionEventBus.ProgressEvent? = null
         val eventJob = launch {
-            val event = eventBus.progressEvents.first()
-
-            // Then
-            assertEquals(fileName, event.fileName)
-            assertEquals(currentFile, event.currentFile)
-            assertEquals(extractedCount, event.extractedCount)
-            assertEquals(totalCount, event.totalCount)
-            assertEquals(progress, event.progress, 0.001f)
+            capturedEvent = eventBus.progressEvents.first()
         }
 
+        // Ensure collector is ready
+        advanceUntilIdle()
+
+        // When
         eventBus.emitProgress(
             fileName = fileName,
             currentFile = currentFile,
@@ -51,7 +48,16 @@ class ExtractionEventBusTest {
             progress = progress
         )
 
-        eventJob.join()
+        // Then - Advance coroutines and verify
+        advanceUntilIdle()
+        eventJob.cancel()
+
+        assertNotNull(capturedEvent)
+        assertEquals(fileName, capturedEvent!!.fileName)
+        assertEquals(currentFile, capturedEvent!!.currentFile)
+        assertEquals(extractedCount, capturedEvent!!.extractedCount)
+        assertEquals(totalCount, capturedEvent!!.totalCount)
+        assertEquals(progress, capturedEvent!!.progress, 0.001f)
     }
 
     @Test
@@ -63,19 +69,15 @@ class ExtractionEventBusTest {
         val totalCount = 100
         val progress = 0.42f
 
-        // When
+        var capturedEvent: ExtractionEventBus.ProgressEvent? = null
         val eventJob = launch {
-            val event = eventBus.progressEvents.first()
-
-            // Then
-            assertNotNull(event)
-            assertEquals("archive.zip", event.fileName)
-            assertEquals("readme.txt", event.currentFile)
-            assertEquals(42, event.extractedCount)
-            assertEquals(100, event.totalCount)
-            assertEquals(0.42f, event.progress, 0.001f)
+            capturedEvent = eventBus.progressEvents.first()
         }
 
+        // Ensure collector is ready
+        advanceUntilIdle()
+
+        // When
         eventBus.emitProgress(
             fileName = fileName,
             currentFile = currentFile,
@@ -84,7 +86,16 @@ class ExtractionEventBusTest {
             progress = progress
         )
 
-        eventJob.join()
+        // Then - Advance coroutines and verify
+        advanceUntilIdle()
+        eventJob.cancel()
+
+        assertNotNull(capturedEvent)
+        assertEquals("archive.zip", capturedEvent!!.fileName)
+        assertEquals("readme.txt", capturedEvent!!.currentFile)
+        assertEquals(42, capturedEvent!!.extractedCount)
+        assertEquals(100, capturedEvent!!.totalCount)
+        assertEquals(0.42f, capturedEvent!!.progress, 0.001f)
     }
 
     @Test
@@ -108,18 +119,26 @@ class ExtractionEventBusTest {
 
     @Test
     fun `emitComplete should emit event to completeEvents flow`() = runTest {
-        // Given
+        // Given - Start collecting in background
+        var eventReceived = false
         val eventJob = launch {
-            val event = eventBus.completeEvents.first()
-
-            // Then
-            assertEquals(Unit, event)
+            eventBus.completeEvents.first()
+            eventReceived = true
         }
+
+        // Ensure collector is ready
+        advanceUntilIdle()
 
         // When
         eventBus.emitComplete()
 
-        eventJob.join()
+        // Then - Advance to process emission
+        advanceUntilIdle()
+
+        // Verify event was received
+        assertEquals(true, eventReceived)
+
+        eventJob.cancel()
     }
 
     @Test
@@ -135,13 +154,15 @@ class ExtractionEventBusTest {
             eventBus.progressEvents.collect { collector2.add(it) }
         }
 
+        // Ensure collectors are ready
+        advanceUntilIdle()
+
         // When
         eventBus.emitProgress("test.zip", "file.txt", 1, 10, 0.1f)
 
-        // Wait a bit for collection
-        kotlinx.coroutines.delay(100)
+        // Then - Advance coroutines to ensure collection completes
+        advanceUntilIdle()
 
-        // Then
         assertEquals(1, collector1.size)
         assertEquals(1, collector2.size)
         assertEquals("test.zip", collector1[0].fileName)
@@ -165,6 +186,9 @@ class ExtractionEventBusTest {
             }
         }
 
+        // Then - Advance time to trigger timeout
+        advanceUntilIdle()
+
         // Wait and verify timeout
         try {
             job.join()
@@ -172,7 +196,7 @@ class ExtractionEventBusTest {
             // Expected - no replay for complete events
         }
 
-        // Then - Should not have received event (replay = 0)
+        // Should not have received event (replay = 0)
         assertFalse(eventReceived)
     }
 
@@ -184,16 +208,19 @@ class ExtractionEventBusTest {
             eventBus.progressEvents.collect { receivedEvents.add(it) }
         }
 
+        // Ensure collector is ready
+        advanceUntilIdle()
+
         // When - Emit first event
         eventBus.emitProgress("test1.zip", "file1.txt", 1, 10, 0.1f)
-        kotlinx.coroutines.delay(100)
+        advanceUntilIdle()
 
         // Cancel collection
         job.cancel()
 
         // Emit second event after cancellation
         eventBus.emitProgress("test2.zip", "file2.txt", 2, 10, 0.2f)
-        kotlinx.coroutines.delay(100)
+        advanceUntilIdle()
 
         // Then - Should only have received first event
         assertEquals(1, receivedEvents.size)

@@ -1,7 +1,7 @@
 package app.otter.domain.usecase
 
-import android.net.Uri
 import app.otter.domain.model.FileItem
+import app.otter.domain.model.ResourcePath
 import app.otter.domain.repository.FileBrowserRepository
 
 /**
@@ -14,11 +14,11 @@ class BrowseFilesUseCase(
     /**
      * Lists files and directories at the given path.
      *
-     * @param uri URI of the directory to browse
+     * @param path Path of the directory to browse
      * @return Result containing list of files and directories, sorted: archives → directories → files
      */
-    suspend operator fun invoke(uri: Uri): Result<List<FileItem>> {
-        return repository.listFiles(uri).map { files ->
+    suspend operator fun invoke(path: ResourcePath): Result<List<FileItem>> {
+        return repository.listFiles(path).map { files ->
             files.sortedWith(
                 compareBy<FileItem> { !it.isArchive }  // Archives first
                     .thenBy { !it.isDirectory }         // Then directories
@@ -28,18 +28,18 @@ class BrowseFilesUseCase(
     }
 
     /**
-     * Gets the parent directory URI.
+     * Gets the parent directory path.
      *
-     * @param currentUri Current directory URI
-     * @return Parent directory URI, or null if at root
+     * @param currentPath Current directory path
+     * @return Parent directory path, or null if at root
      */
-    fun getParent(currentUri: Uri): Uri? = repository.getParent(currentUri)
+    fun getParent(currentPath: ResourcePath): ResourcePath? = repository.getParent(currentPath)
 
     /**
-     * Checks if the given URI is a root directory.
+     * Checks if the given path is a root directory.
      *
-     * @param uri URI to check
+     * @param path Path to check
      * @return True if this is a root directory
      */
-    fun isRoot(uri: Uri): Boolean = repository.isRoot(uri)
+    fun isRoot(path: ResourcePath): Boolean = repository.isRoot(path)
 }

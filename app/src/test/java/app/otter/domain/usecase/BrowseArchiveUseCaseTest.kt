@@ -1,7 +1,7 @@
 package app.otter.domain.usecase
 
-import android.net.Uri
 import app.otter.domain.model.ArchiveEntry
+import app.otter.domain.model.ResourcePath
 import app.otter.domain.repository.ArchiveBrowserRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -26,36 +26,36 @@ class BrowseArchiveUseCaseTest {
     @Test
     fun `invoke should delegate to repository`() = runTest {
         // Given
-        val archiveUri = Uri.parse("file:///test.zip")
+        val archivePath = ResourcePath.from("file:///test.zip")
         val path = "folder"
         val entries = listOf(
             ArchiveEntry("folder/file.txt", "file.txt", false, 100, 80, System.currentTimeMillis()),
             ArchiveEntry("folder/sub", "sub", true, null, null, System.currentTimeMillis())
         )
-        coEvery { repository.listEntries(archiveUri, path) } returns Result.success(entries)
+        coEvery { repository.listEntries(archivePath, path) } returns Result.success(entries)
 
         // When
-        val result = useCase(archiveUri, path)
+        val result = useCase(archivePath, path)
 
         // Then
         assertTrue(result.isSuccess)
-        coVerify { repository.listEntries(archiveUri, path) }
+        coVerify { repository.listEntries(archivePath, path) }
     }
 
     @Test
     fun `invoke should sort directories before files`() = runTest {
         // Given
-        val archiveUri = Uri.parse("file:///test.zip")
+        val archivePath = ResourcePath.from("file:///test.zip")
         val entries = listOf(
             ArchiveEntry("file1.txt", "file1.txt", false, 100, 80, System.currentTimeMillis()),
             ArchiveEntry("dir1", "dir1", true, null, null, System.currentTimeMillis()),
             ArchiveEntry("file2.txt", "file2.txt", false, 200, 150, System.currentTimeMillis()),
             ArchiveEntry("dir2", "dir2", true, null, null, System.currentTimeMillis())
         )
-        coEvery { repository.listEntries(archiveUri, "") } returns Result.success(entries)
+        coEvery { repository.listEntries(archivePath, "") } returns Result.success(entries)
 
         // When
-        val result = useCase(archiveUri, "")
+        val result = useCase(archivePath, "")
 
         // Then
         assertTrue(result.isSuccess)
@@ -72,17 +72,17 @@ class BrowseArchiveUseCaseTest {
     @Test
     fun `invoke should sort alphabetically within same type`() = runTest {
         // Given
-        val archiveUri = Uri.parse("file:///test.zip")
+        val archivePath = ResourcePath.from("file:///test.zip")
         val entries = listOf(
             ArchiveEntry("zebra.txt", "zebra.txt", false, 100, 80, System.currentTimeMillis()),
             ArchiveEntry("apple.txt", "apple.txt", false, 100, 80, System.currentTimeMillis()),
             ArchiveEntry("zoo", "zoo", true, null, null, System.currentTimeMillis()),
             ArchiveEntry("archive", "archive", true, null, null, System.currentTimeMillis())
         )
-        coEvery { repository.listEntries(archiveUri, "") } returns Result.success(entries)
+        coEvery { repository.listEntries(archivePath, "") } returns Result.success(entries)
 
         // When
-        val result = useCase(archiveUri, "")
+        val result = useCase(archivePath, "")
 
         // Then
         val sorted = result.getOrNull()!!
@@ -97,16 +97,16 @@ class BrowseArchiveUseCaseTest {
     @Test
     fun `invoke should be case insensitive when sorting`() = runTest {
         // Given
-        val archiveUri = Uri.parse("file:///test.zip")
+        val archivePath = ResourcePath.from("file:///test.zip")
         val entries = listOf(
             ArchiveEntry("Zebra.txt", "Zebra.txt", false, 100, 80, System.currentTimeMillis()),
             ArchiveEntry("apple.txt", "apple.txt", false, 100, 80, System.currentTimeMillis()),
             ArchiveEntry("BANANA.txt", "BANANA.txt", false, 100, 80, System.currentTimeMillis())
         )
-        coEvery { repository.listEntries(archiveUri, "") } returns Result.success(entries)
+        coEvery { repository.listEntries(archivePath, "") } returns Result.success(entries)
 
         // When
-        val result = useCase(archiveUri, "")
+        val result = useCase(archivePath, "")
 
         // Then
         val sorted = result.getOrNull()!!
@@ -118,11 +118,11 @@ class BrowseArchiveUseCaseTest {
     @Test
     fun `invoke should return empty list when repository returns empty`() = runTest {
         // Given
-        val archiveUri = Uri.parse("file:///test.zip")
-        coEvery { repository.listEntries(archiveUri, "") } returns Result.success(emptyList())
+        val archivePath = ResourcePath.from("file:///test.zip")
+        coEvery { repository.listEntries(archivePath, "") } returns Result.success(emptyList())
 
         // When
-        val result = useCase(archiveUri, "")
+        val result = useCase(archivePath, "")
 
         // Then
         assertTrue(result.isSuccess)
@@ -132,12 +132,12 @@ class BrowseArchiveUseCaseTest {
     @Test
     fun `invoke should propagate repository failure`() = runTest {
         // Given
-        val archiveUri = Uri.parse("file:///test.zip")
+        val archivePath = ResourcePath.from("file:///test.zip")
         val exception = IllegalArgumentException("Archive not found")
-        coEvery { repository.listEntries(archiveUri, "") } returns Result.failure(exception)
+        coEvery { repository.listEntries(archivePath, "") } returns Result.failure(exception)
 
         // When
-        val result = useCase(archiveUri, "")
+        val result = useCase(archivePath, "")
 
         // Then
         assertTrue(result.isFailure)
@@ -147,13 +147,13 @@ class BrowseArchiveUseCaseTest {
     @Test
     fun `invoke should use empty string as default path`() = runTest {
         // Given
-        val archiveUri = Uri.parse("file:///test.zip")
-        coEvery { repository.listEntries(archiveUri, "") } returns Result.success(emptyList())
+        val archivePath = ResourcePath.from("file:///test.zip")
+        coEvery { repository.listEntries(archivePath, "") } returns Result.success(emptyList())
 
         // When
-        useCase(archiveUri)
+        useCase(archivePath)
 
         // Then
-        coVerify { repository.listEntries(archiveUri, "") }
+        coVerify { repository.listEntries(archivePath, "") }
     }
 }

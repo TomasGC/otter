@@ -2,6 +2,7 @@ package app.otter.ui.viewmodel
 
 import android.net.Uri
 import app.otter.domain.model.FileItem
+import app.otter.domain.model.ResourcePath
 import app.otter.domain.usecase.BrowseFilesUseCase
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -244,7 +245,7 @@ class FileBrowserViewModelTest {
         val folder = state.files.find { it.isDirectory }!!
 
         // Mock navigation result
-        coEvery { browseFilesUseCase(folder.uri) } returns Result.success(emptyList())
+        coEvery { browseFilesUseCase(folder.path) } returns Result.success(emptyList())
 
         // When
         viewModel.navigateInto(folder)
@@ -355,7 +356,7 @@ class FileBrowserViewModelTest {
         isArchive: Boolean = false
     ): FileItem {
         return FileItem(
-            uri = Uri.parse("file:///$name"),
+            path = ResourcePath.from("file:///$name"),
             name = name,
             isDirectory = isDirectory,
             sizeBytes = if (isDirectory) null else 1024L,

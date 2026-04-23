@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.otter.data.util.ResourcePathConverter
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import javax.inject.Inject
@@ -78,7 +79,8 @@ class ExtractionServiceInstrumentedTest {
         // Given - Use unique filename for this test
         val testFile = createTestZipFile("progress-test.zip")
         val archiveUri = Uri.fromFile(testFile)
-        val intent = ExtractionService.newIntent(context, archiveUri, "progress-test.zip")
+        val archivePath = ResourcePathConverter.fromUri(archiveUri)
+        val intent = ExtractionService.newIntent(context, archivePath, "progress-test.zip")
 
         // When - Start service with Hilt injection
         context.startService(intent)
@@ -99,7 +101,8 @@ class ExtractionServiceInstrumentedTest {
         // Given - Use unique filename for this test
         val testFile = createTestZipFile("complete-test.zip")
         val archiveUri = Uri.fromFile(testFile)
-        val intent = ExtractionService.newIntent(context, archiveUri, "complete-test.zip")
+        val archivePath = ResourcePathConverter.fromUri(archiveUri)
+        val intent = ExtractionService.newIntent(context, archivePath, "complete-test.zip")
 
         // When - Start service with Hilt injection
         context.startService(intent)
@@ -118,9 +121,10 @@ class ExtractionServiceInstrumentedTest {
         // Given - Use unique filename for this test
         val testFile = createTestZipFile("single-queue-test.zip")
         val file1Uri = Uri.fromFile(testFile)
+        val file1Path = ResourcePathConverter.fromUri(file1Uri)
 
         // When - Start service (Hilt injection)
-        val intent = ExtractionService.newIntent(context, file1Uri, "single-queue-test.zip")
+        val intent = ExtractionService.newIntent(context, file1Path, "single-queue-test.zip")
         context.startService(intent)
 
         // Then - Wait for extraction to complete
@@ -141,7 +145,7 @@ class ExtractionServiceInstrumentedTest {
         val file2Uri = Uri.fromFile(file2)
 
         extractionQueue.enqueueAll(
-            listOf(ExtractionQueue.ExtractionTask(file2Uri, "queue-test-2.zip"))
+            listOf(ExtractionQueue.ExtractionTask(ResourcePathConverter.fromUri(file2Uri), "queue-test-2.zip"))
         )
 
         // Start collecting events BEFORE starting service to avoid race condition
@@ -153,7 +157,8 @@ class ExtractionServiceInstrumentedTest {
         }
 
         // When - Start service with first file (Hilt injection)
-        val intent = ExtractionService.newIntent(context, file1Uri, "queue-test-1.zip")
+        val file1Path = ResourcePathConverter.fromUri(file1Uri)
+        val intent = ExtractionService.newIntent(context, file1Path, "queue-test-1.zip")
         context.startService(intent)
 
         // Then - Wait for both files to be processed
@@ -175,7 +180,8 @@ class ExtractionServiceInstrumentedTest {
         // Given - Use unique filename for this test
         val testFile = createTestZipFile("stop-test.zip")
         val archiveUri = Uri.fromFile(testFile)
-        val intent = ExtractionService.newIntent(context, archiveUri, "stop-test.zip")
+        val archivePath = ResourcePathConverter.fromUri(archiveUri)
+        val intent = ExtractionService.newIntent(context, archivePath, "stop-test.zip")
 
         // When - Start service with Hilt injection
         context.startService(intent)
@@ -196,7 +202,8 @@ class ExtractionServiceInstrumentedTest {
     fun serviceShouldHandleInvalidUri() = runBlocking {
         // Given - Invalid URI
         val invalidUri = Uri.parse("file:///nonexistent/file.zip")
-        val intent = ExtractionService.newIntent(context, invalidUri, "invalid.zip")
+        val invalidPath = ResourcePathConverter.fromUri(invalidUri)
+        val intent = ExtractionService.newIntent(context, invalidPath, "invalid.zip")
 
         // When - Start service with Hilt injection
         context.startService(intent)

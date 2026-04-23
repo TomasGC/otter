@@ -1,11 +1,9 @@
 package app.otter.domain.model
 
-import android.net.Uri
-
 /**
  * Represents a file or directory in the file browser.
  *
- * @property uri The URI of the file or directory
+ * @property path The path to the file or directory
  * @property name Display name of the file or directory
  * @property isDirectory True if this is a directory, false if it's a file
  * @property sizeBytes Size in bytes (null for directories)
@@ -13,7 +11,7 @@ import android.net.Uri
  * @property mimeType MIME type of the file (null for directories)
  */
 data class FileItem(
-    val uri: Uri,
+    val path: ResourcePath,
     val name: String,
     val isDirectory: Boolean,
     val sizeBytes: Long?,

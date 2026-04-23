@@ -2,6 +2,7 @@ package app.otter.service
 
 import android.content.Context
 import android.net.Uri
+import app.otter.domain.model.ResourcePath
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -38,8 +39,8 @@ class ExtractionQueueTest {
     fun `enqueueAll adds tasks to queue`() {
         // Given
         val tasks = listOf(
-            ExtractionQueue.ExtractionTask(Uri.parse("file:///archive1.zip"), "archive1.zip"),
-            ExtractionQueue.ExtractionTask(Uri.parse("file:///archive2.zip"), "archive2.zip")
+            ExtractionQueue.ExtractionTask(ResourcePath.from("file:///archive1.zip"), "archive1.zip"),
+            ExtractionQueue.ExtractionTask(ResourcePath.from("file:///archive2.zip"), "archive2.zip")
         )
 
         // When
@@ -53,7 +54,7 @@ class ExtractionQueueTest {
     fun `processNext returns false when already extracting`() {
         // Given
         val tasks = listOf(
-            ExtractionQueue.ExtractionTask(Uri.parse("file:///archive1.zip"), "archive1.zip")
+            ExtractionQueue.ExtractionTask(ResourcePath.from("file:///archive1.zip"), "archive1.zip")
         )
         queue.enqueueAll(tasks)
 
@@ -80,7 +81,7 @@ class ExtractionQueueTest {
     @Test
     fun `processNext starts service with correct intent`() {
         // Given
-        val task = ExtractionQueue.ExtractionTask(Uri.parse("file:///test.zip"), "test.zip")
+        val task = ExtractionQueue.ExtractionTask(ResourcePath.from("file:///test.zip"), "test.zip")
         queue.enqueueAll(listOf(task))
 
         every { mockContext.startService(any()) } returns mockk()
@@ -98,8 +99,8 @@ class ExtractionQueueTest {
     fun `onExtractionComplete processes next task in queue`() {
         // Given
         val tasks = listOf(
-            ExtractionQueue.ExtractionTask(Uri.parse("file:///archive1.zip"), "archive1.zip"),
-            ExtractionQueue.ExtractionTask(Uri.parse("file:///archive2.zip"), "archive2.zip")
+            ExtractionQueue.ExtractionTask(ResourcePath.from("file:///archive1.zip"), "archive1.zip"),
+            ExtractionQueue.ExtractionTask(ResourcePath.from("file:///archive2.zip"), "archive2.zip")
         )
         queue.enqueueAll(tasks)
 
@@ -121,8 +122,8 @@ class ExtractionQueueTest {
     fun `clear removes all tasks and resets state`() {
         // Given
         val tasks = listOf(
-            ExtractionQueue.ExtractionTask(Uri.parse("file:///archive1.zip"), "archive1.zip"),
-            ExtractionQueue.ExtractionTask(Uri.parse("file:///archive2.zip"), "archive2.zip")
+            ExtractionQueue.ExtractionTask(ResourcePath.from("file:///archive1.zip"), "archive1.zip"),
+            ExtractionQueue.ExtractionTask(ResourcePath.from("file:///archive2.zip"), "archive2.zip")
         )
         queue.enqueueAll(tasks)
         queue.processNext(mockContext)
@@ -145,9 +146,9 @@ class ExtractionQueueTest {
         assertEquals(0, queue.size())
 
         val tasks = listOf(
-            ExtractionQueue.ExtractionTask(Uri.parse("file:///archive1.zip"), "archive1.zip"),
-            ExtractionQueue.ExtractionTask(Uri.parse("file:///archive2.zip"), "archive2.zip"),
-            ExtractionQueue.ExtractionTask(Uri.parse("file:///archive3.zip"), "archive3.zip")
+            ExtractionQueue.ExtractionTask(ResourcePath.from("file:///archive1.zip"), "archive1.zip"),
+            ExtractionQueue.ExtractionTask(ResourcePath.from("file:///archive2.zip"), "archive2.zip"),
+            ExtractionQueue.ExtractionTask(ResourcePath.from("file:///archive3.zip"), "archive3.zip")
         )
 
         // When

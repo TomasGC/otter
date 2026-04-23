@@ -2,8 +2,10 @@ package app.otter.data.repository
 
 import android.content.Context
 import android.net.Uri
+import app.otter.data.util.ResourcePathConverter
 import app.otter.domain.model.ArchiveEntry
 import app.otter.domain.model.ExtractionProgress
+import app.otter.domain.model.ResourcePath
 import app.otter.domain.repository.ArchiveBrowserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -24,9 +26,10 @@ class ArchiveBrowserRepositoryImpl(
     private val context: Context,
 ) : ArchiveBrowserRepository {
 
-    override suspend fun listEntries(archiveUri: Uri, path: String): Result<List<ArchiveEntry>> {
+    override suspend fun listEntries(archivePath: ResourcePath, path: String): Result<List<ArchiveEntry>> {
         return withContext(Dispatchers.IO) {
             try {
+                val archiveUri = ResourcePathConverter.toUri(archivePath)
                 val archiveFile = getFileFromUri(archiveUri) ?: return@withContext Result.failure(
                     IllegalArgumentException("Cannot access archive file")
                 )
@@ -103,16 +106,18 @@ class ArchiveBrowserRepositoryImpl(
     }
 
     override fun extractSelected(
-        archiveUri: Uri,
+        archivePath: ResourcePath,
         entryPaths: List<String>,
-        destinationUri: Uri,
+        destinationPath: ResourcePath,
     ): Flow<ExtractionProgress> = flow {
         emit(ExtractionProgress.Idle)
 
         try {
+            val archiveUri = ResourcePathConverter.toUri(archivePath)
             val archiveFile = getFileFromUri(archiveUri) ?: throw IllegalArgumentException(
                 "Cannot access archive file"
             )
+            val destinationUri = ResourcePathConverter.toUri(destinationPath)
             val destinationFile = File(destinationUri.path ?: throw IllegalArgumentException(
                 "Invalid destination path"
             ))
