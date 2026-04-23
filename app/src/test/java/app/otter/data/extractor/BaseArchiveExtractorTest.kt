@@ -95,7 +95,7 @@ class BaseArchiveExtractorTest {
         val destination = tempFolder.newFolder("output")
 
         // Count temp files before
-        val tempDir = File(System.getProperty("java.io.tmpdir"))
+        val tempDir = File(System.getProperty("java.io.tmpdir") ?: "/tmp")
         val filesBefore = tempDir.listFiles { file -> file.name.startsWith("fake_archive") }?.size ?: 0
 
         // When
@@ -115,7 +115,7 @@ class BaseArchiveExtractorTest {
         val destination = tempFolder.newFolder("output")
 
         // Count temp files before
-        val tempDir = File(System.getProperty("java.io.tmpdir"))
+        val tempDir = File(System.getProperty("java.io.tmpdir") ?: "/tmp")
         val filesBefore = tempDir.listFiles { file -> file.name.startsWith("fake_archive") }?.size ?: 0
 
         // When

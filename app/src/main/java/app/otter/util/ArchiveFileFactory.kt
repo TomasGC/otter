@@ -3,14 +3,16 @@ package app.otter.util
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import app.otter.data.util.ResourcePathConverter
 import app.otter.domain.model.ArchiveFile
 import app.otter.domain.model.ArchiveType
+import app.otter.domain.model.ResourcePath
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Factory for creating ArchiveFile instances from URIs.
+ * Factory for creating ArchiveFile instances from ResourcePath.
  * Extracted from ExtractionService for testability and SRP.
  */
 @Singleton
@@ -20,21 +22,30 @@ class ArchiveFileFactory @Inject constructor(
 ) {
 
     /**
-     * Creates an ArchiveFile from a URI and filename.
+     * Creates an ArchiveFile from a ResourcePath and filename.
      *
-     * @param uri The archive URI (file:// or content://)
+     * @param path The archive path
      * @param fileName The archive filename
      * @return ArchiveFile if valid, null otherwise
      */
-    fun createFromUri(uri: Uri, fileName: String): ArchiveFile? {
+    fun createFromPath(path: ResourcePath, fileName: String): ArchiveFile? {
+        val uri = ResourcePathConverter.toUri(path)
         return when (uri.scheme) {
-            "file" -> createFromFileUri(uri, fileName)
-            "content" -> createFromContentUri(uri, fileName)
+            "file" -> createFromFileUri(path, uri, fileName)
+            "content" -> createFromContentUri(path, uri, fileName)
             else -> null
         }
     }
 
-    private fun createFromFileUri(uri: Uri, fileName: String): ArchiveFile? {
+    /**
+     * Legacy method for tests compatibility.
+     * Converts Uri to ResourcePath immediately.
+     */
+    fun createFromUri(uri: Uri, fileName: String): ArchiveFile? {
+        return createFromPath(ResourcePathConverter.fromUri(uri), fileName)
+    }
+
+    private fun createFromFileUri(path: ResourcePath, uri: Uri, fileName: String): ArchiveFile? {
         val file = File(uri.path ?: return null)
         if (!file.exists() || !file.isFile) {
             return null
@@ -43,7 +54,7 @@ class ArchiveFileFactory @Inject constructor(
         val archiveType = ArchiveType.fromFileName(fileName) ?: return null
 
         return ArchiveFile(
-            uri = uri,
+            path = path,
             name = fileName,
             sizeBytes = file.length(),
             mimeType = mimeTypeUtil.getMimeType(fileName),
@@ -51,7 +62,7 @@ class ArchiveFileFactory @Inject constructor(
         )
     }
 
-    private fun createFromContentUri(uri: Uri, fileName: String): ArchiveFile? {
+    private fun createFromContentUri(path: ResourcePath, uri: Uri, fileName: String): ArchiveFile? {
         val cursor = context.contentResolver.query(uri, null, null, null, null)
             ?: return null
 
@@ -65,7 +76,7 @@ class ArchiveFileFactory @Inject constructor(
             val archiveType = ArchiveType.fromFileName(fileName) ?: return null
 
             ArchiveFile(
-                uri = uri,
+                path = path,
                 name = fileName,
                 sizeBytes = size,
                 mimeType = mimeType,

@@ -5,7 +5,9 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
+import app.otter.data.util.ResourcePathConverter
 import app.otter.domain.model.FileItem
+import app.otter.domain.model.ResourcePath
 import app.otter.domain.repository.FileBrowserRepository
 import app.otter.util.MimeTypeUtil
 import java.io.File
@@ -18,7 +20,8 @@ class FileBrowserRepositoryImpl(
     private val mimeTypeUtil: MimeTypeUtil,
 ) : FileBrowserRepository {
 
-    override suspend fun listFiles(uri: Uri): Result<List<FileItem>> {
+    override suspend fun listFiles(path: ResourcePath): Result<List<FileItem>> {
+        val uri = ResourcePathConverter.toUri(path)
         return try {
 
             val files = when (uri.scheme) {
@@ -49,7 +52,7 @@ class FileBrowserRepositoryImpl(
                 val mimeType = if (file.isFile) mimeTypeUtil.getMimeType(file.name) else null
 
                 FileItem(
-                    uri = Uri.fromFile(file),
+                    path = ResourcePathConverter.fromUri(Uri.fromFile(file)),
                     name = file.name,
                     isDirectory = file.isDirectory,
                     sizeBytes = if (file.isFile) file.length() else null,
@@ -70,7 +73,7 @@ class FileBrowserRepositoryImpl(
         return documentFile.listFiles().mapNotNull { file ->
             try {
                 FileItem(
-                    uri = file.uri,
+                    path = ResourcePathConverter.fromUri(file.uri),
                     name = file.name ?: return@mapNotNull null,
                     isDirectory = file.isDirectory,
                     sizeBytes = if (file.isFile) file.length() else null,
@@ -83,13 +86,14 @@ class FileBrowserRepositoryImpl(
         }
     }
 
-    override fun getParent(currentUri: Uri): Uri? {
-        return when (currentUri.scheme) {
+    override fun getParent(currentPath: ResourcePath): ResourcePath? {
+        val currentUri = ResourcePathConverter.toUri(currentPath)
+        val parentUri = when (currentUri.scheme) {
             "file" -> {
                 val file = File(currentUri.path ?: return null)
                 val parent = file.parentFile ?: return null
                 if (parent.path == "/" || parent.path == Environment.getExternalStorageDirectory().path) {
-                    null
+                    return null
                 } else {
                     Uri.fromFile(parent)
                 }
@@ -102,18 +106,20 @@ class FileBrowserRepositoryImpl(
                         DocumentsContract.getTreeDocumentId(currentUri)
                     )
                 } catch (e: Exception) {
-                    null
+                    return null
                 }
             }
-            else -> null
+            else -> return null
         }
+        return ResourcePathConverter.fromUri(parentUri)
     }
 
-    override fun isRoot(uri: Uri): Boolean {
+    override fun isRoot(path: ResourcePath): Boolean {
+        val uri = ResourcePathConverter.toUri(path)
         return when (uri.scheme) {
             "file" -> {
-                val path = uri.path ?: return true
-                path == "/" || path == Environment.getExternalStorageDirectory().path
+                val filePath = uri.path ?: return true
+                filePath == "/" || filePath == Environment.getExternalStorageDirectory().path
             }
             "content" -> {
                 try {

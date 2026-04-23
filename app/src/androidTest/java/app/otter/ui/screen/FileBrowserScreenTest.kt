@@ -10,6 +10,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.otter.domain.model.FileItem
+import app.otter.domain.model.ResourcePath
 import app.otter.domain.usecase.BrowseFilesUseCase
 import app.otter.ui.theme.OtterTheme
 import app.otter.ui.viewmodel.FileBrowserViewModel
@@ -44,7 +45,7 @@ class FileBrowserScreenTest {
         // Mock file list with archives and directories
         val mockFiles = listOf(
             FileItem(
-                uri = Uri.parse("file:///test.zip"),
+                path = ResourcePath.from("file:///test.zip"),
                 name = "test.zip",
                 isDirectory = false,
                 sizeBytes = 1024L,
@@ -52,7 +53,7 @@ class FileBrowserScreenTest {
                 mimeType = "application/zip"
             ),
             FileItem(
-                uri = Uri.parse("file:///folder1"),
+                path = ResourcePath.from("file:///folder1"),
                 name = "folder1",
                 isDirectory = true,
                 sizeBytes = null,
@@ -60,7 +61,7 @@ class FileBrowserScreenTest {
                 mimeType = null
             ),
             FileItem(
-                uri = Uri.parse("file:///document.txt"),
+                path = ResourcePath.from("file:///document.txt"),
                 name = "document.txt",
                 isDirectory = false,
                 sizeBytes = 512L,

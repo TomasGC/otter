@@ -3,9 +3,11 @@ package app.otter.data.repository
 import android.content.Context
 import android.net.Uri
 import app.otter.data.extractor.ArchiveExtractor
+import app.otter.data.util.ResourcePathConverter
 import app.otter.domain.model.ArchiveFile
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
+import app.otter.domain.model.ResourcePath
 import app.otter.domain.repository.ArchiveRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -24,7 +26,7 @@ class ArchiveRepositoryImpl @Inject constructor(
 
     override fun extractArchive(
         archive: ArchiveFile,
-        destinationUri: Uri
+        destinationPath: ResourcePath
     ): Flow<ExtractionProgress> = callbackFlow {
         try {
             send(ExtractionProgress.Idle)
@@ -36,20 +38,26 @@ class ArchiveRepositoryImpl @Inject constructor(
                     return@callbackFlow
                 }
 
-            val inputStream = context.contentResolver.openInputStream(archive.uri)
+            val archiveUri = ResourcePathConverter.toUri(archive.path)
+            val inputStream = context.contentResolver.openInputStream(archiveUri)
                 ?: run {
                     send(ExtractionProgress.Error("Cannot open archive", null))
                     close()
                     return@callbackFlow
                 }
 
-            val destinationPath = File(destinationUri.path)
-            if (!destinationPath.exists()) {
-                destinationPath.mkdirs()
+            val destinationUri = ResourcePathConverter.toUri(destinationPath)
+            val destinationFile = File(destinationUri.path ?: run {
+                send(ExtractionProgress.Error("Invalid destination path", null))
+                close()
+                return@callbackFlow
+            })
+            if (!destinationFile.exists()) {
+                destinationFile.mkdirs()
             }
 
             // Emit progress events in real-time
-            val result = extractor.extract(inputStream, destinationPath) { progress ->
+            val result = extractor.extract(inputStream, destinationFile) { progress ->
                 trySend(progress)
             }
 

@@ -1,7 +1,7 @@
 package app.otter.domain.repository
 
-import android.net.Uri
 import app.otter.domain.model.FileItem
+import app.otter.domain.model.ResourcePath
 
 /**
  * Repository for browsing files and directories.
@@ -11,24 +11,24 @@ interface FileBrowserRepository {
     /**
      * Lists files and directories at the given path.
      *
-     * @param uri URI of the directory to browse
+     * @param path Path of the directory to browse
      * @return List of files and directories in the given path
      */
-    suspend fun listFiles(uri: Uri): Result<List<FileItem>>
+    suspend fun listFiles(path: ResourcePath): Result<List<FileItem>>
 
     /**
-     * Gets the parent directory URI.
+     * Gets the parent directory path.
      *
-     * @param currentUri Current directory URI
-     * @return Parent directory URI, or null if at root
+     * @param currentPath Current directory path
+     * @return Parent directory path, or null if at root
      */
-    fun getParent(currentUri: Uri): Uri?
+    fun getParent(currentPath: ResourcePath): ResourcePath?
 
     /**
-     * Checks if the given URI is a root directory.
+     * Checks if the given path is a root directory.
      *
-     * @param uri URI to check
+     * @param path Path to check
      * @return True if this is a root directory
      */
-    fun isRoot(uri: Uri): Boolean
+    fun isRoot(path: ResourcePath): Boolean
 }

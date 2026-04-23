@@ -64,6 +64,7 @@ import app.otter.ui.viewmodel.SortOrder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import app.otter.data.util.ResourcePathConverter
 
 /**
  * File browser screen for navigating the file system.
@@ -229,10 +230,11 @@ fun FileBrowserScreen(
 
                                     // Take persistent permissions for content:// URIs
                                     selected.forEach { file ->
-                                        if (file.uri.scheme == "content") {
+                                        val uri = ResourcePathConverter.toUri(file.path)
+                                        if (uri.scheme == "content") {
                                             try {
                                                 context.contentResolver.takePersistableUriPermission(
-                                                    file.uri,
+                                                    uri,
                                                     android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
                                                 )
                                             } catch (e: Exception) {
@@ -243,7 +245,7 @@ fun FileBrowserScreen(
                                     // Add all to queue
                                     val tasks = selected.map { file ->
                                         app.otter.service.ExtractionQueue.ExtractionTask(
-                                            archiveUri = file.uri,
+                                            archiveUri = file.path,
                                             fileName = file.name
                                         )
                                     }
@@ -410,7 +412,7 @@ fun FileBrowserScreen(
                         LazyColumn {
                             items(
                                 items = state.files,
-                                key = { file -> file.uri.toString() }
+                                key = { file -> file.path.toString() }
                             ) { file ->
                                 FileItemRow(
                                     fileItem = file,
@@ -500,7 +502,7 @@ fun FileBrowserScreen(
 
                                     val intent = ExtractionService.newIntent(
                                         context = context,
-                                        archiveUri = file.uri,
+                                        archiveUri = file.path,
                                         fileName = file.name
                                     )
                                     context.startService(intent)

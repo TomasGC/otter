@@ -1,8 +1,8 @@
 package app.otter.domain.usecase
 
-import android.net.Uri
 import app.otter.domain.model.ArchiveFile
 import app.otter.domain.model.ExtractionProgress
+import app.otter.domain.model.ResourcePath
 import app.otter.domain.repository.ArchiveRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -13,14 +13,14 @@ class ExtractArchiveUseCase @Inject constructor(
 ) {
     operator fun invoke(
         archive: ArchiveFile,
-        destinationUri: Uri
+        destinationPath: ResourcePath
     ): Flow<ExtractionProgress> = flow {
         if (archive.sizeBytes == 0L) {
             emit(ExtractionProgress.Error("Archive is empty", null))
             return@flow
         }
 
-        repository.extractArchive(archive, destinationUri)
+        repository.extractArchive(archive, destinationPath)
             .collect { progress ->
                 emit(progress)
             }

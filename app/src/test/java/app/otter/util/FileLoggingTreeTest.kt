@@ -14,6 +14,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
+import kotlin.io.path.createTempDirectory
 
 /**
  * Unit tests for FileLoggingTree (Robolectric)
@@ -29,7 +30,7 @@ class FileLoggingTreeTest {
     @Before
     fun setup() {
         context = mockk(relaxed = true)
-        tempDir = createTempDir("otter-test-logs")
+        tempDir = createTempDirectory("otter-test-logs").toFile()
         every { context.cacheDir } returns tempDir
 
         mockkStatic(Environment::class)

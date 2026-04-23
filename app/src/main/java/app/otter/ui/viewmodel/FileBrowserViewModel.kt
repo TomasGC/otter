@@ -4,7 +4,9 @@ import android.net.Uri
 import android.os.Environment
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.otter.data.util.ResourcePathConverter
 import app.otter.domain.model.FileItem
+import app.otter.domain.model.ResourcePath
 import app.otter.domain.usecase.BrowseFilesUseCase
 import app.otter.service.ExtractionEventBus
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,18 +30,18 @@ class FileBrowserViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<FileBrowserUiState>(FileBrowserUiState.Loading)
     val uiState: StateFlow<FileBrowserUiState> = _uiState.asStateFlow()
 
-    private val navigationStack = Stack<Uri>()
-    private var currentUri: Uri = getDefaultStartUri()
+    private val navigationStack = Stack<ResourcePath>()
+    private var currentPath: ResourcePath = getDefaultStartPath()
     private var allFiles: List<FileItem> = emptyList()
     private var filterArchivesOnly: Boolean = false
     private var sortOrder: SortOrder = SortOrder.ARCHIVES_FIRST
     private var isSelectionMode: Boolean = false
-    private val selectedFiles = mutableSetOf<Uri>()
+    private val selectedFiles = mutableSetOf<ResourcePath>()
     private var previousSuccessState: FileBrowserUiState.Success? = null
 
     init {
-        navigationStack.push(currentUri)
-        browseDirectory(currentUri)
+        navigationStack.push(currentPath)
+        browseDirectory(currentPath)
     }
 
     /**
@@ -99,9 +101,9 @@ class FileBrowserViewModel @Inject constructor(
     fun navigateInto(fileItem: FileItem) {
         if (!fileItem.isDirectory) return
 
-        navigationStack.push(fileItem.uri)
-        currentUri = fileItem.uri
-        browseDirectory(currentUri)
+        navigationStack.push(fileItem.path)
+        currentPath = fileItem.path
+        browseDirectory(currentPath)
     }
 
     /**
@@ -111,8 +113,8 @@ class FileBrowserViewModel @Inject constructor(
         if (navigationStack.size <= 1) return
 
         navigationStack.pop()
-        currentUri = navigationStack.peek()
-        browseDirectory(currentUri)
+        currentPath = navigationStack.peek()
+        browseDirectory(currentPath)
     }
 
     /**
@@ -124,7 +126,7 @@ class FileBrowserViewModel @Inject constructor(
      * Refreshes the current directory.
      */
     fun refresh() {
-        browseDirectory(currentUri)
+        browseDirectory(currentPath)
     }
 
     /**
@@ -149,10 +151,10 @@ class FileBrowserViewModel @Inject constructor(
      * Toggles selection for a file.
      */
     fun toggleFileSelection(fileItem: FileItem) {
-        if (selectedFiles.contains(fileItem.uri)) {
-            selectedFiles.remove(fileItem.uri)
+        if (selectedFiles.contains(fileItem.path)) {
+            selectedFiles.remove(fileItem.path)
         } else {
-            selectedFiles.add(fileItem.uri)
+            selectedFiles.add(fileItem.path)
         }
         applyFilterAndSort()
     }
@@ -161,14 +163,14 @@ class FileBrowserViewModel @Inject constructor(
      * Checks if a file is selected.
      */
     fun isFileSelected(fileItem: FileItem): Boolean {
-        return selectedFiles.contains(fileItem.uri)
+        return selectedFiles.contains(fileItem.path)
     }
 
     /**
      * Gets the list of selected files.
      */
     fun getSelectedFiles(): List<FileItem> {
-        return allFiles.filter { selectedFiles.contains(it.uri) }
+        return allFiles.filter { selectedFiles.contains(it.path) }
     }
 
     /**
@@ -177,18 +179,18 @@ class FileBrowserViewModel @Inject constructor(
     fun selectAllArchives() {
         val archives = allFiles.filter { it.isArchive }
         archives.forEach { archive ->
-            if (!selectedFiles.contains(archive.uri)) {
-                selectedFiles.add(archive.uri)
+            if (!selectedFiles.contains(archive.path)) {
+                selectedFiles.add(archive.path)
             }
         }
         applyFilterAndSort()
     }
 
-    private fun browseDirectory(uri: Uri) {
+    private fun browseDirectory(path: ResourcePath) {
         viewModelScope.launch {
             _uiState.value = FileBrowserUiState.Loading
 
-            browseFilesUseCase(uri)
+            browseFilesUseCase(path)
                 .onSuccess { files ->
                     allFiles = files
                     applyFilterAndSort()
@@ -222,7 +224,7 @@ class FileBrowserViewModel @Inject constructor(
 
         val successState = FileBrowserUiState.Success(
             files = sorted,
-            currentPath = getCurrentPathDisplay(currentUri),
+            currentPath = getCurrentPathDisplay(currentPath),
             canNavigateUp = canNavigateUp(),
             filterArchivesOnly = filterArchivesOnly,
             sortOrder = sortOrder,
@@ -233,14 +235,15 @@ class FileBrowserViewModel @Inject constructor(
         _uiState.value = successState
     }
 
-    private fun getCurrentPathDisplay(uri: Uri): String {
+    private fun getCurrentPathDisplay(path: ResourcePath): String {
+        val uri = ResourcePathConverter.toUri(path)
         return when (uri.scheme) {
             "file" -> {
-                val path = uri.path ?: "/"
-                if (path == Environment.getExternalStorageDirectory().path) {
+                val filePath = uri.path ?: "/"
+                if (filePath == Environment.getExternalStorageDirectory().path) {
                     "Internal Storage"
                 } else {
-                    path
+                    filePath
                 }
             }
             "content" -> uri.lastPathSegment ?: "Storage"
@@ -248,8 +251,8 @@ class FileBrowserViewModel @Inject constructor(
         }
     }
 
-    private fun getDefaultStartUri(): Uri {
-        return Uri.fromFile(Environment.getExternalStorageDirectory())
+    private fun getDefaultStartPath(): ResourcePath {
+        return ResourcePathConverter.fromUri(Uri.fromFile(Environment.getExternalStorageDirectory()))
     }
 }
 

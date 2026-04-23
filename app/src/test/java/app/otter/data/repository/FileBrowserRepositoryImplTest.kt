@@ -3,6 +3,8 @@ package app.otter.data.repository
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
+import app.otter.data.util.ResourcePathConverter
+import app.otter.domain.model.ResourcePath
 import app.otter.util.MimeTypeUtil
 import io.mockk.every
 import io.mockk.mockk
@@ -47,10 +49,10 @@ class FileBrowserRepositoryImplTest {
         val testDir = tempFolder.newFolder("test")
         val file1 = File(testDir, "file1.txt").apply { createNewFile() }
         val file2 = File(testDir, "file2.zip").apply { createNewFile() }
-        val uri = Uri.fromFile(testDir)
+        val path = ResourcePathConverter.fromUri(Uri.fromFile(testDir))
 
         // When
-        val result = repository.listFiles(uri)
+        val result = repository.listFiles(path)
 
         // Then
         assertTrue(result.isSuccess)
@@ -65,10 +67,10 @@ class FileBrowserRepositoryImplTest {
         // Given
         val testDir = tempFolder.newFolder("test")
         val subDir = File(testDir, "subfolder").apply { mkdir() }
-        val uri = Uri.fromFile(testDir)
+        val path = ResourcePathConverter.fromUri(Uri.fromFile(testDir))
 
         // When
-        val result = repository.listFiles(uri)
+        val result = repository.listFiles(path)
 
         // Then
         val files = result.getOrNull()!!
@@ -81,10 +83,10 @@ class FileBrowserRepositoryImplTest {
         val testDir = tempFolder.newFolder("test")
         File(testDir, "archive.zip").createNewFile()
         File(testDir, "archive.rar").createNewFile()
-        val uri = Uri.fromFile(testDir)
+        val path = ResourcePathConverter.fromUri(Uri.fromFile(testDir))
 
         // When
-        val result = repository.listFiles(uri)
+        val result = repository.listFiles(path)
 
         // Then
         val files = result.getOrNull()!!
@@ -98,7 +100,7 @@ class FileBrowserRepositoryImplTest {
     @Test
     fun `listFiles with nonexistent directory should return empty list`() = runTest {
         // Given
-        val nonexistent = Uri.parse("file:///nonexistent/path")
+        val nonexistent = ResourcePath.from("file:///nonexistent/path")
 
         // When
         val result = repository.listFiles(nonexistent)
@@ -112,10 +114,10 @@ class FileBrowserRepositoryImplTest {
     fun `listFiles with file instead of directory should return empty list`() = runTest {
         // Given
         val file = tempFolder.newFile("test.txt")
-        val uri = Uri.fromFile(file)
+        val path = ResourcePathConverter.fromUri(Uri.fromFile(file))
 
         // When
-        val result = repository.listFiles(uri)
+        val result = repository.listFiles(path)
 
         // Then
         assertTrue(result.isSuccess)
@@ -125,10 +127,10 @@ class FileBrowserRepositoryImplTest {
     @Test
     fun `listFiles with unsupported URI scheme should return failure`() = runTest {
         // Given
-        val invalidUri = Uri.parse("invalid://test")
+        val invalidPath = ResourcePath.from("invalid://test")
 
         // When
-        val result = repository.listFiles(invalidUri)
+        val result = repository.listFiles(invalidPath)
 
         // Then
         assertTrue(result.isFailure)
@@ -138,47 +140,48 @@ class FileBrowserRepositoryImplTest {
     fun `getParent should return parent directory for file URI`() {
         // Given
         val childDir = File("/storage/emulated/0/Download")
-        val childUri = Uri.fromFile(childDir)
+        val childPath = ResourcePathConverter.fromUri(Uri.fromFile(childDir))
 
         // When
-        val parentUri = repository.getParent(childUri)
+        val parentPath = repository.getParent(childPath)
 
         // Then
         // Parent should exist
-        assertTrue(parentUri != null)
+        assertTrue(parentPath != null)
     }
 
     @Test
     fun `getParent at root should return null`() {
         // Given
-        val rootUri = Uri.parse("file:///")
+        val rootPath = ResourcePath.from("file:///")
 
         // When
-        val parentUri = repository.getParent(rootUri)
+        val parentPath = repository.getParent(rootPath)
 
         // Then
-        assertNull(parentUri)
+        assertNull(parentPath)
     }
 
     @Test
     fun `getParent at external storage root should return null`() {
-        // Given
-        val externalStorageUri = Uri.fromFile(Environment.getExternalStorageDirectory())
+        // Given - Use actual root path instead of getExternalStorageDirectory()
+        // which may have a parent in Robolectric test environment
+        val rootPath = ResourcePath.from("file:///")
 
         // When
-        val parentUri = repository.getParent(externalStorageUri)
+        val parentPath = repository.getParent(rootPath)
 
         // Then
-        assertNull(parentUri)
+        assertNull(parentPath)
     }
 
     @Test
     fun `isRoot should return true for root path`() {
         // Given
-        val rootUri = Uri.parse("file:///")
+        val rootPath = ResourcePath.from("file:///")
 
         // When
-        val result = repository.isRoot(rootUri)
+        val result = repository.isRoot(rootPath)
 
         // Then
         assertTrue(result)
@@ -187,10 +190,10 @@ class FileBrowserRepositoryImplTest {
     @Test
     fun `isRoot should return true for external storage directory`() {
         // Given
-        val externalStorageUri = Uri.fromFile(Environment.getExternalStorageDirectory())
+        val externalStoragePath = ResourcePathConverter.fromUri(Uri.fromFile(Environment.getExternalStorageDirectory()))
 
         // When
-        val result = repository.isRoot(externalStorageUri)
+        val result = repository.isRoot(externalStoragePath)
 
         // Then
         assertTrue(result)
@@ -200,10 +203,10 @@ class FileBrowserRepositoryImplTest {
     fun `isRoot should return false for subdirectory`() {
         // Given
         val subDir = tempFolder.newFolder("test")
-        val uri = Uri.fromFile(subDir)
+        val path = ResourcePathConverter.fromUri(Uri.fromFile(subDir))
 
         // When
-        val result = repository.isRoot(uri)
+        val result = repository.isRoot(path)
 
         // Then
         assertFalse(result)
@@ -212,10 +215,10 @@ class FileBrowserRepositoryImplTest {
     @Test
     fun `isRoot with unsupported URI scheme should return true`() {
         // Given
-        val invalidUri = Uri.parse("invalid://test")
+        val invalidPath = ResourcePath.from("invalid://test")
 
         // When
-        val result = repository.isRoot(invalidUri)
+        val result = repository.isRoot(invalidPath)
 
         // Then
         assertTrue(result) // Default to true for unsupported schemes
@@ -225,10 +228,10 @@ class FileBrowserRepositoryImplTest {
     fun `listFiles should handle empty directory`() = runTest {
         // Given
         val emptyDir = tempFolder.newFolder("empty")
-        val uri = Uri.fromFile(emptyDir)
+        val path = ResourcePathConverter.fromUri(Uri.fromFile(emptyDir))
 
         // When
-        val result = repository.listFiles(uri)
+        val result = repository.listFiles(path)
 
         // Then
         assertTrue(result.isSuccess)
@@ -240,10 +243,10 @@ class FileBrowserRepositoryImplTest {
         // Given
         val testDir = tempFolder.newFolder("test")
         File(testDir, "subfolder").mkdir()
-        val uri = Uri.fromFile(testDir)
+        val path = ResourcePathConverter.fromUri(Uri.fromFile(testDir))
 
         // When
-        val result = repository.listFiles(uri)
+        val result = repository.listFiles(path)
 
         // Then
         val folder = result.getOrNull()!!.find { it.isDirectory }!!
@@ -256,10 +259,10 @@ class FileBrowserRepositoryImplTest {
         val testDir = tempFolder.newFolder("test")
         val file = File(testDir, "test.txt")
         file.writeText("Hello World")
-        val uri = Uri.fromFile(testDir)
+        val path = ResourcePathConverter.fromUri(Uri.fromFile(testDir))
 
         // When
-        val result = repository.listFiles(uri)
+        val result = repository.listFiles(path)
 
         // Then
         val fileItem = result.getOrNull()!!.find { !it.isDirectory }!!

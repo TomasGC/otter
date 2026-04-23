@@ -31,6 +31,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import javax.inject.Inject
+import app.otter.data.util.ResourcePathConverter
+import app.otter.domain.model.ResourcePath
 
 @AndroidEntryPoint
 class ExtractionService : Service() {
@@ -66,16 +68,18 @@ class ExtractionService : Service() {
             return START_NOT_STICKY
         }
 
-        val archiveUri = intent?.data
+        val archiveUriRaw = intent?.data
         val fileName = intent?.getStringExtra(EXTRA_FILE_NAME) ?: "archive"
 
-        Timber.tag(TAG).d("Service started for file: $fileName, uri: $archiveUri")
+        Timber.tag(TAG).d("Service started for file: $fileName, uri: $archiveUriRaw")
 
-        if (archiveUri == null) {
+        if (archiveUriRaw == null) {
             Timber.tag(TAG).e("No archive URI provided")
             stopSelf()
             return START_NOT_STICKY
         }
+
+        val archiveUri = ResourcePathConverter.fromUri(archiveUriRaw)
 
         Timber.tag(TAG).d("Starting foreground service with notification")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -122,13 +126,13 @@ class ExtractionService : Service() {
         super.onDestroy()
     }
 
-    private suspend fun extractArchive(archiveUri: Uri, fileName: String) {
+    private suspend fun extractArchive(archiveUri: ResourcePath, fileName: String) {
         var extractedFilesCount = 0
         var lastError: String? = null
         var fileLoggingTree: app.otter.util.FileLoggingTree? = null
 
         try {
-            val archiveFile = archiveFileFactory.createFromUri(archiveUri, fileName)
+            val archiveFile = archiveFileFactory.createFromPath(archiveUri, fileName)
                 ?: throw IllegalStateException("Cannot create archive file")
 
             // Try to extract in the same folder as the archive
@@ -143,11 +147,11 @@ class ExtractionService : Service() {
                 Timber.tag(TAG).d("File logging enabled at: ${fileLoggingTree.getLogPath()}")
             }
 
-            val destinationUri = Uri.fromFile(destinationFolder)
+            val destinationPath = ResourcePathConverter.fromUri(Uri.fromFile(destinationFolder))
 
             Timber.tag(TAG).d("Starting extraction to: ${destinationFolder.absolutePath}")
 
-            extractArchiveUseCase(archiveFile, destinationUri).collect { progress ->
+            extractArchiveUseCase(archiveFile, destinationPath).collect { progress ->
                 when (progress) {
                     is ExtractionProgress.Extracting -> {
                         extractedFilesCount = progress.extractedCount
@@ -233,7 +237,8 @@ class ExtractionService : Service() {
         }
     }
 
-    private fun getDestinationFolder(archiveUri: Uri, fileName: String): File {
+    private fun getDestinationFolder(archivePath: ResourcePath, fileName: String): File {
+        val archiveUri = ResourcePathConverter.toUri(archivePath)
         // Try to get parent folder from URI
         val documentFile = DocumentFile.fromSingleUri(this, archiveUri)
         val parentUri = documentFile?.parentFile?.uri
@@ -434,9 +439,9 @@ class ExtractionService : Service() {
         const val ACTION_EXTRACTION_PROGRESS = "app.otter.service.EXTRACTION_PROGRESS"
         const val ACTION_EXTRACTION_COMPLETE = "app.otter.service.EXTRACTION_COMPLETE"
 
-        fun newIntent(context: Context, archiveUri: Uri, fileName: String): Intent {
+        fun newIntent(context: Context, archiveUri: ResourcePath, fileName: String): Intent {
             return Intent(context, ExtractionService::class.java).apply {
-                data = archiveUri
+                data = ResourcePathConverter.toUri(archiveUri)
                 putExtra(EXTRA_FILE_NAME, fileName)
             }
         }
