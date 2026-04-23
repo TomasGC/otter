@@ -1,6 +1,7 @@
 package app.otter.data.extractor
 
 import app.otter.domain.model.ArchiveType
+import app.otter.util.PathValidator
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -16,7 +17,8 @@ import org.junit.Test
  */
 class RarExtractorTest {
 
-    private val extractor = RarExtractor()
+    private val realPathValidator = PathValidator()
+    private val extractor = RarExtractor(realPathValidator)
 
     @Test
     fun `should support RAR type`() {

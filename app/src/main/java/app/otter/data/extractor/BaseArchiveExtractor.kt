@@ -76,13 +76,16 @@ abstract class BaseArchiveExtractor : ArchiveExtractor {
 
     protected fun logExtractionProgress(extractedCount: Int, totalCount: Int, fileName: String) {
         // Only log every 100 files to avoid performance issues
-        if (extractedCount % 100 == 0 || extractedCount == totalCount) {
+        if (extractedCount % LOG_INTERVAL_FILES == 0 || extractedCount == totalCount) {
             Timber.tag(getTag()).d("Extracted $extractedCount/$totalCount files (current: $fileName)")
         }
     }
 
+    companion object {
+        private const val LOG_INTERVAL_FILES = 100
+    }
+
     protected fun logExtractionComplete(extractedCount: Int) {
-        Timber.tag(getTag()).d("${getTag()} extraction completed: $extractedCount files")
         Timber.tag(getTag()).d("Extraction completed: $extractedCount files")
     }
 

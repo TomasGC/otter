@@ -14,6 +14,8 @@ import app.otter.domain.repository.FileBrowserRepository
 import app.otter.domain.usecase.BrowseArchiveUseCase
 import app.otter.domain.usecase.BrowseFilesUseCase
 import app.otter.domain.usecase.ExtractArchiveUseCase
+import app.otter.util.MimeTypeUtil
+import app.otter.util.PathValidator
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -31,9 +33,11 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideExtractors(): List<ArchiveExtractor> = listOf(
-        ZipExtractor(),
-        RarExtractor()
+    fun provideExtractors(
+        pathValidator: PathValidator
+    ): List<ArchiveExtractor> = listOf(
+        ZipExtractor(pathValidator),
+        RarExtractor(pathValidator)
     )
 
     @Provides
@@ -46,8 +50,9 @@ object AppModule {
     @Provides
     @Singleton
     fun provideFileBrowserRepository(
-        context: Context
-    ): FileBrowserRepository = FileBrowserRepositoryImpl(context)
+        context: Context,
+        mimeTypeUtil: MimeTypeUtil
+    ): FileBrowserRepository = FileBrowserRepositoryImpl(context, mimeTypeUtil)
 
     @Provides
     @Singleton

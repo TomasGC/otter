@@ -44,6 +44,9 @@ class ExtractionService : Service() {
     @Inject
     lateinit var extractionQueue: ExtractionQueue
 
+    @Inject
+    lateinit var archiveFileFactory: app.otter.util.ArchiveFileFactory
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private lateinit var notificationManager: NotificationManager
 
@@ -125,7 +128,7 @@ class ExtractionService : Service() {
         var fileLoggingTree: app.otter.util.FileLoggingTree? = null
 
         try {
-            val archiveFile = createArchiveFile(archiveUri, fileName)
+            val archiveFile = archiveFileFactory.createFromUri(archiveUri, fileName)
                 ?: throw IllegalStateException("Cannot create archive file")
 
             // Try to extract in the same folder as the archive
@@ -285,58 +288,6 @@ class ExtractionService : Service() {
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Error getting real path from URI")
             null
-        }
-    }
-
-    private fun createArchiveFile(uri: Uri, fileName: String): app.otter.domain.model.ArchiveFile? {
-        return when (uri.scheme) {
-            "file" -> {
-                // Handle file:// URIs
-                val file = File(uri.path ?: return null)
-                if (!file.exists() || !file.isFile) {
-                    return null
-                }
-
-                val archiveType = app.otter.domain.model.ArchiveType.fromFileName(fileName)
-                    ?: return null
-
-                app.otter.domain.model.ArchiveFile(
-                    uri = uri,
-                    name = fileName,
-                    sizeBytes = file.length(),
-                    mimeType = MimeTypeUtil.getMimeType(fileName),
-                    type = archiveType
-                )
-            }
-            "content" -> {
-                // Handle content:// URIs
-                val cursor = contentResolver.query(uri, null, null, null, null)
-                if (cursor == null) {
-                    return null
-                }
-
-                cursor.use {
-                    if (!it.moveToFirst()) return null
-
-                    val sizeIndex = it.getColumnIndex(OpenableColumns.SIZE)
-                    val size = if (sizeIndex != -1) it.getLong(sizeIndex) else 0L
-
-                    val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
-                    val archiveType = app.otter.domain.model.ArchiveType.fromFileName(fileName)
-                        ?: return null
-
-                    app.otter.domain.model.ArchiveFile(
-                        uri = uri,
-                        name = fileName,
-                        sizeBytes = size,
-                        mimeType = mimeType,
-                        type = archiveType
-                    )
-                }
-            }
-            else -> {
-                null
-            }
         }
     }
 

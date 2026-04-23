@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
@@ -103,5 +104,99 @@ class ExtractionEventBusTest {
         // Then - Should receive replayed event
         assertEquals("test.zip", event.fileName)
         assertEquals(1, event.extractedCount)
+    }
+
+    @Test
+    fun `emitComplete should emit event to completeEvents flow`() = runTest {
+        // Given
+        val eventJob = launch {
+            val event = eventBus.completeEvents.first()
+
+            // Then
+            assertEquals(Unit, event)
+        }
+
+        // When
+        eventBus.emitComplete()
+
+        eventJob.join()
+    }
+
+    @Test
+    fun `multiple collectors should receive same progress event`() = runTest {
+        // Given
+        val collector1 = mutableListOf<ExtractionEventBus.ProgressEvent>()
+        val collector2 = mutableListOf<ExtractionEventBus.ProgressEvent>()
+
+        val job1 = launch {
+            eventBus.progressEvents.collect { collector1.add(it) }
+        }
+        val job2 = launch {
+            eventBus.progressEvents.collect { collector2.add(it) }
+        }
+
+        // When
+        eventBus.emitProgress("test.zip", "file.txt", 1, 10, 0.1f)
+
+        // Wait a bit for collection
+        kotlinx.coroutines.delay(100)
+
+        // Then
+        assertEquals(1, collector1.size)
+        assertEquals(1, collector2.size)
+        assertEquals("test.zip", collector1[0].fileName)
+        assertEquals("test.zip", collector2[0].fileName)
+
+        job1.cancel()
+        job2.cancel()
+    }
+
+    @Test
+    fun `completeEvents should not have replay`() = runTest {
+        // Given - Emit before collecting
+        eventBus.emitComplete()
+
+        // When - Try to collect after emission
+        var eventReceived = false
+        val job = launch {
+            kotlinx.coroutines.withTimeout(500) {
+                eventBus.completeEvents.first()
+                eventReceived = true
+            }
+        }
+
+        // Wait and verify timeout
+        try {
+            job.join()
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            // Expected - no replay for complete events
+        }
+
+        // Then - Should not have received event (replay = 0)
+        assertFalse(eventReceived)
+    }
+
+    @Test
+    fun `cancelling collection should stop receiving events`() = runTest {
+        // Given
+        val receivedEvents = mutableListOf<ExtractionEventBus.ProgressEvent>()
+        val job = launch {
+            eventBus.progressEvents.collect { receivedEvents.add(it) }
+        }
+
+        // When - Emit first event
+        eventBus.emitProgress("test1.zip", "file1.txt", 1, 10, 0.1f)
+        kotlinx.coroutines.delay(100)
+
+        // Cancel collection
+        job.cancel()
+
+        // Emit second event after cancellation
+        eventBus.emitProgress("test2.zip", "file2.txt", 2, 10, 0.2f)
+        kotlinx.coroutines.delay(100)
+
+        // Then - Should only have received first event
+        assertEquals(1, receivedEvents.size)
+        assertEquals("test1.zip", receivedEvents[0].fileName)
     }
 }

@@ -16,7 +16,9 @@ import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 import javax.inject.Inject
 
-class ZipExtractor @Inject constructor() : ArchiveExtractor {
+class ZipExtractor @Inject constructor(
+    private val pathValidator: PathValidator
+) : ArchiveExtractor {
 
     override fun supports(type: ArchiveType): Boolean = type == ArchiveType.ZIP
 
@@ -30,7 +32,7 @@ class ZipExtractor @Inject constructor() : ArchiveExtractor {
 
         try {
             // Create temp file to enable counting
-            tempFile = File.createTempFile("otter_zip_", ".zip")
+            tempFile = File.createTempFile(TEMP_FILE_PREFIX, TEMP_FILE_SUFFIX)
             tempFile.outputStream().use { output ->
                 inputStream.copyTo(output)
             }
@@ -54,7 +56,7 @@ class ZipExtractor @Inject constructor() : ArchiveExtractor {
                     val entry = entries.nextElement()
                     if (!entry.isDirectory) {
                         // Path traversal protection + directory creation
-                        val outputFile = PathValidator.createSafeOutputFile(destinationPath, entry.name)
+                        val outputFile = pathValidator.createSafeOutputFile(destinationPath, entry.name)
 
                         // Extract using ZipFile.getInputStream (more reliable than stream)
                         zipFile.getInputStream(entry).use { input ->
@@ -111,5 +113,7 @@ class ZipExtractor @Inject constructor() : ArchiveExtractor {
         private const val TAG = "ZipExtractor"
         private const val BUFFER_SIZE_BYTES = 256 * 1024 // 256 KB
         private const val PROGRESS_THROTTLE_MS = 1000L // 1 second
+        private const val TEMP_FILE_PREFIX = "otter_zip_"
+        private const val TEMP_FILE_SUFFIX = ".zip"
     }
 }
