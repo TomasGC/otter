@@ -1,6 +1,10 @@
 package app.otter.util
 
-object MimeTypeUtil {
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class MimeTypeUtil @Inject constructor() {
     fun getMimeType(filename: String): String {
         val extension = filename.substringAfterLast('.', "").lowercase()
 

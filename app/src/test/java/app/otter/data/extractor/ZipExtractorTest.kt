@@ -3,6 +3,7 @@ package app.otter.data.extractor
 import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
+import app.otter.util.PathValidator
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -20,7 +21,8 @@ class ZipExtractorTest {
     @get:Rule
     val tempFolder = TemporaryFolder()
 
-    private val extractor = ZipExtractor()
+    private val realPathValidator = PathValidator()
+    private val extractor = ZipExtractor(realPathValidator)
 
     @Test
     fun `should support ZIP type`() {

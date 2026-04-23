@@ -253,6 +253,101 @@ class FileBrowserViewModelTest {
         assertTrue(viewModel.canNavigateUp())
     }
 
+    @Test
+    fun `selectAllArchives with no archives should not change selection`() {
+        // Given - Files list with no archives
+        val mockFiles = listOf(
+            createFileItem("folder1", isDirectory = true),
+            createFileItem("file.txt", isArchive = false)
+        )
+        coEvery { browseFilesUseCase(any()) } returns Result.success(mockFiles)
+        viewModel = FileBrowserViewModel(browseFilesUseCase, eventBus, extractionQueue)
+
+        viewModel.enterSelectionMode()
+
+        // When
+        viewModel.selectAllArchives()
+
+        // Then
+        val state = viewModel.uiState.value as FileBrowserUiState.Success
+        assertEquals(0, state.selectedCount)
+    }
+
+    @Test
+    fun `selectAllArchives with empty list should handle gracefully`() {
+        // Given
+        coEvery { browseFilesUseCase(any()) } returns Result.success(emptyList())
+        viewModel = FileBrowserViewModel(browseFilesUseCase, eventBus, extractionQueue)
+
+        viewModel.enterSelectionMode()
+
+        // When
+        viewModel.selectAllArchives()
+
+        // Then
+        val state = viewModel.uiState.value as FileBrowserUiState.Success
+        assertEquals(0, state.selectedCount)
+    }
+
+    @Test
+    fun `browseFilesUseCase error should show Error state`() {
+        // Given
+        val errorMessage = "Permission denied"
+        coEvery { browseFilesUseCase(any()) } returns Result.failure(SecurityException(errorMessage))
+
+        // When
+        viewModel = FileBrowserViewModel(browseFilesUseCase, eventBus, extractionQueue)
+
+        // Then
+        val state = viewModel.uiState.value
+        assertTrue(state is FileBrowserUiState.Error)
+        val errorState = state as FileBrowserUiState.Error
+        assertTrue(errorState.message.contains(errorMessage))
+    }
+
+    @Test
+    fun `navigateInto with non-directory should not change state`() {
+        // Given
+        val state = viewModel.uiState.value as FileBrowserUiState.Success
+        val file = state.files.find { !it.isDirectory && !it.isArchive }!!
+        val stateBefore = viewModel.uiState.value
+
+        // When
+        viewModel.navigateInto(file)
+
+        // Then - State should not change
+        assertEquals(stateBefore, viewModel.uiState.value)
+    }
+
+    @Test
+    fun `toggleFileSelection with empty selection should add file`() {
+        // Given
+        viewModel.enterSelectionMode()
+        val state = viewModel.uiState.value as FileBrowserUiState.Success
+        val file = state.files.first()
+        assertEquals(0, state.selectedCount)
+
+        // When
+        viewModel.toggleFileSelection(file)
+
+        // Then
+        val newState = viewModel.uiState.value as FileBrowserUiState.Success
+        assertEquals(1, newState.selectedCount)
+        assertTrue(viewModel.isFileSelected(file))
+    }
+
+    @Test
+    fun `getSelectedFiles with no selection should return empty list`() {
+        // Given
+        viewModel.enterSelectionMode()
+
+        // When
+        val selected = viewModel.getSelectedFiles()
+
+        // Then
+        assertTrue(selected.isEmpty())
+    }
+
     // Helper functions
     private fun createFileItem(
         name: String,

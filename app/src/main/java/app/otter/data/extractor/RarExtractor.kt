@@ -20,7 +20,9 @@ import java.io.InputStream
 import java.io.RandomAccessFile
 import javax.inject.Inject
 
-class RarExtractor @Inject constructor() : ArchiveExtractor {
+class RarExtractor @Inject constructor(
+    private val pathValidator: PathValidator
+) : ArchiveExtractor {
 
     override fun supports(type: ArchiveType): Boolean = type == ArchiveType.RAR
 
@@ -34,7 +36,7 @@ class RarExtractor @Inject constructor() : ArchiveExtractor {
 
         try {
             // Create temporary file (7-Zip-JBinding requires RandomAccessFile)
-            tempFile = File.createTempFile("otter_rar_", ".rar")
+            tempFile = File.createTempFile(TEMP_FILE_PREFIX, TEMP_FILE_SUFFIX)
             tempFile.outputStream().use { output ->
                 inputStream.copyTo(output)
             }
@@ -74,7 +76,7 @@ class RarExtractor @Inject constructor() : ArchiveExtractor {
                     val path = inArchive?.getProperty(index, PropID.PATH) as? String ?: return null
 
                     // Path traversal protection + directory creation
-                    val outputFile = PathValidator.createSafeOutputFile(destinationPath, path)
+                    val outputFile = pathValidator.createSafeOutputFile(destinationPath, path)
                     currentOutputStream = FileOutputStream(outputFile)
 
                     return ISequentialOutStream { data ->
@@ -126,5 +128,10 @@ class RarExtractor @Inject constructor() : ArchiveExtractor {
             inArchive?.close()
             tempFile?.delete()
         }
+    }
+
+    companion object {
+        private const val TEMP_FILE_PREFIX = "otter_rar_"
+        private const val TEMP_FILE_SUFFIX = ".rar"
     }
 }

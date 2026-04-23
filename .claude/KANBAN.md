@@ -6,24 +6,27 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ## Work History
 
-2026-04-16 - #12 Add Automated Code Review to GitHub Actions
+2026-04-21 - #12 Add Automated Code Review to GitHub Actions
 - Integrated Reviewdog with ktlint for Kotlin style checking on PRs (action-setup + official CLI)
 - Added Detekt static analysis for code quality (complexity, naming, potential bugs)
-- Implemented Jacoco test coverage verification with 80% threshold enforcement
+- Implemented Jacoco test coverage verification with 80% threshold enforcement (blocks merge if <80%)
 - Added OWASP Dependency Check for vulnerability scanning (CVSS ≥7.0)
 - Added APK size monitoring (50MB limit) and TruffleHog secret detection
 - Consolidated duplicate workflows (ci.yml and pr-check.yml merged)
 - Added context file validation to ensure KANBAN.md/ARCHITECTURE.md updated with code changes
+- Created comprehensive test suite: Service (100%), Activity (100%), Extractors (RAR/ZIP)
+- Fixed ktlint violations (trailing commas, wrapping, unused imports) across entire codebase
+- Resolved CI check failures with robust error handling in tests
 - Used official tools + reviewdog/action-setup (no third-party actions) for security/supply chain safety
 tags: #ci-cd #code-quality #reviewdog #security #testing
 Ref: https://github.com/TomasGC/otter/issues/12
-Commit: 4f49938
+Commits: 58821a8, 32d9e42, a453f5f, e1ae1c3, 4f49938
 
-2026-04-16 - #9 Auto Extraction Mode with Background Service
+2026-04-20 - #9 Auto Extraction Mode with Background Service
 - Implemented ExtractionService as foreground service with progress notifications (file counter, percentage)
 - Optimized ZIP extraction: direct stream + 256KB buffer (no temp file) for 3-5x faster performance
 - Added user cancellation support with "Stop" button in notification (isActive checks)
-- Implemented FileLogger for extraction logs (.txt format, readable on Android)
+- Implemented FileLogger for extraction logs (.txt format, readable on Android) - DEBUG builds only
 - Created BaseArchiveExtractor to eliminate code duplication (DRY principle)
 - Updated ArchiveRepositoryImpl to use callbackFlow for real-time progress emission
 - Added build.ps1 script for automatic version increment + Docker build

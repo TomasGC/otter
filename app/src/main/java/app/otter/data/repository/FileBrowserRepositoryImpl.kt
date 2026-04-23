@@ -15,6 +15,7 @@ import java.io.File
  */
 class FileBrowserRepositoryImpl(
     private val context: Context,
+    private val mimeTypeUtil: MimeTypeUtil,
 ) : FileBrowserRepository {
 
     override suspend fun listFiles(uri: Uri): Result<List<FileItem>> {
@@ -45,7 +46,7 @@ class FileBrowserRepositoryImpl(
 
         return files?.mapNotNull { file ->
             try {
-                val mimeType = if (file.isFile) MimeTypeUtil.getMimeType(file.name) else null
+                val mimeType = if (file.isFile) mimeTypeUtil.getMimeType(file.name) else null
 
                 FileItem(
                     uri = Uri.fromFile(file),
