@@ -9,29 +9,27 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  build:
-    uses: ./.github/workflows/_reusable/build-apk.yml
-    with:
-      variant: debug
-      retention-days: 7
+  verify-feature-ci:
+    name: Verify Feature-CI Passed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Feature-CI status on source branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          echo "Checking Feature-CI status for branch: $BRANCH"
 
-  unit-tests:
-    uses: ./.github/workflows/_reusable/unit-tests.yml
-    with:
-      retention-days: 7
+          CONCLUSION=$(gh run list --workflow=feature-ci.yml --branch "$BRANCH" --limit 1 --json conclusion --jq '.[0].conclusion')
 
-  instrumented-tests:
-    uses: ./.github/workflows/_reusable/instrumented-tests.yml
-    with:
-      api-level: 30
-      retention-days: 7
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "ERROR: Feature-CI must pass before PR can be merged"
+            echo "Feature-CI status: $CONCLUSION"
+            echo "Fix Feature-CI failures first, then re-run this workflow"
+            exit 1
+          fi
 
-  coverage-merge:
-    uses: ./.github/workflows/_reusable/coverage-merge.yml
-    needs: [unit-tests, instrumented-tests]
-    with:
-      coverage-threshold: 75
-      retention-days: 7
+          echo "SUCCESS: Feature-CI passed on branch $BRANCH"
 
   pr-validation:
     name: Validate PR Format
@@ -50,42 +48,12 @@ jobs:
           fi
           echo "SUCCESS: PR title format valid"
 
-  lint-checks:
-    uses: ./.github/workflows/_reusable/lint-checks.yml
+  security-final-check:
+    name: Final Security Validation
+    needs: verify-feature-ci
+    uses: ./.github/workflows/reusable-security-checks.yml
     with:
       retention-days: 7
-
-  android-lint-review:
-    name: Android Lint Review
-    runs-on: ubuntu-latest
-    needs: lint-checks
-    steps:
-      - name: Download lint results
-        uses: actions/download-artifact@v4
-        with:
-          name: lint-results-xml
-
-      - name: Parse lint results
-        if: always()
-        run: |
-          if [ -f lint-results-debug.xml ]; then
-            ERROR_COUNT=$(grep -c 'severity="Error"' lint-results-debug.xml || echo 0)
-            WARNING_COUNT=$(grep -c 'severity="Warning"' lint-results-debug.xml || echo 0)
-
-            echo "Android Lint Results:"
-            echo "  - Errors: $ERROR_COUNT"
-            echo "  - Warnings: $WARNING_COUNT"
-
-            if [ "$ERROR_COUNT" -gt 0 ]; then
-              echo "ERROR: Found $ERROR_COUNT lint errors - check artifact for details"
-              exit 1
-            else
-              echo "SUCCESS: No lint errors found"
-            fi
-          else
-            echo "WARNING: Lint report not found"
-            exit 1
-          fi
 
   context-check:
     name: Verify Context Files Updated
@@ -137,7 +105,7 @@ jobs:
             })
 
   security-checks:
-    uses: ./.github/workflows/_reusable/security-checks.yml
+    uses: ./.github/workflows/reusable-security-checks.yml
     needs: build
     with:
       retention-days: 7
@@ -145,6 +113,6 @@ jobs:
   # Optional: Matrix testing across multiple API levels
   # Uncomment to test on API 26 (min), 30 (stable), 34 (max)
   # instrumented-tests-matrix:
-  #   uses: ./.github/workflows/_reusable/instrumented-tests-matrix.yml
+  #   uses: ./.github/workflows/reusable-instrumented-tests-matrix.yml
   #   with:
   #     retention-days: 7
