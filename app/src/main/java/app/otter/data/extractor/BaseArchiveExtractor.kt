@@ -83,6 +83,10 @@ abstract class BaseArchiveExtractor : ArchiveExtractor {
 
     companion object {
         private const val LOG_INTERVAL_FILES = 100
+
+        // Shared temp file constants for extractors requiring RandomAccessFile
+        const val TEMP_FILE_PREFIX = "otter_archive_"
+        const val TEMP_FILE_SUFFIX = ".tmp"
     }
 
     protected fun logExtractionComplete(extractedCount: Int) {

@@ -20,11 +20,11 @@ import java.io.InputStream
 import java.io.RandomAccessFile
 import javax.inject.Inject
 
-class RarExtractor @Inject constructor(
+class SevenZipExtractor @Inject constructor(
     private val pathValidator: PathValidator
 ) : ArchiveExtractor {
 
-    override fun supports(type: ArchiveType): Boolean = type == ArchiveType.RAR
+    override fun supports(type: ArchiveType): Boolean = type == ArchiveType.SEVEN_ZIP
 
     override suspend fun extract(
         inputStream: InputStream,
@@ -44,7 +44,7 @@ class RarExtractor @Inject constructor(
                 inputStream.copyTo(output)
             }
 
-            // Open archive with 7-Zip-JBinding (auto-detects RAR4/RAR5)
+            // Open archive with 7-Zip-JBinding (auto-detects 7z format)
             val randomAccessFile = RandomAccessFile(tempFile, "r")
             inArchive = SevenZip.openInArchive(null, RandomAccessFileInStream(randomAccessFile))
 
@@ -124,7 +124,7 @@ class RarExtractor @Inject constructor(
             )
         } catch (e: Exception) {
             ExtractionResult.Failure(
-                errorMessage = "RAR extraction failed: ${e.message}",
+                errorMessage = "7-Zip extraction failed: ${e.message}",
                 cause = e
             )
         } finally {
@@ -134,4 +134,3 @@ class RarExtractor @Inject constructor(
     }
 
 }
-

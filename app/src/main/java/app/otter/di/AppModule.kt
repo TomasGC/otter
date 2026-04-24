@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import app.otter.data.extractor.ArchiveExtractor
 import app.otter.data.extractor.RarExtractor
+import app.otter.data.extractor.SevenZipExtractor
 import app.otter.data.extractor.ZipExtractor
 import app.otter.data.repository.ArchiveBrowserRepositoryImpl
 import app.otter.data.repository.ArchiveRepositoryImpl
@@ -37,7 +38,8 @@ object AppModule {
         pathValidator: PathValidator
     ): List<ArchiveExtractor> = listOf(
         ZipExtractor(pathValidator),
-        RarExtractor(pathValidator)
+        RarExtractor(pathValidator),
+        SevenZipExtractor(pathValidator)
     )
 
     @Provides
