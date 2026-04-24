@@ -15,8 +15,8 @@ android {
         applicationId = "app.otter"
         minSdk = 26
         targetSdk = 34
-        versionCode = 63
-        versionName = "0.0.63"
+        versionCode = 66
+        versionName = "0.0.66"
 
         testInstrumentationRunner = "app.otter.HiltTestRunner"
         vectorDrawables {
@@ -31,6 +31,12 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        create("release") {
+            storeFile = file("../keystore/release.keystore")
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "aBaEtUAPd9KGvmaYQFqFUacjbTg="
+            keyAlias = "otter-release"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "k0/tuOtQvGzrvBttMmBOmEHHk7g="
+        }
     }
 
     buildTypes {
@@ -40,6 +46,7 @@ android {
         }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
