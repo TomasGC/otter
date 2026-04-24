@@ -3,6 +3,7 @@ package app.otter.data.extractor
 import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
+import app.otter.util.PathValidator
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -20,7 +21,8 @@ class ZipExtractorTest {
     @get:Rule
     val tempFolder = TemporaryFolder()
 
-    private val extractor = ZipExtractor()
+    private val realPathValidator = PathValidator()
+    private val extractor = ZipExtractor(realPathValidator)
 
     @Test
     fun `should support ZIP type`() {
@@ -152,13 +154,13 @@ class ZipExtractorTest {
             assertTrue(progress is ExtractionProgress.Extracting)
             val extracting = progress as ExtractionProgress.Extracting
             assertTrue("Should have extracted at least one file", extracting.extractedCount > 0)
-            assertEquals(0, extracting.totalCount) // Indeterminate progress (unknown total)
-            assertEquals(0f, extracting.progress) // Indeterminate progress
+            assertTrue("Total count should be known", extracting.totalCount > 0)
+            assertTrue("Progress should be between 0 and 1", extracting.progress in 0f..1f)
         }
     }
 
     @Test
-    fun `should return success with zero files for corrupted ZIP`() = runTest {
+    fun `should return failure for corrupted ZIP`() = runTest {
         val corruptedBytes = "not a zip file".toByteArray()
         val destination = tempFolder.newFolder("output")
 
@@ -168,10 +170,8 @@ class ZipExtractorTest {
             onProgress = {}
         )
 
-        // ZipInputStream doesn't throw exception for corrupted files,
-        // it just returns null for nextEntry(), resulting in 0 extracted files
-        assertTrue(result is ExtractionResult.Success)
-        assertEquals(0, (result as ExtractionResult.Success).extractedFilesCount)
+        // ZipFile throws exception for corrupted files (unlike ZipInputStream)
+        assertTrue("Should return failure for corrupted ZIP", result is ExtractionResult.Failure)
     }
 
     @Test

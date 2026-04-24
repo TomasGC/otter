@@ -12,9 +12,15 @@
 **ALL TESTS MUST PASS** - No exceptions
 
 After any code change:
-1. Build: `./gradlew assembleDebug`
-2. Test: `./gradlew testDebugUnitTest`
+1. Build: `pwsh.exe -File C:/dev/repos/GitHub/otter/build.ps1`
+2. Test: `pwsh.exe -File C:/dev/repos/GitHub/otter/docker-build.ps1 testDebugUnitTest`
 3. **If any test fails → BLOCK COMMIT**
+
+Alternative commands:
+```bash
+pwsh.exe -File C:/dev/repos/GitHub/otter/docker-build.ps1 assembleDebug    # Build only
+pwsh.exe -File C:/dev/repos/GitHub/otter/docker-build.ps1 testDebugUnitTest    # Test only
+```
 
 **Coverage requirement**: ≥ 80%
 

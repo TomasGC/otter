@@ -4,6 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionResult
+import app.otter.util.PathValidator
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -23,7 +24,8 @@ class RarExtractorInstrumentedTest {
     @get:Rule
     val tempFolder = TemporaryFolder()
 
-    private val extractor = RarExtractor()
+    private val pathValidator = PathValidator()
+    private val extractor = RarExtractor(pathValidator)
 
     @Test
     fun testSupportsRarType() {

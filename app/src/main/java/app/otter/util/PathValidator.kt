@@ -1,12 +1,15 @@
 package app.otter.util
 
 import java.io.File
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Validates file paths for security (path traversal protection).
  * Extracted from extractors for DRY principle and testability.
  */
-object PathValidator {
+@Singleton
+class PathValidator @Inject constructor() {
 
     /**
      * Validates that the output file is within the destination directory.

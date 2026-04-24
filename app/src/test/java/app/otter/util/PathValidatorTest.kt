@@ -3,6 +3,7 @@ package app.otter.util
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -12,13 +13,20 @@ class PathValidatorTest {
     @get:Rule
     val tempFolder = TemporaryFolder()
 
+    private lateinit var pathValidator: PathValidator
+
+    @Before
+    fun setup() {
+        pathValidator = PathValidator()
+    }
+
     @Test
     fun `should accept valid relative path`() {
         // Given
         val path = "folder/file.txt"
 
         // When
-        val result = PathValidator.isSafePath(path)
+        val result = pathValidator.isSafePath(path)
 
         // Then
         assertTrue("Valid relative path should be safe", result)
@@ -30,7 +38,7 @@ class PathValidatorTest {
         val path = "../../etc/passwd"
 
         // When
-        val result = PathValidator.isSafePath(path)
+        val result = pathValidator.isSafePath(path)
 
         // Then
         assertFalse("Path with .. should be rejected", result)
@@ -42,7 +50,7 @@ class PathValidatorTest {
         val path = "/etc/passwd"
 
         // When
-        val result = PathValidator.isSafePath(path)
+        val result = pathValidator.isSafePath(path)
 
         // Then
         assertFalse("Absolute Unix path should be rejected", result)
@@ -54,7 +62,7 @@ class PathValidatorTest {
         val path = "C:\\Windows\\System32\\config"
 
         // When
-        val result = PathValidator.isSafePath(path)
+        val result = pathValidator.isSafePath(path)
 
         // Then
         assertFalse("Absolute Windows path should be rejected", result)
@@ -66,7 +74,7 @@ class PathValidatorTest {
         val path = "archive.v1.2.zip"
 
         // When
-        val result = PathValidator.isSafePath(path)
+        val result = pathValidator.isSafePath(path)
 
         // Then
         assertTrue("Filename with dots should be safe", result)
@@ -78,7 +86,7 @@ class PathValidatorTest {
         val path = "folder/../../../etc/passwd"
 
         // When
-        val result = PathValidator.isSafePath(path)
+        val result = pathValidator.isSafePath(path)
 
         // Then
         assertFalse("Hidden traversal should be rejected", result)
@@ -92,7 +100,7 @@ class PathValidatorTest {
         val entryName = "file.txt"
 
         // When/Then - Should not throw
-        PathValidator.validatePath(
+        pathValidator.validatePath(
             outputFile,
             destination,
             entryName,
@@ -108,7 +116,7 @@ class PathValidatorTest {
 
         // When/Then
         try {
-            PathValidator.validatePath(
+            pathValidator.validatePath(
                 outsideFile,
                 destination,
                 entryName,
@@ -126,7 +134,7 @@ class PathValidatorTest {
         val entryName = "folder1/folder2/file.txt"
 
         // When
-        val outputFile = PathValidator.createSafeOutputFile(
+        val outputFile = pathValidator.createSafeOutputFile(
             destination,
             entryName,
         )
@@ -148,7 +156,7 @@ class PathValidatorTest {
 
         // When/Then
         try {
-            PathValidator.createSafeOutputFile(
+            pathValidator.createSafeOutputFile(
             destination,
             entryName,
         )
@@ -168,7 +176,7 @@ class PathValidatorTest {
         val entryName = "a/b/c/d/e/file.txt"
 
         // When
-        val outputFile = PathValidator.createSafeOutputFile(
+        val outputFile = pathValidator.createSafeOutputFile(
             destination,
             entryName,
         )
@@ -183,7 +191,7 @@ class PathValidatorTest {
         val path = "folder\\subfolder\\file.txt"
 
         // When
-        val result = PathValidator.isSafePath(path)
+        val result = pathValidator.isSafePath(path)
 
         // Then
         assertTrue("Windows path separators should be safe", result)
@@ -195,7 +203,7 @@ class PathValidatorTest {
         val path = ""
 
         // When
-        val result = PathValidator.isSafePath(path)
+        val result = pathValidator.isSafePath(path)
 
         // Then
         assertTrue("Empty path should be safe (will be rejected elsewhere)", result)
@@ -207,7 +215,7 @@ class PathValidatorTest {
         val path = "文件/αρχείο/файл.txt"
 
         // When
-        val result = PathValidator.isSafePath(path)
+        val result = pathValidator.isSafePath(path)
 
         // Then
         assertTrue("Unicode path should be safe", result)
@@ -219,7 +227,7 @@ class PathValidatorTest {
         val path = "../file.txt"
 
         // When
-        val result = PathValidator.isSafePath(path)
+        val result = pathValidator.isSafePath(path)
 
         // Then
         assertFalse("Leading traversal should be rejected", result)
@@ -231,7 +239,7 @@ class PathValidatorTest {
         val path = "folder/.."
 
         // When
-        val result = PathValidator.isSafePath(path)
+        val result = pathValidator.isSafePath(path)
 
         // Then
         assertFalse("Trailing traversal should be rejected", result)

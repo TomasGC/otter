@@ -5,9 +5,17 @@ import android.content.Context
 import app.otter.data.extractor.ArchiveExtractor
 import app.otter.data.extractor.RarExtractor
 import app.otter.data.extractor.ZipExtractor
+import app.otter.data.repository.ArchiveBrowserRepositoryImpl
 import app.otter.data.repository.ArchiveRepositoryImpl
+import app.otter.data.repository.FileBrowserRepositoryImpl
+import app.otter.domain.repository.ArchiveBrowserRepository
 import app.otter.domain.repository.ArchiveRepository
+import app.otter.domain.repository.FileBrowserRepository
+import app.otter.domain.usecase.BrowseArchiveUseCase
+import app.otter.domain.usecase.BrowseFilesUseCase
 import app.otter.domain.usecase.ExtractArchiveUseCase
+import app.otter.util.MimeTypeUtil
+import app.otter.util.PathValidator
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -25,9 +33,11 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideExtractors(): List<ArchiveExtractor> = listOf(
-        ZipExtractor(),
-        RarExtractor()
+    fun provideExtractors(
+        pathValidator: PathValidator
+    ): List<ArchiveExtractor> = listOf(
+        ZipExtractor(pathValidator),
+        RarExtractor(pathValidator)
     )
 
     @Provides
@@ -38,7 +48,30 @@ object AppModule {
     ): ArchiveRepository = ArchiveRepositoryImpl(context, extractors)
 
     @Provides
+    @Singleton
+    fun provideFileBrowserRepository(
+        context: Context,
+        mimeTypeUtil: MimeTypeUtil
+    ): FileBrowserRepository = FileBrowserRepositoryImpl(context, mimeTypeUtil)
+
+    @Provides
+    @Singleton
+    fun provideArchiveBrowserRepository(
+        context: Context
+    ): ArchiveBrowserRepository = ArchiveBrowserRepositoryImpl(context)
+
+    @Provides
     fun provideExtractArchiveUseCase(
         repository: ArchiveRepository
     ): ExtractArchiveUseCase = ExtractArchiveUseCase(repository)
+
+    @Provides
+    fun provideBrowseFilesUseCase(
+        repository: FileBrowserRepository
+    ): BrowseFilesUseCase = BrowseFilesUseCase(repository)
+
+    @Provides
+    fun provideBrowseArchiveUseCase(
+        repository: ArchiveBrowserRepository
+    ): BrowseArchiveUseCase = BrowseArchiveUseCase(repository)
 }
