@@ -3,7 +3,8 @@ name: CD - Release
 on:
   push:
     tags:
-      - 'v*'  # Trigger on version tags (v1.0.0, v1.0.1, etc.)
+      - 'v*'        # Stable releases: v1.0.0, v1.0.1, etc.
+      - 'test-v*'   # Pre-releases: test-v1.0.0-alpha, test-v1.0.0-rc1, etc.
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -39,9 +40,13 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG#test-v}
+          VERSION=${VERSION#v}
+          IS_PRERELEASE=${{ startsWith(github.ref, 'refs/tags/test-') }}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version $VERSION"
+          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          echo "Building version $VERSION (prerelease: $IS_PRERELEASE)"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -69,10 +74,11 @@ jobs:
           files: app/build/outputs/apk/release/otter-${{ steps.version.outputs.version }}.apk
           generate_release_notes: true
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.version.outputs.is_prerelease }}
           body: |
             ## Release ${{ steps.version.outputs.version }}
 
+            ${{ steps.version.outputs.is_prerelease == 'true' && '**Type**: Pre-release (test build)' || '**Type**: Stable release' }}
             **Status**: Signed with release keystore
 
             ### Installation

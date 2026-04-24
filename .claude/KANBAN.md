@@ -6,6 +6,21 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ## Work History
 
+2026-04-24 - #10 Restructure GitHub Actions Workflows
+- Moved reusable workflows from _reusable/ to root (GitHub Actions limitation - no subdirectories)
+- Renamed workflows to reusable-*.yml pattern for consistency
+- Optimized feature-ci.yml for parallel execution (lint-checks + unit-tests → build → ui-tests)
+- Refactored ci.yml to verify feature-ci passed instead of duplicating tests
+- Added pre-release support (test-v* tags) to cd.yml for non-production releases
+- Fixed workflow permissions (moved to workflow level for reusable workflows)
+- Removed Unicode emojis causing encoding errors in workflow outputs
+- Secured release keystore (moved to GitHub Secrets RELEASE_KEYSTORE_BASE64, cleaned from history)
+- Eliminated test duplication between feature-ci and ci workflows
+- Performance: fail-fast with parallel lint + tests, ~30% faster feedback
+tags: #ci-cd #github-actions #optimization #security #workflows
+Ref: https://github.com/TomasGC/otter/issues/10
+Commits: 3352280, da0f2d7, a3af352
+
 2026-04-21 - #12 Add Automated Code Review to GitHub Actions
 - Integrated Reviewdog with ktlint for Kotlin style checking on PRs (action-setup + official CLI)
 - Added Detekt static analysis for code quality (complexity, naming, potential bugs)
@@ -20,7 +35,7 @@ Track of work sessions and completed tasks linked to GitHub issues.
 - Used official tools + reviewdog/action-setup (no third-party actions) for security/supply chain safety
 tags: #ci-cd #code-quality #reviewdog #security #testing
 Ref: https://github.com/TomasGC/otter/issues/12
-Commits: 58821a8, 32d9e42, a453f5f, e1ae1c3, 4f49938
+Commits: 58821a8, 32d9e42, a453f5f, e1ae1c3, 4f49938, 4f49938
 
 2026-04-20 - #9 Auto Extraction Mode with Background Service
 - Implemented ExtractionService as foreground service with progress notifications (file counter, percentage)

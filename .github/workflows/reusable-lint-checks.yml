@@ -8,6 +8,9 @@ on:
         type: number
         default: 7
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Android Lint
@@ -60,9 +63,6 @@ jobs:
   ktlint:
     name: Kotlin Style Check
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
 
     steps:
       - uses: actions/checkout@v4

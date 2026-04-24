@@ -10,25 +10,30 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  quick-checks:
-    name: Quick Build & Unit Tests
-    uses: ./.github/workflows/_reusable/unit-tests.yml
+  lint-checks:
+    name: Lint Checks
+    uses: ./.github/workflows/reusable-lint-checks.yml
+    with:
+      retention-days: 3
+
+  unit-tests:
+    name: Unit Tests
+    uses: ./.github/workflows/reusable-unit-tests.yml
     with:
       retention-days: 3
 
   build:
-    uses: ./.github/workflows/_reusable/build-apk.yml
+    name: Build APK
+    needs: [lint-checks, unit-tests]
+    uses: ./.github/workflows/reusable-build-apk.yml
     with:
       variant: debug
       retention-days: 3
 
   ui-tests:
-    uses: ./.github/workflows/_reusable/instrumented-tests.yml
+    name: UI Tests
+    needs: build
+    uses: ./.github/workflows/reusable-instrumented-tests.yml
     with:
       api-level: 30
-      retention-days: 3
-
-  lint:
-    uses: ./.github/workflows/_reusable/lint-checks.yml
-    with:
       retention-days: 3
