@@ -1,0 +1,137 @@
+name: Coverage Merge (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      coverage-threshold:
+        description: "Minimum coverage percentage required"
+        type: number
+        default: 75
+      retention-days:
+        description: "Coverage report retention days"
+        type: number
+        default: 7
+
+jobs:
+  coverage-merge:
+    name: Merge Coverage & Verify >= ${{ inputs.coverage-threshold }}%
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
+        with:
+          cache-read-only: false
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Download unit test results
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-test-results
+          path: app/build/test-results/testDebugUnitTest/
+
+      - name: Download instrumented test results
+        uses: actions/download-artifact@v4
+        with:
+          name: instrumented-test-results
+          path: app/build/reports/androidTests/connected/
+
+      - name: Download instrumented coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: instrumented-coverage
+          path: app/build/outputs/code_coverage/
+        continue-on-error: true
+
+      - name: Generate merged coverage report
+        run: ./gradlew :app:jacocoMergedReport
+
+      - name: Verify coverage threshold (>= ${{ inputs.coverage-threshold }}%)
+        run: |
+          set -euo pipefail
+
+          REPORT="app/build/reports/jacoco/jacocoMergedReport/jacocoMergedReport.xml"
+
+          if [ ! -f "$REPORT" ]; then
+            echo "[ERROR] Coverage report not found at: $REPORT"
+            exit 1
+          fi
+
+          echo "[INFO] Using report: $REPORT"
+
+          if ! grep -q "<counter" "$REPORT"; then
+            echo "[ERROR] Invalid XML format in coverage report"
+            exit 1
+          fi
+
+          MISSED=$(grep -oP 'counter type="LINE".*missed="\K[0-9]+' "$REPORT" | head -1) || {
+            echo "[ERROR] Failed to parse missed lines from coverage report"
+            exit 1
+          }
+          COVERED=$(grep -oP 'counter type="LINE".*covered="\K[0-9]+' "$REPORT" | head -1) || {
+            echo "[ERROR] Failed to parse covered lines from coverage report"
+            exit 1
+          }
+
+          if [ -z "$MISSED" ] || [ -z "$COVERED" ]; then
+            echo "[ERROR] Could not parse coverage data (empty values)"
+            exit 1
+          fi
+
+          TOTAL=$((MISSED + COVERED))
+
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "[ERROR] No coverage data found (0 total lines)"
+            exit 1
+          fi
+
+          PERCENT=$((COVERED * 100 / TOTAL))
+
+          if ! [[ "$PERCENT" =~ ^[0-9]+$ ]]; then
+            echo "[ERROR] Invalid coverage percentage calculated: '$PERCENT'"
+            exit 1
+          fi
+
+          echo "[STATS] Test Coverage: $PERCENT% ($COVERED/$TOTAL lines)"
+
+          THRESHOLD=${{ inputs.coverage-threshold }}
+          if [ $PERCENT -lt $THRESHOLD ]; then
+            echo "[FAIL] Coverage $PERCENT% is below threshold (${THRESHOLD}%)"
+            echo "[INFO] Current: $COVERED/$TOTAL lines covered"
+            echo "[INFO] Required: At least $((TOTAL * THRESHOLD / 100)) lines must be covered"
+            exit 1
+          fi
+
+          echo "[PASS] Coverage meets threshold: $PERCENT% (>=${THRESHOLD}%)"
+
+          if [ $PERCENT -ge 90 ]; then
+            echo "[EXCELLENT] Exceptional! Coverage exceeds 90%"
+          elif [ $PERCENT -ge 85 ]; then
+            echo "[EXCELLENT] Great coverage above 85%"
+          fi
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: app/build/reports/jacoco/jacocoMergedReport/
+          retention-days: ${{ inputs.retention-days }}
