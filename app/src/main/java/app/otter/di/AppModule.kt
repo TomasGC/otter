@@ -3,6 +3,7 @@ package app.otter.di
 import android.app.Application
 import android.content.Context
 import app.otter.data.extractor.ArchiveExtractor
+import app.otter.data.extractor.ArchiveLibraryManager
 import app.otter.data.extractor.RarExtractor
 import app.otter.data.extractor.SevenZipExtractor
 import app.otter.data.extractor.ZipExtractor
@@ -35,11 +36,12 @@ object AppModule {
     @Provides
     @Singleton
     fun provideExtractors(
-        pathValidator: PathValidator
+        pathValidator: PathValidator,
+        archiveLibraryManager: ArchiveLibraryManager
     ): List<ArchiveExtractor> = listOf(
         ZipExtractor(pathValidator),
-        RarExtractor(pathValidator),
-        SevenZipExtractor(pathValidator)
+        RarExtractor(pathValidator, archiveLibraryManager),
+        SevenZipExtractor(pathValidator, archiveLibraryManager)
     )
 
     @Provides

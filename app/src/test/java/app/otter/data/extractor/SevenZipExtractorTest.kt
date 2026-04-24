@@ -18,7 +18,8 @@ import org.junit.Test
 class SevenZipExtractorTest {
 
     private val realPathValidator = PathValidator()
-    private val extractor = SevenZipExtractor(realPathValidator)
+    private val archiveLibraryManager = ArchiveLibraryManager()
+    private val extractor = SevenZipExtractor(realPathValidator, archiveLibraryManager)
 
     @Test
     fun `should support SEVEN_ZIP type`() {

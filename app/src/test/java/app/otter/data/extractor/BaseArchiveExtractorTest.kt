@@ -56,10 +56,6 @@ class BaseArchiveExtractorTest {
             return ExtractionResult.Failure("Extraction failed", RuntimeException("Test failure"))
         }
 
-        override fun getFilePrefix(): String = "fake_archive"
-
-        override fun getFileExtension(): String = ".tmp"
-
         // Expose protected methods for testing
         fun testValidatePath(outputFile: File, destinationPath: File, entryName: String) {
             validatePath(outputFile, destinationPath, entryName)
@@ -96,13 +92,13 @@ class BaseArchiveExtractorTest {
 
         // Count temp files before
         val tempDir = File(System.getProperty("java.io.tmpdir") ?: "/tmp")
-        val filesBefore = tempDir.listFiles { file -> file.name.startsWith("fake_archive") }?.size ?: 0
+        val filesBefore = tempDir.listFiles { file -> file.name.startsWith(BaseArchiveExtractor.TEMP_FILE_PREFIX) }?.size ?: 0
 
         // When
         extractor.extract(inputStream, destination) {}
 
         // Then - Verify no new temp files left behind
-        val filesAfter = tempDir.listFiles { file -> file.name.startsWith("fake_archive") }?.size ?: 0
+        val filesAfter = tempDir.listFiles { file -> file.name.startsWith(BaseArchiveExtractor.TEMP_FILE_PREFIX) }?.size ?: 0
         assertEquals("Temp files should be cleaned up", filesBefore, filesAfter)
     }
 
@@ -116,7 +112,7 @@ class BaseArchiveExtractorTest {
 
         // Count temp files before
         val tempDir = File(System.getProperty("java.io.tmpdir") ?: "/tmp")
-        val filesBefore = tempDir.listFiles { file -> file.name.startsWith("fake_archive") }?.size ?: 0
+        val filesBefore = tempDir.listFiles { file -> file.name.startsWith(BaseArchiveExtractor.TEMP_FILE_PREFIX) }?.size ?: 0
 
         // When
         val result = extractor.extract(inputStream, destination) {}
@@ -125,7 +121,7 @@ class BaseArchiveExtractorTest {
         assertTrue("Should return failure", result is ExtractionResult.Failure)
 
         // Verify no new temp files left behind
-        val filesAfter = tempDir.listFiles { file -> file.name.startsWith("fake_archive") }?.size ?: 0
+        val filesAfter = tempDir.listFiles { file -> file.name.startsWith(BaseArchiveExtractor.TEMP_FILE_PREFIX) }?.size ?: 0
         assertEquals("Temp files should be cleaned up", filesBefore, filesAfter)
     }
 
@@ -252,8 +248,8 @@ class BaseArchiveExtractorTest {
 
         // Then
         assertTrue("Temp file should exist", tempFile.exists())
-        assertTrue("Temp file name should start with prefix", tempFile.name.startsWith("fake_archive"))
-        assertTrue("Temp file name should end with extension", tempFile.name.endsWith(".tmp"))
+        assertTrue("Temp file name should start with prefix", tempFile.name.startsWith(BaseArchiveExtractor.TEMP_FILE_PREFIX))
+        assertTrue("Temp file name should end with extension", tempFile.name.endsWith(BaseArchiveExtractor.TEMP_FILE_SUFFIX))
         assertEquals("Temp file should have correct content", content, tempFile.readText())
 
         // Cleanup

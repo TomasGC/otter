@@ -16,6 +16,7 @@ jobs:
   instrumented-tests:
     name: Instrumented Tests (API ${{ inputs.api-level }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -72,6 +73,8 @@ jobs:
 
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL: 2
         with:
           api-level: ${{ inputs.api-level }}
           target: default
@@ -80,7 +83,9 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 2048 -no-metrics
           disable-animations: true
-          script: ./gradlew connectedDebugAndroidTest
+          script: |
+            ./gradlew connectedDebugAndroidTest
+            killall -INT crashpad_handler || true
 
       - name: Upload instrumented test results
         if: always()

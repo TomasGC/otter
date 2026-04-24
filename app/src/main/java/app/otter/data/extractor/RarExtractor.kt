@@ -4,49 +4,35 @@ import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
 import app.otter.util.PathValidator
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import net.sf.sevenzipjbinding.ExtractAskMode
 import net.sf.sevenzipjbinding.ExtractOperationResult
 import net.sf.sevenzipjbinding.IArchiveExtractCallback
 import net.sf.sevenzipjbinding.IInArchive
 import net.sf.sevenzipjbinding.ISequentialOutStream
 import net.sf.sevenzipjbinding.PropID
-import net.sf.sevenzipjbinding.SevenZip
-import net.sf.sevenzipjbinding.impl.RandomAccessFileInStream
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
-import java.io.RandomAccessFile
 import javax.inject.Inject
 
 class RarExtractor @Inject constructor(
-    private val pathValidator: PathValidator
-) : ArchiveExtractor {
+    private val pathValidator: PathValidator,
+    private val archiveLibraryManager: ArchiveLibraryManager
+) : BaseArchiveExtractor() {
 
     override fun supports(type: ArchiveType): Boolean = type == ArchiveType.RAR
 
-    override suspend fun extract(
-        inputStream: InputStream,
+    override fun getTag(): String = "RAR"
+
+    override suspend fun extractFromTempFile(
+        tempFile: File,
         destinationPath: File,
         onProgress: (ExtractionProgress) -> Unit
-    ): ExtractionResult = withContext(Dispatchers.IO) {
-        var tempFile: File? = null
+    ): ExtractionResult {
         var inArchive: IInArchive? = null
 
         try {
-            // Create temporary file (7-Zip-JBinding requires RandomAccessFile)
-            tempFile = File.createTempFile(
-                BaseArchiveExtractor.TEMP_FILE_PREFIX,
-                BaseArchiveExtractor.TEMP_FILE_SUFFIX
-            )
-            tempFile.outputStream().use { output ->
-                inputStream.copyTo(output)
-            }
-
-            // Open archive with 7-Zip-JBinding (auto-detects RAR4/RAR5)
-            val randomAccessFile = RandomAccessFile(tempFile, "r")
-            inArchive = SevenZip.openInArchive(null, RandomAccessFileInStream(randomAccessFile))
+            // Open archive via manager (singleton handles native library lifecycle)
+            inArchive = archiveLibraryManager.openArchive(tempFile)
 
             val totalCount = inArchive.numberOfItems
             var extractedCount = 0
@@ -102,6 +88,7 @@ class RarExtractor @Inject constructor(
                             extractedCount++
                             val path = inArchive?.getProperty(currentIndex, PropID.PATH) as? String ?: "unknown"
 
+                            logExtractionProgress(extractedCount, totalCount, path)
                             onProgress(
                                 ExtractionProgress.Extracting(
                                     currentFile = path,
@@ -118,20 +105,14 @@ class RarExtractor @Inject constructor(
             // Extract all items
             inArchive.extract(null, false, extractCallback)
 
-            ExtractionResult.Success(
+            logExtractionComplete(extractedCount)
+
+            return ExtractionResult.Success(
                 outputPath = destinationPath.absolutePath,
                 extractedFilesCount = extractedCount
             )
-        } catch (e: Exception) {
-            ExtractionResult.Failure(
-                errorMessage = "RAR extraction failed: ${e.message}",
-                cause = e
-            )
         } finally {
             inArchive?.close()
-            tempFile?.delete()
         }
     }
-
 }
-

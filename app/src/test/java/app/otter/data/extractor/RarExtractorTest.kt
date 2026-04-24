@@ -18,7 +18,8 @@ import org.junit.Test
 class RarExtractorTest {
 
     private val realPathValidator = PathValidator()
-    private val extractor = RarExtractor(realPathValidator)
+    private val archiveLibraryManager = ArchiveLibraryManager()
+    private val extractor = RarExtractor(realPathValidator, archiveLibraryManager)
 
     @Test
     fun `should support RAR type`() {
