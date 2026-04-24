@@ -527,6 +527,78 @@ suspend fun extract(uri: Uri, destination: File): Flow<ExtractionResult> = callb
 
 ## CI/CD Pipeline
 
+**GitHub Actions workflows** - Optimized reusable workflow architecture:
+
+### Workflow Structure (Issue #10)
+
+**Reusable Workflows** (`.github/workflows/reusable-*.yml`):
+- `reusable-unit-tests.yml` - JUnit + MockK unit tests
+- `reusable-build-apk.yml` - Gradle assembly (debug/release)
+- `reusable-instrumented-tests.yml` - UI tests with Android emulator
+- `reusable-lint-checks.yml` - ktlint, detekt, Android Lint
+- `reusable-coverage-merge.yml` - Jacoco coverage reports
+- `reusable-security-checks.yml` - OWASP, TruffleHog, APK size
+
+**Caller Workflows**:
+- `feature-ci.yml` - Validates feature/bugfix branches (parallel lint + tests)
+- `ci.yml` - PR validation (verifies feature-ci passed, static checks only)
+- `cd.yml` - Release pipeline (test-v* for pre-releases, v* for stable)
+
+### Feature-CI Pipeline (Optimized for Speed)
+
+```
+┌──────────────┐     ┌─────────────┐
+│ Lint Checks  │     │ Unit Tests  │ (parallel, fail-fast)
+│ (3 jobs)     │     │             │
+└──────┬───────┘     └──────┬──────┘
+       │                    │
+       └────────┬───────────┘
+                ▼
+         ┌─────────────┐
+         │  Build APK  │
+         └──────┬──────┘
+                ▼
+         ┌──────────────┐
+         │  UI Tests    │
+         │  (API 30)    │
+         └──────────────┘
+```
+
+**Performance**: ~30% faster with parallel execution
+
+### CI Pipeline (No Duplication)
+
+```
+┌──────────────────┐    ┌─────────────────┐    ┌──────────────┐
+│ verify-feature-ci│    │ PR Validation   │    │ Context Check│
+│ (check passed)   │    │ (title format)  │    │ (docs update)│
+└────────┬─────────┘    └─────────────────┘    └──────────────┘
+         │ (blocks if failed)
+         ▼
+  ┌────────────────┐
+  │ Security Check │
+  │ (final gate)   │
+  └────────────────┘
+```
+
+**Eliminated duplication**: Relies on feature-ci for full test suite
+
+### CD Pipeline (Pre-release Support)
+
+```
+Tags:
+  v1.0.0       → Stable release (public)
+  test-v1.0.0  → Pre-release (testing)
+
+Pipeline:
+  unit-tests-release → build-release → create-github-release
+                       (signed APK)    (prerelease flag)
+```
+
+**Security**: Release keystore in GitHub Secrets (RELEASE_KEYSTORE_BASE64)
+
+## CI/CD Pipeline
+
 **GitHub Actions workflows** (`.github/workflows/ci.yml`):
 
 ### Build & Test Job
