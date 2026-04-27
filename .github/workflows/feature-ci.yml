@@ -35,5 +35,4 @@ jobs:
     needs: build
     uses: ./.github/workflows/reusable-instrumented-tests.yml
     with:
-      api-level: 30
       retention-days: 3

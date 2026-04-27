@@ -30,50 +30,35 @@ import javax.inject.Singleton
 @Singleton
 class ArchiveLibraryManager @Inject constructor() {
 
-    private val tag = "ArchiveLibraryManager"
-    private var initialized = false
-
-    /**
-     * Opens an archive file using 7-Zip-JBinding.
-     * Automatically initializes the native library on first call.
-     * Auto-detects archive format (RAR, 7z, TAR, GZ, etc.).
-     *
-     * @param archiveFile File to open as archive
-     * @return Opened IInArchive instance
-     * @throws Exception if archive cannot be opened or initialization fails
-     */
-    @Synchronized
-    fun openArchive(archiveFile: File): IInArchive {
-        ensureInitialized()
-
-        return try {
-            val randomAccessFile = RandomAccessFile(archiveFile, "r")
-            SevenZip.openInArchive(null, RandomAccessFileInStream(randomAccessFile))
-                ?: throw IllegalStateException("Failed to open archive: ${archiveFile.name}")
-        } catch (e: Exception) {
-            Log.e(tag, "Failed to open archive: ${archiveFile.name}", e)
-            throw e
-        }
+    companion object {
+        private const val TAG = "ArchiveLibraryManager"
+        private const val ERROR_MESSAGE_UNSUPPORTED_FORMAT = "unsupported format or corrupted"
     }
 
     /**
-     * Ensures native library is initialized.
-     * Thread-safe, idempotent initialization.
+     * Opens an archive file using 7-Zip-JBinding.
+     * Auto-detects archive format (RAR, 7z, TAR, GZ, etc.).
+     *
+     * Thread-safe: Multiple calls can safely execute concurrently.
+     * The native library is loaded automatically on first use by 7-Zip-JBinding.
+     *
+     * Note on resource management: The RandomAccessFile is wrapped in RandomAccessFileInStream
+     * and ownership is transferred to the IInArchive. When IInArchive.close() is called,
+     * it closes the underlying stream and file handle.
+     *
+     * @param archiveFile File to open as archive
+     * @return Opened IInArchive instance
+     * @throws IllegalStateException if archive format is not recognized
+     * @throws Exception if archive cannot be opened
      */
     @Synchronized
-    private fun ensureInitialized() {
-        if (initialized) {
-            return
-        }
-
-        try {
-            // 7-Zip-JBinding auto-loads native libraries on first use
-            // We just need to trigger it once and cache the state
-            Log.d(tag, "Initializing 7-Zip-JBinding native library")
-            initialized = true
-            Log.d(tag, "7-Zip-JBinding initialized successfully")
+    fun openArchive(archiveFile: File): IInArchive {
+        return try {
+            val randomAccessFile = RandomAccessFile(archiveFile, "r")
+            SevenZip.openInArchive(null, RandomAccessFileInStream(randomAccessFile))
+                ?: throw IllegalStateException("Failed to open archive: ${archiveFile.name} ($ERROR_MESSAGE_UNSUPPORTED_FORMAT)")
         } catch (e: Exception) {
-            Log.e(tag, "Failed to initialize 7-Zip-JBinding", e)
+            Log.e(TAG, "Failed to open archive: ${archiveFile.name}", e)
             throw e
         }
     }

@@ -19,6 +19,10 @@ class SevenZipExtractor @Inject constructor(
     private val archiveLibraryManager: ArchiveLibraryManager
 ) : BaseArchiveExtractor() {
 
+    companion object {
+        private const val UNKNOWN_FILE_NAME = "unknown"
+    }
+
     override fun supports(type: ArchiveType): Boolean = type == ArchiveType.SEVEN_ZIP
 
     override fun getTag(): String = "7ZIP"
@@ -57,12 +61,12 @@ class SevenZipExtractor @Inject constructor(
                         return null
                     }
 
-                    val isDirectory = inArchive?.getProperty(index, PropID.IS_FOLDER) as? Boolean ?: false
+                    val isDirectory = inArchive.getProperty(index, PropID.IS_FOLDER) as? Boolean ?: false
                     if (isDirectory) {
                         return null
                     }
 
-                    val path = inArchive?.getProperty(index, PropID.PATH) as? String ?: return null
+                    val path = inArchive.getProperty(index, PropID.PATH) as? String ?: return null
 
                     // Path traversal protection + directory creation
                     val outputFile = pathValidator.createSafeOutputFile(destinationPath, path)
@@ -83,10 +87,10 @@ class SevenZipExtractor @Inject constructor(
                     currentOutputStream = null
 
                     if (extractOperationResult == ExtractOperationResult.OK) {
-                        val isDirectory = inArchive?.getProperty(currentIndex, PropID.IS_FOLDER) as? Boolean ?: false
+                        val isDirectory = inArchive.getProperty(currentIndex, PropID.IS_FOLDER) as? Boolean ?: false
                         if (!isDirectory) {
                             extractedCount++
-                            val path = inArchive?.getProperty(currentIndex, PropID.PATH) as? String ?: "unknown"
+                            val path = inArchive.getProperty(currentIndex, PropID.PATH) as? String ?: UNKNOWN_FILE_NAME
 
                             logExtractionProgress(extractedCount, totalCount, path)
                             onProgress(
