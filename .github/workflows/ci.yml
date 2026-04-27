@@ -13,21 +13,45 @@ jobs:
     name: Verify Feature-CI Passed
     runs-on: ubuntu-latest
     steps:
-      - name: Check Feature-CI status on source branch
+      - name: Wait for Feature-CI to complete
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="${{ github.head_ref }}"
           echo "Checking Feature-CI status for branch: $BRANCH"
 
-          CONCLUSION=$(gh run list --workflow=feature-ci.yml --branch "$BRANCH" --limit 1 --json conclusion --jq '.[0].conclusion')
+          # Wait up to 30 minutes for Feature-CI to complete
+          MAX_WAIT=1800
+          WAITED=0
+          SLEEP_INTERVAL=30
 
-          if [ "$CONCLUSION" != "success" ]; then
-            echo "ERROR: Feature-CI must pass before PR can be merged"
-            echo "Feature-CI status: $CONCLUSION"
-            echo "Fix Feature-CI failures first, then re-run this workflow"
-            exit 1
-          fi
+          while [ $WAITED -lt $MAX_WAIT ]; do
+            STATUS=$(gh run list --workflow=feature-ci.yml --branch "$BRANCH" --limit 1 --json status,conclusion --jq '.[0]')
+            RUN_STATUS=$(echo "$STATUS" | jq -r '.status')
+            CONCLUSION=$(echo "$STATUS" | jq -r '.conclusion')
+
+            echo "Feature-CI status: $RUN_STATUS (conclusion: $CONCLUSION)"
+
+            # If completed, check result
+            if [ "$RUN_STATUS" = "completed" ]; then
+              if [ "$CONCLUSION" != "success" ]; then
+                echo "ERROR: Feature-CI must pass before PR can be merged"
+                echo "Feature-CI status: $CONCLUSION"
+                echo "Fix Feature-CI failures first, then re-run this workflow"
+                exit 1
+              fi
+              echo "Feature-CI passed successfully"
+              exit 0
+            fi
+
+            # Still running, wait
+            echo "Feature-CI still running, waiting ${SLEEP_INTERVAL}s..."
+            sleep $SLEEP_INTERVAL
+            WAITED=$((WAITED + SLEEP_INTERVAL))
+          done
+
+          echo "ERROR: Feature-CI did not complete within ${MAX_WAIT}s"
+          exit 1
 
           echo "SUCCESS: Feature-CI passed on branch $BRANCH"
 
