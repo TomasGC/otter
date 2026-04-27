@@ -559,8 +559,14 @@ suspend fun extract(uri: Uri, destination: File): Flow<ExtractionResult> = callb
 
 **Caller Workflows**:
 - `feature-ci.yml` - Validates feature/bugfix branches (parallel lint + tests)
-- `ci.yml` - PR validation (verifies feature-ci passed, static checks only)
+- `ci.yml` - PR validation (waits for feature-ci, then static checks)
 - `cd.yml` - Release pipeline (test-v* for pre-releases, v* for stable)
+
+**CI Workflow Synchronization** (Issue #23):
+- CI now polls Feature-CI status every 30s (max 30 min wait)
+- Eliminates race condition where both workflows run simultaneously
+- Sequential execution: Feature-CI completes → CI validates
+- No more false failures from checking 'in_progress' status
 
 ### Feature-CI Pipeline (Optimized for Speed)
 

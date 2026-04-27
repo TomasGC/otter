@@ -6,6 +6,17 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ## Work History
 
+2026-04-27 - #23 Fix CI to Run After Feature-CI
+- Fixed race condition where CI and Feature-CI run simultaneously on PR push
+- Implemented polling mechanism: CI waits up to 30 minutes for Feature-CI completion
+- Checks Feature-CI status every 30 seconds instead of immediate check
+- Eliminates false failures from checking 'in_progress' status
+- Improves developer experience: no more manual CI re-runs
+- Clean sequential execution: Feature-CI completes → CI validates result
+tag: #ci-cd #workflow #race-condition
+Ref: https://github.com/TomasGC/otter/issues/23
+Commit: 647856c
+
 2026-04-27 - #14 Add 7-Zip (.7z) Extraction Support
 - Implemented SevenZipExtractor using 7-Zip-JBinding library for 7z format support
 - Created ArchiveLibraryManager singleton to centralize native library lifecycle management
