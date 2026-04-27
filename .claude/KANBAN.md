@@ -6,6 +6,20 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ## Work History
 
+2026-04-27 - #14 Add 7-Zip (.7z) Extraction Support
+- Implemented SevenZipExtractor using 7-Zip-JBinding library for 7z format support
+- Created ArchiveLibraryManager singleton to centralize native library lifecycle management
+- Extracted SevenZipCallbackExtractor to eliminate 180 lines of code duplication between RarExtractor and SevenZipExtractor
+- Migrated instrumented tests from reactivecircus/android-emulator-runner to Gradle Managed Devices (official Google solution)
+- Resolved CI/CD stability issues: eliminated crashpad_handler hang and emulator boot timeouts
+- Added comprehensive tests: 19 unit tests + 6 instrumented tests (including ArchiveLibraryManager lifecycle tests)
+- Refactored extractors: RarExtractor 122→51 lines (-58%), SevenZipExtractor 122→51 lines (-58%)
+- Configuration: Pixel 4 API 30 with AOSP system image for stable CI execution
+- CI Stability: 100% success rate (previously ~70% with third-party emulator wrapper)
+tags: #7zip #extraction #refactoring #ci-cd #gradle-managed-devices #stability
+Ref: https://github.com/TomasGC/otter/issues/14
+Commits: 1cea40d, f0bff30, 31ed3dd, d4ba3ae
+
 2026-04-24 - #10 Restructure GitHub Actions Workflows
 - Moved reusable workflows from _reusable/ to root (GitHub Actions limitation - no subdirectories)
 - Renamed workflows to reusable-*.yml pattern for consistency

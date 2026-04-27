@@ -7,14 +7,14 @@ import app.otter.util.PathValidator
 import java.io.File
 import javax.inject.Inject
 
-class RarExtractor @Inject constructor(
+class SevenZipExtractor @Inject constructor(
     private val pathValidator: PathValidator,
     private val archiveLibraryManager: ArchiveLibraryManager
 ) : BaseArchiveExtractor() {
 
-    override fun supports(type: ArchiveType): Boolean = type == ArchiveType.RAR
+    override fun supports(type: ArchiveType): Boolean = type == ArchiveType.SEVEN_ZIP
 
-    override fun getTag(): String = "RAR"
+    override fun getTag(): String = "7ZIP"
 
     override suspend fun extractFromTempFile(
         tempFile: File,

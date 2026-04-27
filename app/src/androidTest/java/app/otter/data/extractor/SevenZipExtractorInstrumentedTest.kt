@@ -15,32 +15,32 @@ import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * Instrumented test for RarExtractor with real device/emulator.
- * Tests RAR5 extraction with native 7-Zip-JBinding libraries.
+ * Instrumented test for SevenZipExtractor with real device/emulator.
+ * Tests 7z extraction with native 7-Zip-JBinding libraries.
  */
 @RunWith(AndroidJUnit4::class)
-class RarExtractorInstrumentedTest {
+class SevenZipExtractorInstrumentedTest {
 
     @get:Rule
     val tempFolder = TemporaryFolder()
 
     private val pathValidator = PathValidator()
     private val archiveLibraryManager = ArchiveLibraryManager()
-    private val extractor = RarExtractor(pathValidator, archiveLibraryManager)
+    private val extractor = SevenZipExtractor(pathValidator, archiveLibraryManager)
 
     @Test
-    fun testSupportsRarType() {
-        assertTrue(extractor.supports(ArchiveType.RAR))
+    fun testSupportsSevenZipType() {
+        assertTrue(extractor.supports(ArchiveType.SEVEN_ZIP))
     }
 
     @Test
-    fun testExtractRealRarFile() = runTest {
+    fun testExtractReal7zFile() = runTest {
         val context = InstrumentationRegistry.getInstrumentation().context
-        val testRar = context.assets.open("archives/test.rar")
+        val test7z = context.assets.open("archives/test.7z")
         val destination = tempFolder.newFolder("output")
 
         val result = extractor.extract(
-            inputStream = testRar,
+            inputStream = test7z,
             destinationPath = destination,
             onProgress = {}
         )
@@ -59,6 +59,6 @@ class RarExtractorInstrumentedTest {
         // Verify content
         val firstFile = extractedFiles.first()
         val content = firstFile.readText().trim()
-        assertTrue("Expected 'RAR', got '$content'", content.contains("RAR"))
+        assertTrue("Expected '7z', got '$content'", content.contains("7z", ignoreCase = true))
     }
 }

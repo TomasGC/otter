@@ -3,10 +3,6 @@ name: Instrumented Tests (Reusable)
 on:
   workflow_call:
     inputs:
-      api-level:
-        description: "Android API level"
-        type: number
-        default: 30
       retention-days:
         description: "Test results retention days"
         type: number
@@ -14,8 +10,9 @@ on:
 
 jobs:
   instrumented-tests:
-    name: Instrumented Tests (API ${{ inputs.api-level }})
+    name: Instrumented Tests (Gradle Managed Devices)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -48,39 +45,8 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: AVD cache
-        uses: actions/cache@v4
-        id: avd-cache
-        with:
-          path: |
-            ~/.android/avd/*
-            ~/.android/adb*
-          key: avd-${{ inputs.api-level }}-v2
-
-      - name: Create AVD snapshot
-        if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: ${{ inputs.api-level }}
-          target: default
-          arch: x86_64
-          profile: Nexus 6
-          force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 2048 -no-metrics
-          disable-animations: false
-          script: echo "Generated AVD snapshot"
-
-      - name: Run instrumented tests
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: ${{ inputs.api-level }}
-          target: default
-          arch: x86_64
-          profile: Nexus 6
-          force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 2048 -no-metrics
-          disable-animations: true
-          script: ./gradlew connectedDebugAndroidTest
+      - name: Run instrumented tests with Gradle Managed Devices
+        run: ./gradlew pixel4api30DebugAndroidTest
 
       - name: Upload instrumented test results
         if: always()

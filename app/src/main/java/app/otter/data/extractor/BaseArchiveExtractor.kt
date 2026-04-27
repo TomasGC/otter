@@ -48,7 +48,7 @@ abstract class BaseArchiveExtractor : ArchiveExtractor {
     ): ExtractionResult
 
     protected fun createTempFile(inputStream: InputStream): File {
-        val tempFile = File.createTempFile(getFilePrefix(), getFileExtension())
+        val tempFile = File.createTempFile(TEMP_FILE_PREFIX, TEMP_FILE_SUFFIX)
         Timber.tag(getTag()).d("Created temp file: ${tempFile.absolutePath}")
 
         var bytesCopied = 0L
@@ -83,12 +83,13 @@ abstract class BaseArchiveExtractor : ArchiveExtractor {
 
     companion object {
         private const val LOG_INTERVAL_FILES = 100
+
+        // Shared temp file constants for extractors requiring RandomAccessFile
+        const val TEMP_FILE_PREFIX = "otter_archive_"
+        const val TEMP_FILE_SUFFIX = ".tmp"
     }
 
     protected fun logExtractionComplete(extractedCount: Int) {
         Timber.tag(getTag()).d("Extraction completed: $extractedCount files")
     }
-
-    protected abstract fun getFilePrefix(): String
-    protected abstract fun getFileExtension(): String
 }
