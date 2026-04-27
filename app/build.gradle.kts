@@ -15,8 +15,8 @@ android {
         applicationId = "app.otter"
         minSdk = 26
         targetSdk = 34
-        versionCode = 66
-        versionName = "0.0.66"
+        versionCode = 68
+        versionName = "0.0.68"
 
         testInstrumentationRunner = "app.otter.HiltTestRunner"
         vectorDrawables {
@@ -133,7 +133,7 @@ dependencies {
     // DocumentFile for accessing parent folder
     implementation("androidx.documentfile:documentfile:1.0.1")
 
-    // 7-Zip for Android (supports RAR5 and all archive formats)
+    // 7-Zip for Android (supports RAR5, 7z, tar, tar.gz, tgz and all archive formats)
     implementation("com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.03")
 
     // Timber - Logging library

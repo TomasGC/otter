@@ -6,6 +6,7 @@ import app.otter.data.extractor.ArchiveExtractor
 import app.otter.data.extractor.ArchiveLibraryManager
 import app.otter.data.extractor.RarExtractor
 import app.otter.data.extractor.SevenZipExtractor
+import app.otter.data.extractor.TarExtractor
 import app.otter.data.extractor.ZipExtractor
 import app.otter.data.repository.ArchiveBrowserRepositoryImpl
 import app.otter.data.repository.ArchiveRepositoryImpl
@@ -41,7 +42,8 @@ object AppModule {
     ): List<ArchiveExtractor> = listOf(
         ZipExtractor(pathValidator),
         RarExtractor(pathValidator, archiveLibraryManager),
-        SevenZipExtractor(pathValidator, archiveLibraryManager)
+        SevenZipExtractor(pathValidator, archiveLibraryManager),
+        TarExtractor(pathValidator, archiveLibraryManager)
     )
 
     @Provides
