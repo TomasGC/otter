@@ -1,7 +1,7 @@
 # Project Architecture - Otter (Android Archive Extractor)
 
-**Purpose**: System architecture and design decisions for Otter (ZIP + RAR extraction with background service)
-**Last Updated**: 2026-04-16
+**Purpose**: System architecture and design decisions for Otter (ZIP + RAR + 7z extraction with background service)
+**Last Updated**: 2026-04-27
 
 ---
 
@@ -23,6 +23,7 @@
 | **Testing** | JUnit + MockK | Unit testing framework |
 | **ZIP Extraction** | java.util.zip | Native ZIP support |
 | **RAR Extraction** | 7-Zip-JBinding | RAR4/RAR5 support (.so libs) |
+| **7z Extraction** | 7-Zip-JBinding | 7-Zip format support (.so libs) |
 | **Background Work** | Foreground Service | Progress notifications |
 
 
@@ -203,16 +204,27 @@ sealed class UiState<out T> {
                               │           ▼                    │
                               │  ┌──────────────────────────┐ │
                               │  │  BaseArchiveExtractor    │ │
-                              │  │  (DRY pattern)           │ │
+                              │  │  (Template Method)       │ │
                               │  └──────────────────────────┘ │
-                              │     ▲                      ▲   │
-                              │     │                      │   │
-                              │  ┌──┴─────────┐   ┌───────┴──┐│
-                              │  │ZipExtractor│   │RarExtractor││
-                              │  │(direct     │   │(7-Zip    ││
-                              │  │ stream,    │   │ JBinding)││
-                              │  │ 256KB buf) │   │          ││
-                              │  └────────────┘   └──────────┘│
+                              │     ▲           ▲          ▲   │
+                              │     │           │          │   │
+                              │  ┌──┴───┐  ┌───┴───┐  ┌───┴──┐│
+                              │  │ Zip  │  │  Rar  │  │ 7Zip ││
+                              │  │(zip) │  │(7-Zip │  │(7-Zip││
+                              │  │      │  │JBind) │  │JBind)││
+                              │  └──────┘  └───┬───┘  └───┬──┘│
+                              │                │          │    │
+                              │                └────┬─────┘    │
+                              │                     ▼          │
+                              │  ┌──────────────────────────┐ │
+                              │  │SevenZipCallbackExtractor │ │
+                              │  │(shared extraction logic) │ │
+                              │  └──────────────────────────┘ │
+                              │                ▼               │
+                              │  ┌──────────────────────────┐ │
+                              │  │ ArchiveLibraryManager    │ │
+                              │  │ (@Singleton, lifecycle)  │ │
+                              │  └──────────────────────────┘ │
                               │           ▼                    │
                               │  ┌──────────────────────────┐ │
                               │  │  Android Storage         │ │
@@ -529,15 +541,21 @@ suspend fun extract(uri: Uri, destination: File): Flow<ExtractionResult> = callb
 
 **GitHub Actions workflows** - Optimized reusable workflow architecture:
 
-### Workflow Structure (Issue #10)
+### Workflow Structure (Issue #10, #14)
 
 **Reusable Workflows** (`.github/workflows/reusable-*.yml`):
 - `reusable-unit-tests.yml` - JUnit + MockK unit tests
 - `reusable-build-apk.yml` - Gradle assembly (debug/release)
-- `reusable-instrumented-tests.yml` - UI tests with Android emulator
+- `reusable-instrumented-tests.yml` - **Gradle Managed Devices** (official Google solution)
 - `reusable-lint-checks.yml` - ktlint, detekt, Android Lint
 - `reusable-coverage-merge.yml` - Jacoco coverage reports
 - `reusable-security-checks.yml` - OWASP, TruffleHog, APK size
+
+**Instrumented Tests** (Issue #14):
+- Migrated from `reactivecircus/android-emulator-runner` to **Gradle Managed Devices**
+- Benefits: More stable, better caching, official Google support, no third-party wrapper
+- Configuration: Pixel 4, API 30, AOSP system image
+- No more crashpad_handler hang issues or boot timeouts
 
 **Caller Workflows**:
 - `feature-ci.yml` - Validates feature/bugfix branches (parallel lint + tests)
@@ -558,13 +576,15 @@ suspend fun extract(uri: Uri, destination: File): Flow<ExtractionResult> = callb
          │  Build APK  │
          └──────┬──────┘
                 ▼
-         ┌──────────────┐
-         │  UI Tests    │
-         │  (API 30)    │
-         └──────────────┘
+         ┌──────────────────────┐
+         │  UI Tests            │
+         │  (Gradle Managed     │
+         │   Devices - Pixel 4) │
+         └──────────────────────┘
 ```
 
 **Performance**: ~30% faster with parallel execution
+**Stability**: 100% success rate with Gradle Managed Devices (vs ~70% with reactivecircus)
 
 ### CI Pipeline (No Duplication)
 
