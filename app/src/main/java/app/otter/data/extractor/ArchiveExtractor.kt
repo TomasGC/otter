@@ -12,6 +12,8 @@ interface ArchiveExtractor {
     suspend fun extract(
         inputStream: InputStream,
         destinationPath: File,
+        archiveType: ArchiveType,
+        sourceFileName: String,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult
 }

@@ -2,11 +2,12 @@ package app.otter.di
 
 import android.app.Application
 import android.content.Context
+import app.otter.data.extractor.ApacheGzipExtractor
+import app.otter.data.extractor.ApacheTarExtractor
 import app.otter.data.extractor.ArchiveExtractor
 import app.otter.data.extractor.ArchiveLibraryManager
 import app.otter.data.extractor.RarExtractor
 import app.otter.data.extractor.SevenZipExtractor
-import app.otter.data.extractor.TarExtractor
 import app.otter.data.extractor.ZipExtractor
 import app.otter.data.repository.ArchiveBrowserRepositoryImpl
 import app.otter.data.repository.ArchiveRepositoryImpl
@@ -43,7 +44,8 @@ object AppModule {
         ZipExtractor(pathValidator),
         RarExtractor(pathValidator, archiveLibraryManager),
         SevenZipExtractor(pathValidator, archiveLibraryManager),
-        TarExtractor(pathValidator, archiveLibraryManager)
+        ApacheTarExtractor(pathValidator),  // Uses Apache Commons Compress (works with InputStream)
+        ApacheGzipExtractor(pathValidator)  // Uses Apache Commons Compress (works with InputStream)
     )
 
     @Provides
@@ -63,8 +65,9 @@ object AppModule {
     @Provides
     @Singleton
     fun provideArchiveBrowserRepository(
-        context: Context
-    ): ArchiveBrowserRepository = ArchiveBrowserRepositoryImpl(context)
+        context: Context,
+        pathValidator: PathValidator
+    ): ArchiveBrowserRepository = ArchiveBrowserRepositoryImpl(context, pathValidator)
 
     @Provides
     fun provideExtractArchiveUseCase(

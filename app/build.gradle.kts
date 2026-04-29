@@ -15,8 +15,8 @@ android {
         applicationId = "app.otter"
         minSdk = 26
         targetSdk = 34
-        versionCode = 68
-        versionName = "0.0.68"
+        versionCode = 73
+        versionName = "0.0.73"
 
         testInstrumentationRunner = "app.otter.HiltTestRunner"
         vectorDrawables {
@@ -36,6 +36,13 @@ android {
             storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "aBaEtUAPd9KGvmaYQFqFUacjbTg="
             keyAlias = "otter-release"
             keyPassword = System.getenv("KEY_PASSWORD") ?: "k0/tuOtQvGzrvBttMmBOmEHHk7g="
+        }
+    }
+
+    sourceSets {
+        // Force inclusion of test archive files in androidTest assets
+        getByName("androidTest") {
+            assets.srcDirs("src/androidTest/assets")
         }
     }
 
@@ -82,6 +89,11 @@ android {
             useLegacyPackaging = true
             keepDebugSymbols += "lib7-Zip-JBinding.so"
         }
+    }
+
+    // Force inclusion of test archive files in androidTest APK
+    androidResources {
+        noCompress += listOf("tar", "gz", "tgz", "tar.gz", "7z", "rar", "zip")
     }
 
     testOptions {
@@ -133,8 +145,11 @@ dependencies {
     // DocumentFile for accessing parent folder
     implementation("androidx.documentfile:documentfile:1.0.1")
 
-    // 7-Zip for Android (supports RAR5, 7z, tar, tar.gz, tgz and all archive formats)
+    // 7-Zip for Android (supports RAR5, 7z)
     implementation("com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.03")
+
+    // Apache Commons Compress (supports GZIP, TAR, TAR.GZ, TGZ)
+    implementation("org.apache.commons:commons-compress:1.25.0")
 
     // Timber - Logging library
     implementation("com.jakewharton.timber:timber:5.0.1")

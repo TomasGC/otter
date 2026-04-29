@@ -3,6 +3,7 @@ package app.otter.data.repository
 import android.content.Context
 import android.net.Uri
 import app.otter.domain.model.ResourcePath
+import app.otter.util.PathValidator
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertTrue
@@ -23,12 +24,14 @@ import org.robolectric.annotation.Config
 class ArchiveBrowserRepositoryImplTest {
 
     private lateinit var context: Context
+    private lateinit var pathValidator: PathValidator
     private lateinit var repository: ArchiveBrowserRepositoryImpl
 
     @Before
     fun setup() {
         context = mockk(relaxed = true)
-        repository = ArchiveBrowserRepositoryImpl(context)
+        pathValidator = PathValidator()
+        repository = ArchiveBrowserRepositoryImpl(context, pathValidator)
     }
 
     @Test

@@ -38,6 +38,8 @@ class ZipExtractorTest {
         val result = extractor.extract(
             inputStream = testZip,
             destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
             onProgress = {}
         )
 
@@ -65,6 +67,8 @@ class ZipExtractorTest {
         val result = extractor.extract(
             inputStream = zipBytes.inputStream(),
             destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
             onProgress = {}
         )
 
@@ -84,6 +88,8 @@ class ZipExtractorTest {
         val result = extractor.extract(
             inputStream = zipBytes.inputStream(),
             destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
             onProgress = {}
         )
 
@@ -102,6 +108,8 @@ class ZipExtractorTest {
         val result = extractor.extract(
             inputStream = zipBytes.inputStream(),
             destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
             onProgress = {}
         )
 
@@ -121,6 +129,8 @@ class ZipExtractorTest {
         val result = extractor.extract(
             inputStream = zipBytes.inputStream(),
             destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
             onProgress = {}
         )
 
@@ -143,6 +153,8 @@ class ZipExtractorTest {
         extractor.extract(
             inputStream = zipBytes.inputStream(),
             destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
             onProgress = { progressEvents.add(it) }
         )
 
@@ -167,6 +179,8 @@ class ZipExtractorTest {
         val result = extractor.extract(
             inputStream = corruptedBytes.inputStream(),
             destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
             onProgress = {}
         )
 
@@ -187,6 +201,8 @@ class ZipExtractorTest {
         val result = extractor.extract(
             inputStream = zipBytes.inputStream(),
             destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
             onProgress = {},
         )
 
@@ -207,6 +223,8 @@ class ZipExtractorTest {
         val result = extractor.extract(
             inputStream = zipBytes.inputStream(),
             destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
             onProgress = {},
         )
 
@@ -227,6 +245,8 @@ class ZipExtractorTest {
         val result = extractor.extract(
             inputStream = zipBytes.inputStream(),
             destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
             onProgress = {},
         )
 
@@ -247,6 +267,8 @@ class ZipExtractorTest {
         val result = extractor.extract(
             inputStream = zipBytes.inputStream(),
             destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
             onProgress = {},
         )
 
@@ -264,6 +286,8 @@ class ZipExtractorTest {
         val result = extractor.extract(
             inputStream = zipBytes.inputStream(),
             destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
             onProgress = {}
         )
 
@@ -282,6 +306,8 @@ class ZipExtractorTest {
         val result = extractor.extract(
             inputStream = zipBytes.inputStream(),
             destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
             onProgress = {}
         )
 
@@ -304,6 +330,8 @@ class ZipExtractorTest {
         val result = extractor.extract(
             inputStream = output.toByteArray().inputStream(),
             destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
             onProgress = {}
         )
 
@@ -329,6 +357,8 @@ class ZipExtractorTest {
         val result = extractor.extract(
             inputStream = zipBytes.inputStream(),
             destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
             onProgress = {}
         )
 

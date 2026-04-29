@@ -35,6 +35,7 @@ class BaseArchiveExtractorTest {
         override suspend fun extractFromTempFile(
             tempFile: File,
             destinationPath: File,
+            sourceFileName: String,
             onProgress: (ExtractionProgress) -> Unit
         ): ExtractionResult {
             wasExtractCalled = true
@@ -61,8 +62,8 @@ class BaseArchiveExtractorTest {
             validatePath(outputFile, destinationPath, entryName)
         }
 
-        fun testCreateTempFile(inputStream: java.io.InputStream): File {
-            return createTempFile(inputStream)
+        fun testCreateTempFile(inputStream: java.io.InputStream, archiveType: ArchiveType): File {
+            return createTempFile(inputStream, archiveType)
         }
     }
 
@@ -75,7 +76,7 @@ class BaseArchiveExtractorTest {
         val destination = tempFolder.newFolder("output")
 
         // When
-        val result = extractor.extract(inputStream, destination) {}
+        val result = extractor.extract(inputStream, destination, ArchiveType.ZIP, "test.zip") {}
 
         // Then
         assertTrue("Should succeed", result is ExtractionResult.Success)
@@ -95,7 +96,7 @@ class BaseArchiveExtractorTest {
         val filesBefore = tempDir.listFiles { file -> file.name.startsWith(BaseArchiveExtractor.TEMP_FILE_PREFIX) }?.size ?: 0
 
         // When
-        extractor.extract(inputStream, destination) {}
+        extractor.extract(inputStream, destination, ArchiveType.ZIP, "test.zip") {}
 
         // Then - Verify no new temp files left behind
         val filesAfter = tempDir.listFiles { file -> file.name.startsWith(BaseArchiveExtractor.TEMP_FILE_PREFIX) }?.size ?: 0
@@ -115,7 +116,7 @@ class BaseArchiveExtractorTest {
         val filesBefore = tempDir.listFiles { file -> file.name.startsWith(BaseArchiveExtractor.TEMP_FILE_PREFIX) }?.size ?: 0
 
         // When
-        val result = extractor.extract(inputStream, destination) {}
+        val result = extractor.extract(inputStream, destination, ArchiveType.ZIP, "test.zip") {}
 
         // Then
         assertTrue("Should return failure", result is ExtractionResult.Failure)
@@ -135,7 +136,7 @@ class BaseArchiveExtractorTest {
 
         // When/Then
         try {
-            extractor.extract(inputStream, destination) {}
+            extractor.extract(inputStream, destination, ArchiveType.ZIP, "test.zip") {}
             assertTrue("Should throw CancellationException", false)
         } catch (e: CancellationException) {
             // Expected
@@ -152,7 +153,7 @@ class BaseArchiveExtractorTest {
         val destination = tempFolder.newFolder("output")
 
         // When
-        val result = extractor.extract(inputStream, destination) {}
+        val result = extractor.extract(inputStream, destination, ArchiveType.ZIP, "test.zip") {}
 
         // Then
         assertTrue("Should return failure result", result is ExtractionResult.Failure)
@@ -168,7 +169,7 @@ class BaseArchiveExtractorTest {
         val destination = tempFolder.newFolder("output")
 
         // When
-        val result = extractor.extract(emptyStream, destination) {}
+        val result = extractor.extract(emptyStream, destination, ArchiveType.ZIP, "test.zip") {}
 
         // Then
         assertTrue("Should return failure for empty stream", result is ExtractionResult.Failure)
@@ -212,7 +213,7 @@ class BaseArchiveExtractorTest {
         val destination = tempFolder.newFolder("output")
 
         // When
-        val result = extractor.extract(inputStream, destination) {}
+        val result = extractor.extract(inputStream, destination, ArchiveType.ZIP, "test.zip") {}
 
         // Then
         assertTrue("Should succeed with large content", result is ExtractionResult.Success)
@@ -228,7 +229,7 @@ class BaseArchiveExtractorTest {
         val progressEvents = mutableListOf<ExtractionProgress>()
 
         // When
-        extractor.extract(inputStream, destination) { progressEvents.add(it) }
+        extractor.extract(inputStream, destination, ArchiveType.ZIP, "test.zip") { progressEvents.add(it) }
 
         // Then
         assertTrue("Should emit progress events", progressEvents.isNotEmpty())
@@ -244,12 +245,12 @@ class BaseArchiveExtractorTest {
         val extractor = FakeArchiveExtractor()
 
         // When
-        val tempFile = extractor.testCreateTempFile(inputStream)
+        val tempFile = extractor.testCreateTempFile(inputStream, ArchiveType.ZIP)
 
         // Then
         assertTrue("Temp file should exist", tempFile.exists())
         assertTrue("Temp file name should start with prefix", tempFile.name.startsWith(BaseArchiveExtractor.TEMP_FILE_PREFIX))
-        assertTrue("Temp file name should end with extension", tempFile.name.endsWith(BaseArchiveExtractor.TEMP_FILE_SUFFIX))
+        assertTrue("Temp file name should end with .zip", tempFile.name.endsWith(".zip"))
         assertEquals("Temp file should have correct content", content, tempFile.readText())
 
         // Cleanup

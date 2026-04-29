@@ -42,6 +42,8 @@ class RarExtractorInstrumentedTest {
         val result = extractor.extract(
             inputStream = testRar,
             destinationPath = destination,
+            archiveType = ArchiveType.RAR,
+            sourceFileName = "test.rar",
             onProgress = {}
         )
 

@@ -45,10 +45,16 @@ class FileBrowserRepositoryImpl(
             return emptyList()
         }
 
+        val canonicalDir = directory.canonicalPath
         val files = directory.listFiles()
 
         return files?.mapNotNull { file ->
             try {
+                // Validate file is within directory bounds
+                if (!file.canonicalPath.startsWith(canonicalDir)) {
+                    return@mapNotNull null
+                }
+
                 val mimeType = if (file.isFile) mimeTypeUtil.getMimeType(file.name) else null
 
                 FileItem(

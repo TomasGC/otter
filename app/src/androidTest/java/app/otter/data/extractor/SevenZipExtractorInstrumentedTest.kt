@@ -42,6 +42,8 @@ class SevenZipExtractorInstrumentedTest {
         val result = extractor.extract(
             inputStream = test7z,
             destinationPath = destination,
+            archiveType = ArchiveType.SEVEN_ZIP,
+            sourceFileName = "test.7z",
             onProgress = {}
         )
 

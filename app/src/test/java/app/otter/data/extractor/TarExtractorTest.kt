@@ -11,12 +11,12 @@ import org.junit.Test
 class TarExtractorTest {
 
     private lateinit var pathValidator: PathValidator
-    private lateinit var tarExtractor: TarExtractor
+    private lateinit var tarExtractor: ApacheTarExtractor
 
     @Before
     fun setup() {
         pathValidator = mockk(relaxed = true)
-        tarExtractor = TarExtractor(pathValidator)
+        tarExtractor = ApacheTarExtractor(pathValidator)
     }
 
     @Test
@@ -42,5 +42,10 @@ class TarExtractorTest {
     @Test
     fun `does not support SEVEN_ZIP type`() {
         assertFalse(tarExtractor.supports(ArchiveType.SEVEN_ZIP))
+    }
+
+    @Test
+    fun `does not support GZIP type`() {
+        assertFalse(tarExtractor.supports(ArchiveType.GZIP))
     }
 }

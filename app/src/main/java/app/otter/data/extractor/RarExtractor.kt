@@ -19,38 +19,10 @@ class RarExtractor @Inject constructor(
     override suspend fun extractFromTempFile(
         tempFile: File,
         destinationPath: File,
+        sourceFileName: String,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult {
         val inArchive = archiveLibraryManager.openArchive(tempFile)
-
-        try {
-            val callback = SevenZipCallbackExtractor(
-                inArchive = inArchive,
-                destinationPath = destinationPath,
-                pathValidator = pathValidator
-            ) { extractedCount, totalCount, fileName ->
-                logExtractionProgress(extractedCount, totalCount, fileName)
-                onProgress(
-                    ExtractionProgress.Extracting(
-                        currentFile = fileName,
-                        extractedCount = extractedCount,
-                        totalCount = totalCount,
-                        progress = if (totalCount > 0) extractedCount.toFloat() / totalCount else 0f
-                    )
-                )
-            }
-
-            inArchive.extract(null, false, callback)
-
-            val extractedCount = callback.getExtractedCount()
-            logExtractionComplete(extractedCount)
-
-            return ExtractionResult.Success(
-                outputPath = destinationPath.absolutePath,
-                extractedFilesCount = extractedCount
-            )
-        } finally {
-            inArchive.close()
-        }
+        return extractWith7Zip(inArchive, destinationPath, pathValidator, onProgress)
     }
 }

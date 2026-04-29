@@ -1,11 +1,14 @@
 package app.otter.data.extractor
 
 import timber.log.Timber
+import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
+import app.otter.util.PathValidator
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import net.sf.sevenzipjbinding.IInArchive
 import java.io.File
 import java.io.InputStream
 
@@ -16,16 +19,18 @@ abstract class BaseArchiveExtractor : ArchiveExtractor {
     override suspend fun extract(
         inputStream: InputStream,
         destinationPath: File,
+        archiveType: ArchiveType,
+        sourceFileName: String,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult = withContext(Dispatchers.IO) {
         var tempFile: File? = null
 
         try {
-            // Create temporary file
-            tempFile = createTempFile(inputStream)
+            // Create temporary file with proper extension for 7-Zip detection
+            tempFile = createTempFile(inputStream, archiveType)
 
             // Delegate extraction to subclass
-            extractFromTempFile(tempFile, destinationPath, onProgress)
+            extractFromTempFile(tempFile, destinationPath, sourceFileName, onProgress)
         } catch (e: CancellationException) {
             Timber.tag(getTag()).d("${getTag()} extraction cancelled")
             throw e // Re-throw to propagate cancellation
@@ -44,16 +49,20 @@ abstract class BaseArchiveExtractor : ArchiveExtractor {
     protected abstract suspend fun extractFromTempFile(
         tempFile: File,
         destinationPath: File,
+        sourceFileName: String,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult
 
-    protected fun createTempFile(inputStream: InputStream): File {
-        val tempFile = File.createTempFile(TEMP_FILE_PREFIX, TEMP_FILE_SUFFIX)
+    protected fun createTempFile(inputStream: InputStream, archiveType: ArchiveType): File {
+        // Use proper extension for 7-Zip format detection
+        // Critical for .tar.gz and .tgz which require multi-layer extraction
+        val extension = archiveType.extensions.first()
+
+        val tempFile = File.createTempFile(TEMP_FILE_PREFIX, extension)
         Timber.tag(getTag()).d("Created temp file: ${tempFile.absolutePath}")
 
-        var bytesCopied = 0L
-        tempFile.outputStream().use { output ->
-            bytesCopied = inputStream.copyTo(output)
+        val bytesCopied = tempFile.outputStream().use { output ->
+            inputStream.copyTo(output)
         }
         Timber.tag(getTag()).d("Copied $bytesCopied bytes to temp file. File size: ${tempFile.length()}")
 
@@ -91,5 +100,46 @@ abstract class BaseArchiveExtractor : ArchiveExtractor {
 
     protected fun logExtractionComplete(extractedCount: Int) {
         Timber.tag(getTag()).d("Extraction completed: $extractedCount files")
+    }
+
+    /**
+     * Common extraction logic for all 7-Zip-based extractors (RAR, 7z, TAR).
+     * Eliminates code duplication across RarExtractor, SevenZipExtractor, and TarExtractor.
+     */
+    protected suspend fun extractWith7Zip(
+        inArchive: IInArchive,
+        destinationPath: File,
+        pathValidator: PathValidator,
+        onProgress: (ExtractionProgress) -> Unit
+    ): ExtractionResult {
+        return try {
+            val callback = SevenZipCallbackExtractor(
+                inArchive = inArchive,
+                destinationPath = destinationPath,
+                pathValidator = pathValidator
+            ) { extractedCount, totalCount, fileName ->
+                logExtractionProgress(extractedCount, totalCount, fileName)
+                onProgress(
+                    ExtractionProgress.Extracting(
+                        currentFile = fileName,
+                        extractedCount = extractedCount,
+                        totalCount = totalCount,
+                        progress = if (totalCount > 0) extractedCount.toFloat() / totalCount else 0f
+                    )
+                )
+            }
+
+            inArchive.extract(null, false, callback)
+
+            val extractedCount = callback.getExtractedCount()
+            logExtractionComplete(extractedCount)
+
+            ExtractionResult.Success(
+                outputPath = destinationPath.absolutePath,
+                extractedFilesCount = extractedCount
+            )
+        } finally {
+            inArchive.close()
+        }
     }
 }

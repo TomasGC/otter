@@ -1,6 +1,5 @@
 package app.otter.data.extractor
 
-import timber.log.Timber
 import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
@@ -9,18 +8,27 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
+import timber.log.Timber
+import java.io.BufferedInputStream
 import java.io.File
 import java.io.InputStream
-import java.util.zip.ZipEntry
-import java.util.zip.ZipFile
-import java.util.zip.ZipInputStream
 import javax.inject.Inject
 
-class ZipExtractor @Inject constructor(
+/**
+ * Extractor for TAR archives using Apache Commons Compress.
+ * Supports: .tar, .tar.gz, .tgz
+ *
+ * Uses InputStream directly (no temp file needed), avoiding asset packaging issues.
+ */
+class ApacheTarExtractor @Inject constructor(
     private val pathValidator: PathValidator
 ) : ArchiveExtractor {
 
-    override fun supports(type: ArchiveType): Boolean = type == ArchiveType.ZIP
+    override fun supports(type: ArchiveType): Boolean {
+        return type == ArchiveType.TAR || type == ArchiveType.TAR_GZ
+    }
 
     override suspend fun extract(
         inputStream: InputStream,
@@ -30,44 +38,32 @@ class ZipExtractor @Inject constructor(
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult = withContext(Dispatchers.IO) {
         var extractedCount = 0
-        var tempFile: File? = null
 
         try {
-            // Create temp file to enable counting
-            tempFile = File.createTempFile(TEMP_FILE_PREFIX, TEMP_FILE_SUFFIX)
-            tempFile.outputStream().use { output ->
-                inputStream.copyTo(output)
+            // Wrap with GZIP decompressor if needed
+            val decompressedStream = if (archiveType == ArchiveType.TAR_GZ) {
+                GzipCompressorInputStream(BufferedInputStream(inputStream))
+            } else {
+                BufferedInputStream(inputStream)
             }
-            Timber.tag(TAG).d("Created temp file: ${tempFile.absolutePath}, size: ${tempFile.length()}")
 
-            // Count total entries using ZipFile (allows random access)
-            val totalCount = ZipFile(tempFile).use { zipFile ->
-                zipFile.entries().asSequence().count { !it.isDirectory }
-            }
-            Timber.tag(TAG).d("Total files in archive: $totalCount")
+            // Count total entries first (requires re-opening stream for actual extraction)
+            // For now, we'll use -1 as totalCount since we can't count without consuming the stream
+            val totalCount = -1
 
-            // Pre-allocate large buffer for optimal I/O
-            val buffer = ByteArray(BUFFER_SIZE_BYTES)
-
-            // Extract from temp file
-            ZipFile(tempFile).use { zipFile ->
-                val entries = zipFile.entries()
+            // Extract all entries
+            TarArchiveInputStream(decompressedStream).use { tarInput ->
+                var entry = tarInput.nextTarEntry
                 var lastNotificationTime = 0L
 
-                while (entries.hasMoreElements() && isActive) {
-                    val entry = entries.nextElement()
+                while (entry != null && isActive) {
                     if (!entry.isDirectory) {
-                        // Path traversal protection + directory creation
+                        // Path traversal protection
                         val outputFile = pathValidator.createSafeOutputFile(destinationPath, entry.name)
 
-                        // Extract using ZipFile.getInputStream (more reliable than stream)
-                        zipFile.getInputStream(entry).use { input ->
-                            outputFile.outputStream().buffered(BUFFER_SIZE_BYTES).use { output ->
-                                var bytesRead: Int
-                                while (input.read(buffer).also { bytesRead = it } != -1 && isActive) {
-                                    output.write(buffer, 0, bytesRead)
-                                }
-                            }
+                        // Extract entry
+                        outputFile.outputStream().buffered(BUFFER_SIZE_BYTES).use { output ->
+                            tarInput.copyTo(output, BUFFER_SIZE_BYTES)
                         }
 
                         // Check if cancelled during file extraction
@@ -75,7 +71,7 @@ class ZipExtractor @Inject constructor(
 
                         extractedCount++
 
-                        // Throttle notifications to reduce overhead
+                        // Throttle progress notifications
                         val currentTime = System.currentTimeMillis()
                         if (currentTime - lastNotificationTime > PROGRESS_THROTTLE_MS) {
                             lastNotificationTime = currentTime
@@ -90,32 +86,32 @@ class ZipExtractor @Inject constructor(
                             )
                         }
                     }
+
+                    entry = tarInput.nextTarEntry
                 }
             }
+
+            Timber.tag(TAG).d("TAR extraction completed: $extractedCount files")
 
             ExtractionResult.Success(
                 outputPath = destinationPath.absolutePath,
                 extractedFilesCount = extractedCount
             )
         } catch (e: CancellationException) {
+            Timber.tag(TAG).d("TAR extraction cancelled")
             throw e // Re-throw to propagate cancellation
         } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "ZIP extraction failed: ${e.message}")
+            Timber.tag(TAG).e(e, "TAR extraction failed: ${e.message}")
             ExtractionResult.Failure(
-                errorMessage = "Extraction failed: ${e.message}",
+                errorMessage = "TAR extraction failed: ${e.message}",
                 cause = e
             )
-        } finally {
-            // Clean up temp file
-            tempFile?.delete()
         }
     }
 
     companion object {
-        private const val TAG = "ZipExtractor"
+        private const val TAG = "ApacheTarExtractor"
         private const val BUFFER_SIZE_BYTES = 256 * 1024 // 256 KB
         private const val PROGRESS_THROTTLE_MS = 1000L // 1 second
-        private const val TEMP_FILE_PREFIX = "otter_zip_"
-        private const val TEMP_FILE_SUFFIX = ".zip"
     }
 }

@@ -24,15 +24,26 @@ import java.io.RandomAccessFile
  */
 class ArchiveBrowserRepositoryImpl(
     private val context: Context,
+    private val pathValidator: app.otter.util.PathValidator,
 ) : ArchiveBrowserRepository {
+
+    companion object {
+        private const val TEMP_ARCHIVE_PREFIX = "temp_archive_"
+    }
 
     override suspend fun listEntries(archivePath: ResourcePath, path: String): Result<List<ArchiveEntry>> {
         return withContext(Dispatchers.IO) {
+            var tempCacheFile: File? = null
             try {
                 val archiveUri = ResourcePathConverter.toUri(archivePath)
                 val archiveFile = getFileFromUri(archiveUri) ?: return@withContext Result.failure(
                     IllegalArgumentException("Cannot access archive file")
                 )
+
+                // Track if this is a temporary cache file that needs cleanup
+                if (archiveUri.scheme == "content") {
+                    tempCacheFile = archiveFile
+                }
 
                 val entries = mutableListOf<ArchiveEntry>()
                 val seenDirectories = mutableSetOf<String>()
@@ -101,6 +112,9 @@ class ArchiveBrowserRepositoryImpl(
                 Result.success(entries.distinctBy { it.path })
             } catch (e: Exception) {
                 Result.failure(e)
+            } finally {
+                // Clean up temporary cache file if created
+                tempCacheFile?.delete()
             }
         }
     }
@@ -112,11 +126,18 @@ class ArchiveBrowserRepositoryImpl(
     ): Flow<ExtractionProgress> = flow {
         emit(ExtractionProgress.Idle)
 
+        var tempCacheFile: File? = null
         try {
             val archiveUri = ResourcePathConverter.toUri(archivePath)
             val archiveFile = getFileFromUri(archiveUri) ?: throw IllegalArgumentException(
                 "Cannot access archive file"
             )
+
+            // Track if this is a temporary cache file that needs cleanup
+            if (archiveUri.scheme == "content") {
+                tempCacheFile = archiveFile
+            }
+
             val destinationUri = ResourcePathConverter.toUri(destinationPath)
             val destinationFile = File(destinationUri.path ?: throw IllegalArgumentException(
                 "Invalid destination path"
@@ -143,6 +164,9 @@ class ArchiveBrowserRepositoryImpl(
                         val isDirectory = inArchive.getSimpleInterface().getArchiveItem(i).isFolder
                         val outputFile = File(destinationFile, itemPath)
 
+                        // Validate path to prevent traversal attacks
+                        pathValidator.validatePath(outputFile, destinationFile, itemPath)
+
                         if (isDirectory) {
                             outputFile.mkdirs()
                         } else {
@@ -150,6 +174,8 @@ class ArchiveBrowserRepositoryImpl(
 
                             val extractionResult = IntArray(1)
                             inArchive.extract(intArrayOf(i), false, object : net.sf.sevenzipjbinding.IArchiveExtractCallback {
+                                private var currentOutputStream: FileOutputStream? = null
+
                                 override fun setTotal(total: Long) {}
                                 override fun setCompleted(complete: Long) {}
 
@@ -161,8 +187,11 @@ class ArchiveBrowserRepositoryImpl(
                                         return null
                                     }
 
+                                    currentOutputStream = FileOutputStream(outputFile)
                                     return net.sf.sevenzipjbinding.ISequentialOutStream { data ->
-                                        FileOutputStream(outputFile, true).use { it.write(data) }
+                                        val stream = currentOutputStream
+                                            ?: throw IllegalStateException("Output stream closed unexpectedly")
+                                        stream.write(data)
                                         data.size
                                     }
                                 }
@@ -172,6 +201,12 @@ class ArchiveBrowserRepositoryImpl(
                                 override fun setOperationResult(
                                     extractOperationResult: net.sf.sevenzipjbinding.ExtractOperationResult
                                 ) {
+                                    try {
+                                        currentOutputStream?.close()
+                                    } finally {
+                                        currentOutputStream = null
+                                    }
+
                                     extractionResult[0] = if (extractOperationResult == net.sf.sevenzipjbinding.ExtractOperationResult.OK) {
                                         1
                                     } else {
@@ -200,7 +235,11 @@ class ArchiveBrowserRepositoryImpl(
                 }
             }
         } catch (e: Exception) {
-            emit(ExtractionProgress.Error(e.message ?: "Extraction failed", e))
+            val errorMessage = "${e::class.simpleName}: ${e.message ?: "Extraction failed"}"
+            emit(ExtractionProgress.Error(errorMessage, e))
+        } finally {
+            // Clean up temporary cache file if created
+            tempCacheFile?.delete()
         }
     }.flowOn(Dispatchers.IO)
 
@@ -208,8 +247,8 @@ class ArchiveBrowserRepositoryImpl(
         return when (uri.scheme) {
             "file" -> File(uri.path ?: return null)
             "content" -> {
-                // Copy to cache if content URI
-                val cacheFile = File(context.cacheDir, "temp_archive_${System.currentTimeMillis()}")
+                // Copy to cache if content URI (caller must delete after use)
+                val cacheFile = File(context.cacheDir, "$TEMP_ARCHIVE_PREFIX${System.currentTimeMillis()}")
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     cacheFile.outputStream().use { output ->
                         input.copyTo(output)
