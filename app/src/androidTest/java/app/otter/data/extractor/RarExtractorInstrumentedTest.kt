@@ -3,6 +3,7 @@ package app.otter.data.extractor
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.otter.domain.model.ArchiveType
+import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
 import app.otter.util.PathValidator
 import kotlinx.coroutines.test.runTest
@@ -62,5 +63,30 @@ class RarExtractorInstrumentedTest {
         val firstFile = extractedFiles.first()
         val content = firstFile.readText().trim()
         assertTrue("Expected 'RAR', got '$content'", content.contains("RAR"))
+    }
+
+    @Test
+    fun testExtractRarWithProgress() = runTest {
+        val context = InstrumentationRegistry.getInstrumentation().context
+        val testRar = context.assets.open("archives/test.rar")
+        val destination = tempFolder.newFolder("output-progress")
+        val progressValues = mutableListOf<Int>()
+
+        val result = extractor.extract(
+            inputStream = testRar,
+            destinationPath = destination,
+            archiveType = ArchiveType.RAR,
+            sourceFileName = "test.rar",
+            onProgress = { progress ->
+                if (progress is ExtractionProgress.Extracting) {
+                    progressValues.add((progress.progress * 100).toInt())
+                }
+            }
+        )
+
+        assertTrue("Expected Success, got ${result::class.simpleName}",
+            result is ExtractionResult.Success)
+        assertTrue("Progress callback should be called", progressValues.isNotEmpty())
+        assertTrue("Final progress should be 100", progressValues.last() == 100)
     }
 }

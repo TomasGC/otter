@@ -2,6 +2,7 @@ package app.otter.data.extractor
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.otter.domain.model.ArchiveType
+import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
 import app.otter.util.PathValidator
 import kotlinx.coroutines.test.runTest
@@ -135,5 +136,55 @@ class TarExtractorInstrumentedTest {
 
         val content = file.readText().trim()
         assertEquals("Expected content 'Tgz', got '$content'", "Tgz", content)
+    }
+
+    @Test
+    fun testExtractMultiFileTar() = runTest {
+        val testTarFile = tempFolder.newFile("test-multi.tar")
+        TestArchiveHelper.createMultiFileTar(testTarFile)
+
+        val destination = tempFolder.newFolder("output-multi-tar")
+
+        val result = extractor.extract(
+            inputStream = testTarFile.inputStream(),
+            destinationPath = destination,
+            archiveType = ArchiveType.TAR,
+            sourceFileName = "test-multi.tar",
+            onProgress = {}
+        )
+
+        assertTrue(result is ExtractionResult.Success)
+
+        val extractedCount = (result as ExtractionResult.Success).extractedFilesCount
+        assertEquals("Expected 4 files", 4, extractedCount)
+
+        val extractedFiles = destination.walk().filter { it.isFile }.toList()
+        assertEquals("Expected 4 files", 4, extractedFiles.size)
+    }
+
+    @Test
+    fun testExtractTarWithProgress() = runTest {
+        val testTarFile = tempFolder.newFile("test-progress.tar")
+        TestArchiveHelper.createMultiFileTar(testTarFile)
+
+        val destination = tempFolder.newFolder("output-progress-tar")
+        val progressValues = mutableListOf<Int>()
+
+        val result = extractor.extract(
+            inputStream = testTarFile.inputStream(),
+            destinationPath = destination,
+            archiveType = ArchiveType.TAR,
+            sourceFileName = "test-progress.tar",
+            onProgress = { progress ->
+                if (progress is ExtractionProgress.Extracting) {
+                    progressValues.add((progress.progress * 100).toInt())
+                }
+            }
+        )
+
+        assertTrue(result is ExtractionResult.Success)
+        assertTrue("Progress callback should be called", progressValues.isNotEmpty())
+        assertTrue("Final progress should be 100", progressValues.last() == 100)
+        assertTrue("Progress should increase", progressValues.zipWithNext().all { (a, b) -> a <= b })
     }
 }

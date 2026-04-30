@@ -3,6 +3,7 @@ package app.otter.data.extractor
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.otter.domain.model.ArchiveType
+import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
 import app.otter.util.PathValidator
 import kotlinx.coroutines.test.runTest
@@ -62,5 +63,30 @@ class SevenZipExtractorInstrumentedTest {
         val firstFile = extractedFiles.first()
         val content = firstFile.readText().trim()
         assertTrue("Expected '7z', got '$content'", content.contains("7z", ignoreCase = true))
+    }
+
+    @Test
+    fun testExtract7zWithProgress() = runTest {
+        val context = InstrumentationRegistry.getInstrumentation().context
+        val test7z = context.assets.open("archives/test.7z")
+        val destination = tempFolder.newFolder("output-progress")
+        val progressValues = mutableListOf<Int>()
+
+        val result = extractor.extract(
+            inputStream = test7z,
+            destinationPath = destination,
+            archiveType = ArchiveType.SEVEN_ZIP,
+            sourceFileName = "test.7z",
+            onProgress = { progress ->
+                if (progress is ExtractionProgress.Extracting) {
+                    progressValues.add((progress.progress * 100).toInt())
+                }
+            }
+        )
+
+        assertTrue("Expected Success, got ${result::class.simpleName}",
+            result is ExtractionResult.Success)
+        assertTrue("Progress callback should be called", progressValues.isNotEmpty())
+        assertTrue("Final progress should be 100", progressValues.last() == 100)
     }
 }

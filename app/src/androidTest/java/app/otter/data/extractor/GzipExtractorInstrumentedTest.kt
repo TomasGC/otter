@@ -2,6 +2,7 @@ package app.otter.data.extractor
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.otter.domain.model.ArchiveType
+import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
 import app.otter.util.PathValidator
 import kotlinx.coroutines.test.runTest
@@ -96,5 +97,30 @@ class GzipExtractorInstrumentedTest {
         // Verify content (file.txt.gzip contains "Gzip")
         val content = extractedFile.readText().trim()
         assertEquals("Expected 'Gzip', got '$content'", "Gzip", content)
+    }
+
+    @Test
+    fun testExtractGzWithProgress() = runTest {
+        val testGzFile = tempFolder.newFile("file-progress.txt.gz")
+        TestArchiveHelper.createGzFile(testGzFile)
+
+        val destination = tempFolder.newFolder("output-gz-progress")
+        val progressValues = mutableListOf<Int>()
+
+        val result = extractor.extract(
+            inputStream = testGzFile.inputStream(),
+            destinationPath = destination,
+            archiveType = ArchiveType.GZIP,
+            sourceFileName = "file-progress.txt.gz",
+            onProgress = { progress ->
+                if (progress is ExtractionProgress.Extracting) {
+                    progressValues.add((progress.progress * 100).toInt())
+                }
+            }
+        )
+
+        assertTrue(result is ExtractionResult.Success)
+        assertTrue("Progress callback should be called", progressValues.isNotEmpty())
+        assertTrue("Final progress should be 100", progressValues.last() == 100)
     }
 }
