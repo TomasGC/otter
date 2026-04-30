@@ -2,6 +2,8 @@ package app.otter.data.extractor
 
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
+import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
+import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -11,7 +13,7 @@ import java.io.File
  *
  * Pattern conventions:
  *
- * For ARCHIVE formats (TAR, RAR, ZIP, 7Z):
+ * For ARCHIVE formats (TAR, ZIP):
  * - Archive name: test.<extension>
  * - Contains folder: test<Extension>/ (camelCase)
  * - Contains file: file.txt with content "<Extension>"
@@ -21,6 +23,9 @@ import java.io.File
  * - Compressed file: file.txt.<extension>
  * - Decompresses to: file.txt containing "<Extension>"
  * - Example: file.txt.gz → file.txt → "Gz"
+ *
+ * Note: RAR and 7Z archives are kept as assets since Apache Commons Compress
+ * doesn't support creating these formats, and 7-Zip-JBinding creation API is complex.
  */
 object TestArchiveHelper {
 
@@ -113,6 +118,26 @@ object TestArchiveHelper {
                 gzipOut.write(tarBytes.toByteArray())
             }
         }
+    }
+
+    /**
+     * Creates a ZIP archive (test.zip).
+     *
+     * Pattern: test.zip → testZip/file.txt → "Zip"
+     */
+    fun createZipFile(outputFile: File) {
+        val baos = ByteArrayOutputStream()
+        ZipArchiveOutputStream(baos).use { zipOut ->
+            // Create testZip/file.txt entry
+            val fileContent = "Zip".toByteArray()
+            val entry = ZipArchiveEntry("testZip/file.txt")
+
+            zipOut.putArchiveEntry(entry)
+            zipOut.write(fileContent)
+            zipOut.closeArchiveEntry()
+        }
+
+        outputFile.writeBytes(baos.toByteArray())
     }
 
     private fun addTarEntry(tarOut: TarArchiveOutputStream, entryName: String, content: String) {
