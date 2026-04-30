@@ -24,7 +24,11 @@ class ZipExtractorInstrumentedTest {
     val tempFolder = TemporaryFolder()
 
     private val pathValidator = PathValidator()
-    private val extractor = ZipExtractor(pathValidator)
+    private val extractor = ZipExtractor(
+        pathValidator = pathValidator,
+        tempFileManager = TempFileManager(),
+        sevenZipHelper = SevenZipExtractorHelper()
+    )
 
     @Test
     fun testSupportsZipType() {

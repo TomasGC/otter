@@ -24,7 +24,11 @@ class TarExtractorInstrumentedTest {
     val tempFolder = TemporaryFolder()
 
     private val pathValidator = PathValidator()
-    private val extractor = ApacheTarExtractor(pathValidator)
+    private val extractor = ApacheTarExtractor(
+        pathValidator = pathValidator,
+        tempFileManager = TempFileManager(),
+        sevenZipHelper = SevenZipExtractorHelper()
+    )
 
     @Test
     fun testSupportsTarType() {

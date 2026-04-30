@@ -19,7 +19,9 @@ class SevenZipExtractorTest {
 
     private val realPathValidator = PathValidator()
     private val archiveLibraryManager = ArchiveLibraryManager()
-    private val extractor = SevenZipExtractor(realPathValidator, archiveLibraryManager)
+    private val tempFileManager = TempFileManager()
+    private val sevenZipHelper = SevenZipExtractorHelper()
+    private val extractor = SevenZipExtractor(realPathValidator, archiveLibraryManager, tempFileManager, sevenZipHelper)
 
     @Test
     fun `should support SEVEN_ZIP type`() {

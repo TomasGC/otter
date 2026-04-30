@@ -4,17 +4,21 @@ import timber.log.Timber
 import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
-import app.otter.util.PathValidator
+import java.io.File
+import java.io.InputStream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import net.sf.sevenzipjbinding.IInArchive
-import java.io.File
-import java.io.InputStream
 
-abstract class BaseArchiveExtractor : ArchiveExtractor {
+abstract class BaseArchiveExtractor(
+    protected val tempFileManager: ITempFileManager,
+    protected val sevenZipHelper: SevenZipExtractorHelper,
+    protected val progressCalculator: ProgressCalculator = StandardProgressCalculator()
+) : ArchiveExtractor {
 
     protected abstract fun getTag(): String
+
+    protected val logger: ExtractionLogger by lazy { ExtractionLogger(getTag()) }
 
     /**
      * Template method that handles common extraction logic and ensures
@@ -71,59 +75,22 @@ abstract class BaseArchiveExtractor : ArchiveExtractor {
     /**
      * Helper for extractors that need temporary files (RAR, 7z).
      * Creates temp file, extracts, then cleans up automatically.
+     *
+     * The callback lambda can capture needed values from the outer scope
+     * (destinationPath, pathValidator, onProgress, etc.).
      */
     protected suspend fun extractWithTempFile(
         inputStream: InputStream,
-        destinationPath: File,
         archiveType: ArchiveType,
-        sourceFileName: String,
-        onProgress: (ExtractionProgress) -> Unit,
         extractFromTempFile: suspend (File) -> ExtractionResult
     ): ExtractionResult {
         var tempFile: File? = null
         return try {
-            tempFile = createTempFile(inputStream, archiveType)
+            tempFile = tempFileManager.createTempFile(inputStream, archiveType, getTag())
             extractFromTempFile(tempFile)
         } finally {
             tempFile?.delete()
             Timber.tag(getTag()).d("Temp file deleted")
-        }
-    }
-
-    protected fun createTempFile(inputStream: InputStream, archiveType: ArchiveType): File {
-        // Use proper extension for 7-Zip format detection
-        // Critical for .tar.gz and .tgz which require multi-layer extraction
-        val extension = archiveType.extensions.first()
-
-        val tempFile = File.createTempFile(TEMP_FILE_PREFIX, extension)
-        Timber.tag(getTag()).d("Created temp file: ${tempFile.absolutePath}")
-
-        val bytesCopied = tempFile.outputStream().use { output ->
-            inputStream.copyTo(output)
-        }
-        Timber.tag(getTag()).d("Copied $bytesCopied bytes to temp file. File size: ${tempFile.length()}")
-
-        if (!tempFile.exists() || tempFile.length() == 0L) {
-            val error = "Temp file is empty or doesn't exist"
-            Timber.tag(getTag()).e(error)
-            throw IllegalStateException(error)
-        }
-
-        return tempFile
-    }
-
-    protected fun validatePath(outputFile: File, destinationPath: File, entryName: String) {
-        if (!outputFile.canonicalPath.startsWith(destinationPath.canonicalPath)) {
-            val error = "Entry outside destination: $entryName"
-            Timber.tag(getTag()).e(error)
-            throw SecurityException(error)
-        }
-    }
-
-    protected fun logExtractionProgress(extractedCount: Int, totalCount: Int, fileName: String) {
-        // Only log every 100 files to avoid performance issues
-        if (extractedCount % LOG_INTERVAL_FILES == 0 || extractedCount == totalCount) {
-            Timber.tag(getTag()).d("Extracted $extractedCount/$totalCount files (current: $fileName)")
         }
     }
 
@@ -152,7 +119,7 @@ abstract class BaseArchiveExtractor : ArchiveExtractor {
     }
 
     /**
-     * Helper to notify progress with throttling and automatic progress calculation.
+     * Helper to notify progress with throttling and strategy-based progress calculation.
      */
     protected fun notifyProgress(
         extractedCount: Int,
@@ -162,7 +129,7 @@ abstract class BaseArchiveExtractor : ArchiveExtractor {
         onProgress: (ExtractionProgress) -> Unit
     ) {
         if (throttler.shouldNotify()) {
-            val progress = if (totalCount > 0) extractedCount.toFloat() / totalCount else 0f
+            val progress = progressCalculator.calculate(extractedCount, totalCount)
             onProgress(
                 ExtractionProgress.Extracting(
                     currentFile = currentFile,
@@ -175,62 +142,11 @@ abstract class BaseArchiveExtractor : ArchiveExtractor {
     }
 
     companion object {
-        private const val LOG_INTERVAL_FILES = 100
-
-        // Shared temp file constants for extractors requiring RandomAccessFile
-        const val TEMP_FILE_PREFIX = "otter_archive_"
-        const val TEMP_FILE_SUFFIX = ".tmp"
-
         // Shared buffer and throttle constants
         @JvmStatic
         protected val BUFFER_SIZE_BYTES = 256 * 1024 // 256 KB
 
         @JvmStatic
         protected val PROGRESS_THROTTLE_MS = 1000L // 1 second
-    }
-
-    protected fun logExtractionComplete(extractedCount: Int) {
-        Timber.tag(getTag()).d("Extraction completed: $extractedCount files")
-    }
-
-    /**
-     * Common extraction logic for all 7-Zip-based extractors (RAR, 7z, TAR).
-     * Eliminates code duplication across RarExtractor, SevenZipExtractor, and TarExtractor.
-     */
-    protected suspend fun extractWith7Zip(
-        inArchive: IInArchive,
-        destinationPath: File,
-        pathValidator: PathValidator,
-        onProgress: (ExtractionProgress) -> Unit
-    ): ExtractionResult {
-        return try {
-            val callback = SevenZipCallbackExtractor(
-                inArchive = inArchive,
-                destinationPath = destinationPath,
-                pathValidator = pathValidator
-            ) { extractedCount, totalCount, fileName ->
-                logExtractionProgress(extractedCount, totalCount, fileName)
-                onProgress(
-                    ExtractionProgress.Extracting(
-                        currentFile = fileName,
-                        extractedCount = extractedCount,
-                        totalCount = totalCount,
-                        progress = if (totalCount > 0) extractedCount.toFloat() / totalCount else 0f
-                    )
-                )
-            }
-
-            inArchive.extract(null, false, callback)
-
-            val extractedCount = callback.getExtractedCount()
-            logExtractionComplete(extractedCount)
-
-            ExtractionResult.Success(
-                outputPath = destinationPath.absolutePath,
-                extractedFilesCount = extractedCount
-            )
-        } finally {
-            inArchive.close()
-        }
     }
 }

@@ -14,8 +14,10 @@ import java.util.zip.ZipFile
 import javax.inject.Inject
 
 class ZipExtractor @Inject constructor(
-    private val pathValidator: PathValidator
-) : BaseArchiveExtractor() {
+    private val pathValidator: PathValidator,
+    tempFileManager: ITempFileManager,
+    sevenZipHelper: SevenZipExtractorHelper
+) : BaseArchiveExtractor(tempFileManager, sevenZipHelper) {
 
     override fun supports(type: ArchiveType): Boolean = type == ArchiveType.ZIP
 
@@ -33,7 +35,7 @@ class ZipExtractor @Inject constructor(
 
         try {
             // Use base class helper to create temp file with validation
-            tempFile = createTempFile(inputStream, archiveType)
+            tempFile = tempFileManager.createTempFile(inputStream, archiveType, getTag())
 
             // Count total entries using ZipFile (allows random access)
             val totalCount = ZipFile(tempFile).use { zipFile ->
@@ -78,7 +80,7 @@ class ZipExtractor @Inject constructor(
                 }
             }
 
-            Timber.tag(getTag()).d("ZIP extraction completed: $extractedCount files")
+            logger.logComplete(extractedCount)
 
             ExtractionResult.Success(
                 outputPath = destinationPath.absolutePath,

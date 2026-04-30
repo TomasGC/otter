@@ -27,7 +27,12 @@ class SevenZipExtractorInstrumentedTest {
 
     private val pathValidator = PathValidator()
     private val archiveLibraryManager = ArchiveLibraryManager()
-    private val extractor = SevenZipExtractor(pathValidator, archiveLibraryManager)
+    private val extractor = SevenZipExtractor(
+        pathValidator = pathValidator,
+        archiveLibraryManager = archiveLibraryManager,
+        tempFileManager = TempFileManager(),
+        sevenZipHelper = SevenZipExtractorHelper()
+    )
 
     @Test
     fun testSupportsSevenZipType() {

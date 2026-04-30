@@ -10,8 +10,10 @@ import javax.inject.Inject
 
 class SevenZipExtractor @Inject constructor(
     private val pathValidator: PathValidator,
-    private val archiveLibraryManager: ArchiveLibraryManager
-) : BaseArchiveExtractor() {
+    private val archiveLibraryManager: ArchiveLibraryManager,
+    tempFileManager: ITempFileManager,
+    sevenZipHelper: SevenZipExtractorHelper
+) : BaseArchiveExtractor(tempFileManager, sevenZipHelper) {
 
     override fun supports(type: ArchiveType): Boolean = type == ArchiveType.SEVEN_ZIP
 
@@ -24,9 +26,9 @@ class SevenZipExtractor @Inject constructor(
         sourceFileName: String,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult {
-        return extractWithTempFile(inputStream, destinationPath, archiveType, sourceFileName, onProgress) { tempFile ->
+        return extractWithTempFile(inputStream, archiveType) { tempFile ->
             val inArchive = archiveLibraryManager.openArchive(tempFile)
-            extractWith7Zip(inArchive, destinationPath, pathValidator, onProgress)
+            sevenZipHelper.extract(inArchive, destinationPath, pathValidator, onProgress, logger)
         }
     }
 }

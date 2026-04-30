@@ -22,8 +22,10 @@ import javax.inject.Inject
  * Uses InputStream directly (no temp file needed), avoiding asset packaging issues.
  */
 class ApacheTarExtractor @Inject constructor(
-    private val pathValidator: PathValidator
-) : BaseArchiveExtractor() {
+    private val pathValidator: PathValidator,
+    tempFileManager: ITempFileManager,
+    sevenZipHelper: SevenZipExtractorHelper
+) : BaseArchiveExtractor(tempFileManager, sevenZipHelper, IndeterminateProgressCalculator()) {
 
     override fun supports(type: ArchiveType): Boolean {
         return type == ArchiveType.TAR || type == ArchiveType.TAR_GZ
@@ -81,7 +83,7 @@ class ApacheTarExtractor @Inject constructor(
             }
         }
 
-        Timber.tag(getTag()).d("TAR extraction completed: $extractedCount files")
+        logger.logComplete(extractedCount)
 
         ExtractionResult.Success(
             outputPath = destinationPath.absolutePath,

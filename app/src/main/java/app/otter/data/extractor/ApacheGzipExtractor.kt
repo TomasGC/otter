@@ -25,8 +25,10 @@ import javax.inject.Inject
  * Example: photo.jpg.gz → photo.jpg
  */
 class ApacheGzipExtractor @Inject constructor(
-    private val pathValidator: PathValidator
-) : BaseArchiveExtractor() {
+    private val pathValidator: PathValidator,
+    tempFileManager: ITempFileManager,
+    sevenZipHelper: SevenZipExtractorHelper
+) : BaseArchiveExtractor(tempFileManager, sevenZipHelper, SingleFileProgressCalculator()) {
 
     override fun supports(type: ArchiveType): Boolean = type == ArchiveType.GZIP
 

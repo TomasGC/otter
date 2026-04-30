@@ -24,7 +24,11 @@ class GzipExtractorInstrumentedTest {
     val tempFolder = TemporaryFolder()
 
     private val pathValidator = PathValidator()
-    private val extractor = ApacheGzipExtractor(pathValidator)
+    private val extractor = ApacheGzipExtractor(
+        pathValidator = pathValidator,
+        tempFileManager = TempFileManager(),
+        sevenZipHelper = SevenZipExtractorHelper()
+    )
 
     @Test
     fun testSupportsGzipType() {

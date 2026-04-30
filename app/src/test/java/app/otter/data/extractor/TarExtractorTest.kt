@@ -16,7 +16,7 @@ class TarExtractorTest {
     @Before
     fun setup() {
         pathValidator = mockk(relaxed = true)
-        tarExtractor = ApacheTarExtractor(pathValidator)
+        tarExtractor = ApacheTarExtractor(pathValidator, TempFileManager(), SevenZipExtractorHelper())
     }
 
     @Test

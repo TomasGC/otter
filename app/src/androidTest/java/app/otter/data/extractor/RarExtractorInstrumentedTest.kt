@@ -27,7 +27,12 @@ class RarExtractorInstrumentedTest {
 
     private val pathValidator = PathValidator()
     private val archiveLibraryManager = ArchiveLibraryManager()
-    private val extractor = RarExtractor(pathValidator, archiveLibraryManager)
+    private val extractor = RarExtractor(
+        pathValidator = pathValidator,
+        archiveLibraryManager = archiveLibraryManager,
+        tempFileManager = TempFileManager(),
+        sevenZipHelper = SevenZipExtractorHelper()
+    )
 
     @Test
     fun testSupportsRarType() {
