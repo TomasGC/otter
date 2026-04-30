@@ -4,7 +4,6 @@ import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
 import app.otter.util.PathValidator
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
@@ -27,69 +26,50 @@ import javax.inject.Inject
  */
 class ApacheGzipExtractor @Inject constructor(
     private val pathValidator: PathValidator
-) : ArchiveExtractor {
+) : BaseArchiveExtractor() {
 
     override fun supports(type: ArchiveType): Boolean = type == ArchiveType.GZIP
 
-    override suspend fun extract(
+    override fun getTag(): String = "GZIP"
+
+    override suspend fun extractInternal(
         inputStream: InputStream,
         destinationPath: File,
         archiveType: ArchiveType,
         sourceFileName: String,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult = withContext(Dispatchers.IO) {
-        try {
-            // GZIP decompresses to a single file
-            // Derive output filename by removing .gz/.gzip extension from source name
-            val outputFileName = deriveOutputFileName(sourceFileName)
-            val outputFile = File(destinationPath, outputFileName)
+        // GZIP decompresses to a single file
+        // Derive output filename by removing .gz/.gzip extension from source name
+        val outputFileName = deriveOutputFileName(sourceFileName)
+        val outputFile = File(destinationPath, outputFileName)
 
-            Timber.tag(TAG).d("Decompressing $sourceFileName → $outputFileName")
+        Timber.tag(getTag()).d("Decompressing $sourceFileName → $outputFileName")
 
-            // Ensure destination directory exists
-            destinationPath.mkdirs()
+        // Ensure destination directory exists
+        destinationPath.mkdirs()
 
-            // Decompress using Apache Commons Compress
-            GzipCompressorInputStream(BufferedInputStream(inputStream)).use { gzipInput ->
-                outputFile.outputStream().buffered(BUFFER_SIZE_BYTES).use { output ->
-                    gzipInput.copyTo(output, BUFFER_SIZE_BYTES)
-                }
+        // Decompress using Apache Commons Compress
+        GzipCompressorInputStream(BufferedInputStream(inputStream)).use { gzipInput ->
+            outputFile.outputStream().buffered(BaseArchiveExtractor.BUFFER_SIZE_BYTES).use { output ->
+                gzipInput.copyTo(output, BaseArchiveExtractor.BUFFER_SIZE_BYTES)
             }
+        }
 
-            // Verify output
-            if (!outputFile.exists() || outputFile.length() == 0L) {
-                return@withContext ExtractionResult.Failure(
-                    errorMessage = "GZIP decompression produced empty file",
-                    cause = IllegalStateException("Empty output")
-                )
-            }
-
-            Timber.tag(TAG).d("Decompressed to ${outputFile.name} (${outputFile.length()} bytes)")
-
-            // Report progress (GZIP has exactly 1 file)
-            onProgress(
-                ExtractionProgress.Extracting(
-                    currentFile = outputFileName,
-                    extractedCount = 1,
-                    totalCount = 1,
-                    progress = 1.0f
-                )
-            )
-
-            ExtractionResult.Success(
-                outputPath = destinationPath.absolutePath,
-                extractedFilesCount = 1
-            )
-        } catch (e: CancellationException) {
-            Timber.tag(TAG).d("GZIP decompression cancelled")
-            throw e // Re-throw to propagate cancellation
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "GZIP decompression error: ${e.message}")
-            ExtractionResult.Failure(
-                errorMessage = "GZIP decompression failed: ${e.message}",
-                cause = e
+        // Verify output
+        if (!outputFile.exists() || outputFile.length() == 0L) {
+            return@withContext ExtractionResult.Failure(
+                errorMessage = "GZIP decompression produced empty file",
+                cause = IllegalStateException("Empty output")
             )
         }
+
+        Timber.tag(getTag()).d("Decompressed to ${outputFile.name} (${outputFile.length()} bytes)")
+
+        ExtractionResult.Success(
+            outputPath = destinationPath.absolutePath,
+            extractedFilesCount = 1
+        )
     }
 
     /**
@@ -110,10 +90,5 @@ class ApacheGzipExtractor @Inject constructor(
             }
             else -> sourceFileName // Fallback (should not happen)
         }
-    }
-
-    companion object {
-        private const val TAG = "ApacheGzipExtractor"
-        private const val BUFFER_SIZE_BYTES = 256 * 1024 // 256 KB
     }
 }

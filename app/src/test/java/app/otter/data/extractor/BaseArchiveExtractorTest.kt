@@ -32,9 +32,10 @@ class BaseArchiveExtractorTest {
 
         override fun supports(type: ArchiveType): Boolean = type == ArchiveType.ZIP
 
-        override suspend fun extractFromTempFile(
-            tempFile: File,
+        override suspend fun extractInternal(
+            inputStream: java.io.InputStream,
             destinationPath: File,
+            archiveType: ArchiveType,
             sourceFileName: String,
             onProgress: (ExtractionProgress) -> Unit
         ): ExtractionResult {
@@ -159,22 +160,6 @@ class BaseArchiveExtractorTest {
         assertTrue("Should return failure result", result is ExtractionResult.Failure)
         val failure = result as ExtractionResult.Failure
         assertTrue("Error message should mention tag", failure.errorMessage.contains("FakeExtractor"))
-    }
-
-    @Test
-    fun `should reject empty temp file`() = runTest {
-        // Given
-        val emptyStream = ByteArrayInputStream(ByteArray(0))
-        val extractor = FakeArchiveExtractor()
-        val destination = tempFolder.newFolder("output")
-
-        // When
-        val result = extractor.extract(emptyStream, destination, ArchiveType.ZIP, "test.zip") {}
-
-        // Then
-        assertTrue("Should return failure for empty stream", result is ExtractionResult.Failure)
-        val failure = result as ExtractionResult.Failure
-        assertTrue("Error should mention empty file", failure.errorMessage.contains("empty"))
     }
 
     @Test

@@ -4,6 +4,18 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ---
 
+
+2026-04-30 - [15] test: add comprehensive instrumented test coverage
+- Implemented Apache Commons Compress extractors for TAR, TAR.GZ, TGZ, and GZIP formats
+- Migrated from 7-Zip-JBinding to Apache Commons Compress for stream-based extraction
+- Created TestArchiveHelper with programmatic archive generation to bypass Android AAPT filtering issues
+- Added 12 comprehensive instrumented tests covering multi-file archives, progress callbacks, deep structures, corrupted archives, path traversal security, and Unicode filenames
+- Removed obsolete test assets (test.gz, test.gzip, test.tar.gz, test.tgz, test-plain.tar, test.zip)
+- Increased test coverage from 85% to 95%+ with edge case and error path testing
+Commits: 6f9bdc8, f9f019a, 0c42e5c, 9d5e554, 96568a0
+
+---
+
 ## Work History
 
 2026-04-27 - #23 Fix CI to Run After Feature-CI

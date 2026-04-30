@@ -16,6 +16,10 @@ abstract class BaseArchiveExtractor : ArchiveExtractor {
 
     protected abstract fun getTag(): String
 
+    /**
+     * Template method that handles common extraction logic and ensures
+     * final progress callback at 100% is always sent for all extractors.
+     */
     override suspend fun extract(
         inputStream: InputStream,
         destinationPath: File,
@@ -23,14 +27,23 @@ abstract class BaseArchiveExtractor : ArchiveExtractor {
         sourceFileName: String,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult = withContext(Dispatchers.IO) {
-        var tempFile: File? = null
-
         try {
-            // Create temporary file with proper extension for 7-Zip detection
-            tempFile = createTempFile(inputStream, archiveType)
-
             // Delegate extraction to subclass
-            extractFromTempFile(tempFile, destinationPath, sourceFileName, onProgress)
+            val result = extractInternal(inputStream, destinationPath, archiveType, sourceFileName, onProgress)
+
+            // ✅ Automatic final progress callback at 100% for all extractors
+            if (result is ExtractionResult.Success) {
+                onProgress(
+                    ExtractionProgress.Extracting(
+                        currentFile = "",
+                        extractedCount = result.extractedFilesCount,
+                        totalCount = result.extractedFilesCount,
+                        progress = 1.0f
+                    )
+                )
+            }
+
+            result
         } catch (e: CancellationException) {
             Timber.tag(getTag()).d("${getTag()} extraction cancelled")
             throw e // Re-throw to propagate cancellation
@@ -40,18 +53,42 @@ abstract class BaseArchiveExtractor : ArchiveExtractor {
                 errorMessage = "${getTag()} extraction failed: ${e.message}",
                 cause = e
             )
+        }
+    }
+
+    /**
+     * Internal extraction logic to be implemented by subclasses.
+     * The base class will automatically send a final progress callback at 100% after this completes.
+     */
+    protected abstract suspend fun extractInternal(
+        inputStream: InputStream,
+        destinationPath: File,
+        archiveType: ArchiveType,
+        sourceFileName: String,
+        onProgress: (ExtractionProgress) -> Unit
+    ): ExtractionResult
+
+    /**
+     * Helper for extractors that need temporary files (RAR, 7z).
+     * Creates temp file, extracts, then cleans up automatically.
+     */
+    protected suspend fun extractWithTempFile(
+        inputStream: InputStream,
+        destinationPath: File,
+        archiveType: ArchiveType,
+        sourceFileName: String,
+        onProgress: (ExtractionProgress) -> Unit,
+        extractFromTempFile: suspend (File) -> ExtractionResult
+    ): ExtractionResult {
+        var tempFile: File? = null
+        return try {
+            tempFile = createTempFile(inputStream, archiveType)
+            extractFromTempFile(tempFile)
         } finally {
             tempFile?.delete()
             Timber.tag(getTag()).d("Temp file deleted")
         }
     }
-
-    protected abstract suspend fun extractFromTempFile(
-        tempFile: File,
-        destinationPath: File,
-        sourceFileName: String,
-        onProgress: (ExtractionProgress) -> Unit
-    ): ExtractionResult
 
     protected fun createTempFile(inputStream: InputStream, archiveType: ArchiveType): File {
         // Use proper extension for 7-Zip format detection
@@ -90,12 +127,66 @@ abstract class BaseArchiveExtractor : ArchiveExtractor {
         }
     }
 
+    /**
+     * Helper class to throttle progress notifications to avoid performance overhead.
+     * Only notifies if sufficient time has passed since last notification.
+     */
+    protected class ProgressThrottler(
+        private val throttleMs: Long = DEFAULT_THROTTLE_MS
+    ) {
+        private var lastNotificationTime = 0L
+
+        fun shouldNotify(): Boolean {
+            val currentTime = System.currentTimeMillis()
+            return if (currentTime - lastNotificationTime > throttleMs) {
+                lastNotificationTime = currentTime
+                true
+            } else {
+                false
+            }
+        }
+
+        companion object {
+            private const val DEFAULT_THROTTLE_MS = 1000L
+        }
+    }
+
+    /**
+     * Helper to notify progress with throttling and automatic progress calculation.
+     */
+    protected fun notifyProgress(
+        extractedCount: Int,
+        totalCount: Int,
+        currentFile: String,
+        throttler: ProgressThrottler,
+        onProgress: (ExtractionProgress) -> Unit
+    ) {
+        if (throttler.shouldNotify()) {
+            val progress = if (totalCount > 0) extractedCount.toFloat() / totalCount else 0f
+            onProgress(
+                ExtractionProgress.Extracting(
+                    currentFile = currentFile,
+                    extractedCount = extractedCount,
+                    totalCount = totalCount,
+                    progress = progress
+                )
+            )
+        }
+    }
+
     companion object {
         private const val LOG_INTERVAL_FILES = 100
 
         // Shared temp file constants for extractors requiring RandomAccessFile
         const val TEMP_FILE_PREFIX = "otter_archive_"
         const val TEMP_FILE_SUFFIX = ".tmp"
+
+        // Shared buffer and throttle constants
+        @JvmStatic
+        protected val BUFFER_SIZE_BYTES = 256 * 1024 // 256 KB
+
+        @JvmStatic
+        protected val PROGRESS_THROTTLE_MS = 1000L // 1 second
     }
 
     protected fun logExtractionComplete(extractedCount: Int) {

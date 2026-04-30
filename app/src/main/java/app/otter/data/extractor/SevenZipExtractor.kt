@@ -5,6 +5,7 @@ import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
 import app.otter.util.PathValidator
 import java.io.File
+import java.io.InputStream
 import javax.inject.Inject
 
 class SevenZipExtractor @Inject constructor(
@@ -16,13 +17,16 @@ class SevenZipExtractor @Inject constructor(
 
     override fun getTag(): String = "7ZIP"
 
-    override suspend fun extractFromTempFile(
-        tempFile: File,
+    override suspend fun extractInternal(
+        inputStream: InputStream,
         destinationPath: File,
+        archiveType: ArchiveType,
         sourceFileName: String,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult {
-        val inArchive = archiveLibraryManager.openArchive(tempFile)
-        return extractWith7Zip(inArchive, destinationPath, pathValidator, onProgress)
+        return extractWithTempFile(inputStream, destinationPath, archiveType, sourceFileName, onProgress) { tempFile ->
+            val inArchive = archiveLibraryManager.openArchive(tempFile)
+            extractWith7Zip(inArchive, destinationPath, pathValidator, onProgress)
+        }
     }
 }
