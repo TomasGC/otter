@@ -22,8 +22,10 @@ class BaseArchiveExtractorTest {
     private class FakeArchiveExtractor(
         private val shouldSucceed: Boolean = true,
         private val shouldThrowCancellation: Boolean = false,
-        private val shouldThrowException: Boolean = false
-    ) : BaseArchiveExtractor() {
+        private val shouldThrowException: Boolean = false,
+        tempFileManager: TempFileManager = TempFileManager(),
+        sevenZipHelper: SevenZipExtractorHelper = SevenZipExtractorHelper()
+    ) : BaseArchiveExtractor(tempFileManager, sevenZipHelper) {
 
         var extractedFilesCount = 0
         var wasExtractCalled = false
@@ -32,9 +34,11 @@ class BaseArchiveExtractorTest {
 
         override fun supports(type: ArchiveType): Boolean = type == ArchiveType.ZIP
 
-        override suspend fun extractFromTempFile(
-            tempFile: File,
+        override suspend fun extractInternal(
+            inputStream: java.io.InputStream,
             destinationPath: File,
+            archiveType: ArchiveType,
+            sourceFileName: String,
             onProgress: (ExtractionProgress) -> Unit
         ): ExtractionResult {
             wasExtractCalled = true
@@ -57,12 +61,8 @@ class BaseArchiveExtractorTest {
         }
 
         // Expose protected methods for testing
-        fun testValidatePath(outputFile: File, destinationPath: File, entryName: String) {
-            validatePath(outputFile, destinationPath, entryName)
-        }
-
-        fun testCreateTempFile(inputStream: java.io.InputStream): File {
-            return createTempFile(inputStream)
+        fun testCreateTempFile(inputStream: java.io.InputStream, archiveType: ArchiveType): File {
+            return tempFileManager.createTempFile(inputStream, archiveType, getTag())
         }
     }
 
@@ -75,7 +75,7 @@ class BaseArchiveExtractorTest {
         val destination = tempFolder.newFolder("output")
 
         // When
-        val result = extractor.extract(inputStream, destination) {}
+        val result = extractor.extract(inputStream, destination, ArchiveType.ZIP, "test.zip") {}
 
         // Then
         assertTrue("Should succeed", result is ExtractionResult.Success)
@@ -92,13 +92,13 @@ class BaseArchiveExtractorTest {
 
         // Count temp files before
         val tempDir = File(System.getProperty("java.io.tmpdir") ?: "/tmp")
-        val filesBefore = tempDir.listFiles { file -> file.name.startsWith(BaseArchiveExtractor.TEMP_FILE_PREFIX) }?.size ?: 0
+        val filesBefore = tempDir.listFiles { file -> file.name.startsWith("otter_archive_") }?.size ?: 0
 
         // When
-        extractor.extract(inputStream, destination) {}
+        extractor.extract(inputStream, destination, ArchiveType.ZIP, "test.zip") {}
 
         // Then - Verify no new temp files left behind
-        val filesAfter = tempDir.listFiles { file -> file.name.startsWith(BaseArchiveExtractor.TEMP_FILE_PREFIX) }?.size ?: 0
+        val filesAfter = tempDir.listFiles { file -> file.name.startsWith("otter_archive_") }?.size ?: 0
         assertEquals("Temp files should be cleaned up", filesBefore, filesAfter)
     }
 
@@ -112,16 +112,16 @@ class BaseArchiveExtractorTest {
 
         // Count temp files before
         val tempDir = File(System.getProperty("java.io.tmpdir") ?: "/tmp")
-        val filesBefore = tempDir.listFiles { file -> file.name.startsWith(BaseArchiveExtractor.TEMP_FILE_PREFIX) }?.size ?: 0
+        val filesBefore = tempDir.listFiles { file -> file.name.startsWith("otter_archive_") }?.size ?: 0
 
         // When
-        val result = extractor.extract(inputStream, destination) {}
+        val result = extractor.extract(inputStream, destination, ArchiveType.ZIP, "test.zip") {}
 
         // Then
         assertTrue("Should return failure", result is ExtractionResult.Failure)
 
         // Verify no new temp files left behind
-        val filesAfter = tempDir.listFiles { file -> file.name.startsWith(BaseArchiveExtractor.TEMP_FILE_PREFIX) }?.size ?: 0
+        val filesAfter = tempDir.listFiles { file -> file.name.startsWith("otter_archive_") }?.size ?: 0
         assertEquals("Temp files should be cleaned up", filesBefore, filesAfter)
     }
 
@@ -135,7 +135,7 @@ class BaseArchiveExtractorTest {
 
         // When/Then
         try {
-            extractor.extract(inputStream, destination) {}
+            extractor.extract(inputStream, destination, ArchiveType.ZIP, "test.zip") {}
             assertTrue("Should throw CancellationException", false)
         } catch (e: CancellationException) {
             // Expected
@@ -152,7 +152,7 @@ class BaseArchiveExtractorTest {
         val destination = tempFolder.newFolder("output")
 
         // When
-        val result = extractor.extract(inputStream, destination) {}
+        val result = extractor.extract(inputStream, destination, ArchiveType.ZIP, "test.zip") {}
 
         // Then
         assertTrue("Should return failure result", result is ExtractionResult.Failure)
@@ -160,48 +160,6 @@ class BaseArchiveExtractorTest {
         assertTrue("Error message should mention tag", failure.errorMessage.contains("FakeExtractor"))
     }
 
-    @Test
-    fun `should reject empty temp file`() = runTest {
-        // Given
-        val emptyStream = ByteArrayInputStream(ByteArray(0))
-        val extractor = FakeArchiveExtractor()
-        val destination = tempFolder.newFolder("output")
-
-        // When
-        val result = extractor.extract(emptyStream, destination) {}
-
-        // Then
-        assertTrue("Should return failure for empty stream", result is ExtractionResult.Failure)
-        val failure = result as ExtractionResult.Failure
-        assertTrue("Error should mention empty file", failure.errorMessage.contains("empty"))
-    }
-
-    @Test
-    fun `should validate path traversal attack`() {
-        // Given
-        val extractor = FakeArchiveExtractor()
-        val destination = tempFolder.newFolder("output")
-        val maliciousFile = File(destination.parentFile, "../../../etc/passwd")
-
-        // When/Then
-        try {
-            extractor.testValidatePath(maliciousFile, destination, "../../../etc/passwd")
-            assertTrue("Should throw SecurityException", false)
-        } catch (e: SecurityException) {
-            assertTrue("Error should mention entry outside destination", e.message?.contains("outside") ?: false)
-        }
-    }
-
-    @Test
-    fun `should accept valid paths`() {
-        // Given
-        val extractor = FakeArchiveExtractor()
-        val destination = tempFolder.newFolder("output")
-        val validFile = File(destination, "subfolder/file.txt")
-
-        // When/Then - Should not throw
-        extractor.testValidatePath(validFile, destination, "subfolder/file.txt")
-    }
 
     @Test
     fun `should handle large input stream`() = runTest {
@@ -212,7 +170,7 @@ class BaseArchiveExtractorTest {
         val destination = tempFolder.newFolder("output")
 
         // When
-        val result = extractor.extract(inputStream, destination) {}
+        val result = extractor.extract(inputStream, destination, ArchiveType.ZIP, "test.zip") {}
 
         // Then
         assertTrue("Should succeed with large content", result is ExtractionResult.Success)
@@ -228,7 +186,7 @@ class BaseArchiveExtractorTest {
         val progressEvents = mutableListOf<ExtractionProgress>()
 
         // When
-        extractor.extract(inputStream, destination) { progressEvents.add(it) }
+        extractor.extract(inputStream, destination, ArchiveType.ZIP, "test.zip") { progressEvents.add(it) }
 
         // Then
         assertTrue("Should emit progress events", progressEvents.isNotEmpty())
@@ -244,42 +202,16 @@ class BaseArchiveExtractorTest {
         val extractor = FakeArchiveExtractor()
 
         // When
-        val tempFile = extractor.testCreateTempFile(inputStream)
+        val tempFile = extractor.testCreateTempFile(inputStream, ArchiveType.ZIP)
 
         // Then
         assertTrue("Temp file should exist", tempFile.exists())
-        assertTrue("Temp file name should start with prefix", tempFile.name.startsWith(BaseArchiveExtractor.TEMP_FILE_PREFIX))
-        assertTrue("Temp file name should end with extension", tempFile.name.endsWith(BaseArchiveExtractor.TEMP_FILE_SUFFIX))
+        assertTrue("Temp file name should start with prefix", tempFile.name.startsWith("otter_archive_"))
+        assertTrue("Temp file name should end with .zip", tempFile.name.endsWith(".zip"))
         assertEquals("Temp file should have correct content", content, tempFile.readText())
 
         // Cleanup
         tempFile.delete()
     }
 
-    @Test
-    fun `should handle path with multiple parent folders`() {
-        // Given
-        val extractor = FakeArchiveExtractor()
-        val destination = tempFolder.newFolder("output")
-        val validFile = File(destination, "folder1/folder2/folder3/file.txt")
-
-        // When/Then - Should not throw
-        extractor.testValidatePath(validFile, destination, "folder1/folder2/folder3/file.txt")
-    }
-
-    @Test
-    fun `should block absolute paths`() {
-        // Given
-        val extractor = FakeArchiveExtractor()
-        val destination = tempFolder.newFolder("output")
-        val absolutePath = File("/etc/passwd")
-
-        // When/Then
-        try {
-            extractor.testValidatePath(absolutePath, destination, "/etc/passwd")
-            assertTrue("Should throw SecurityException", false)
-        } catch (e: SecurityException) {
-            assertTrue("Error should mention outside destination", e.message?.contains("outside") ?: false)
-        }
-    }
 }

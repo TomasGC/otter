@@ -5,52 +5,53 @@ import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
 import app.otter.util.PathValidator
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.InputStream
-import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
-import java.util.zip.ZipInputStream
 import javax.inject.Inject
 
 class ZipExtractor @Inject constructor(
-    private val pathValidator: PathValidator
-) : ArchiveExtractor {
+    private val pathValidator: PathValidator,
+    tempFileManager: ITempFileManager,
+    sevenZipHelper: SevenZipExtractorHelper
+) : BaseArchiveExtractor(tempFileManager, sevenZipHelper) {
 
     override fun supports(type: ArchiveType): Boolean = type == ArchiveType.ZIP
 
-    override suspend fun extract(
+    override fun getTag(): String = "ZIP"
+
+    override suspend fun extractInternal(
         inputStream: InputStream,
         destinationPath: File,
+        archiveType: ArchiveType,
+        sourceFileName: String,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult = withContext(Dispatchers.IO) {
         var extractedCount = 0
         var tempFile: File? = null
 
         try {
-            // Create temp file to enable counting
-            tempFile = File.createTempFile(TEMP_FILE_PREFIX, TEMP_FILE_SUFFIX)
-            tempFile.outputStream().use { output ->
-                inputStream.copyTo(output)
-            }
-            Timber.tag(TAG).d("Created temp file: ${tempFile.absolutePath}, size: ${tempFile.length()}")
+            // Use base class helper to create temp file with validation
+            tempFile = tempFileManager.createTempFile(inputStream, archiveType, getTag())
 
             // Count total entries using ZipFile (allows random access)
             val totalCount = ZipFile(tempFile).use { zipFile ->
                 zipFile.entries().asSequence().count { !it.isDirectory }
             }
-            Timber.tag(TAG).d("Total files in archive: $totalCount")
+            Timber.tag(getTag()).d("Total files in archive: $totalCount")
 
             // Pre-allocate large buffer for optimal I/O
             val buffer = ByteArray(BUFFER_SIZE_BYTES)
 
+            // Progress throttler from base class
+            val throttler = ProgressThrottler()
+
             // Extract from temp file
             ZipFile(tempFile).use { zipFile ->
                 val entries = zipFile.entries()
-                var lastNotificationTime = 0L
 
                 while (entries.hasMoreElements() && isActive) {
                     val entry = entries.nextElement()
@@ -73,47 +74,22 @@ class ZipExtractor @Inject constructor(
 
                         extractedCount++
 
-                        // Throttle notifications to reduce overhead
-                        val currentTime = System.currentTimeMillis()
-                        if (currentTime - lastNotificationTime > PROGRESS_THROTTLE_MS) {
-                            lastNotificationTime = currentTime
-                            val progress = if (totalCount > 0) extractedCount.toFloat() / totalCount else 0f
-                            onProgress(
-                                ExtractionProgress.Extracting(
-                                    currentFile = entry.name,
-                                    extractedCount = extractedCount,
-                                    totalCount = totalCount,
-                                    progress = progress
-                                )
-                            )
-                        }
+                        // Use base class helper for throttled progress notifications
+                        notifyProgress(extractedCount, totalCount, entry.name, throttler, onProgress)
                     }
                 }
             }
+
+            logger.logComplete(extractedCount)
 
             ExtractionResult.Success(
                 outputPath = destinationPath.absolutePath,
                 extractedFilesCount = extractedCount
             )
-        } catch (e: CancellationException) {
-            throw e // Re-throw to propagate cancellation
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "ZIP extraction failed: ${e.message}")
-            ExtractionResult.Failure(
-                errorMessage = "Extraction failed: ${e.message}",
-                cause = e
-            )
         } finally {
             // Clean up temp file
             tempFile?.delete()
+            Timber.tag(getTag()).d("Temp file deleted")
         }
-    }
-
-    companion object {
-        private const val TAG = "ZipExtractor"
-        private const val BUFFER_SIZE_BYTES = 256 * 1024 // 256 KB
-        private const val PROGRESS_THROTTLE_MS = 1000L // 1 second
-        private const val TEMP_FILE_PREFIX = "otter_zip_"
-        private const val TEMP_FILE_SUFFIX = ".zip"
     }
 }

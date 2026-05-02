@@ -444,6 +444,220 @@ object AppModule {
 
 ---
 
+## SOLID Refactoring Patterns (Issue #15)
+
+### Template Method Pattern
+
+```mermaid
+classDiagram
+    class BaseArchiveExtractor {
+        <<abstract>>
+        +extract() Template Method
+        #extractInternal()* Hook Method
+        +extractWithTempFile()
+        +notifyProgress()
+        -ProgressThrottler
+    }
+    
+    class ZipExtractor {
+        +extractInternal()
+    }
+    
+    class RarExtractor {
+        +extractInternal()
+    }
+    
+    class SevenZipExtractor {
+        +extractInternal()
+    }
+    
+    class ApacheTarExtractor {
+        +extractInternal()
+    }
+    
+    class ApacheGzipExtractor {
+        +extractInternal()
+    }
+    
+    BaseArchiveExtractor <|-- ZipExtractor
+    BaseArchiveExtractor <|-- RarExtractor
+    BaseArchiveExtractor <|-- SevenZipExtractor
+    BaseArchiveExtractor <|-- ApacheTarExtractor
+    BaseArchiveExtractor <|-- ApacheGzipExtractor
+    
+    note for BaseArchiveExtractor "Template Method: extract() defines flow<br/>Hook Method: extractInternal() varies<br/>Guarantee: 100% progress callback"
+```
+
+**Benefits**:
+- Eliminates code duplication (common flow in base class)
+- Guarantees final progress callback at 100% for all extractors
+- Consistent error handling and cancellation support
+
+---
+
+### Strategy Pattern (Progress Calculation)
+
+```mermaid
+classDiagram
+    class ProgressCalculator {
+        <<interface>>
+        +calculate(extracted: Int, total: Int) Float
+    }
+    
+    class StandardProgressCalculator {
+        +calculate() extracted / total
+    }
+    
+    class IndeterminateProgressCalculator {
+        +calculate() 0.0 (streaming)
+    }
+    
+    class SingleFileProgressCalculator {
+        +calculate() 1.0 (single file)
+    }
+    
+    class ZipExtractor {
+        -progressCalculator
+    }
+    
+    class RarExtractor {
+        -progressCalculator
+    }
+    
+    class ApacheTarExtractor {
+        -progressCalculator
+    }
+    
+    class ApacheGzipExtractor {
+        -progressCalculator
+    }
+    
+    ProgressCalculator <|.. StandardProgressCalculator
+    ProgressCalculator <|.. IndeterminateProgressCalculator
+    ProgressCalculator <|.. SingleFileProgressCalculator
+    
+    ZipExtractor --> StandardProgressCalculator : uses
+    RarExtractor --> StandardProgressCalculator : uses
+    ApacheTarExtractor --> IndeterminateProgressCalculator : uses
+    ApacheGzipExtractor --> SingleFileProgressCalculator : uses
+    
+    note for StandardProgressCalculator "Used when total count known<br/>(ZIP, RAR, 7z)"
+    note for IndeterminateProgressCalculator "Used for streaming formats<br/>(TAR)"
+    note for SingleFileProgressCalculator "Used for single file decompression<br/>(GZIP)"
+```
+
+**Benefits**:
+- Open-Closed Principle: add new strategies without modifying extractors
+- Each strategy encapsulates one algorithm variant
+- Easy to test independently
+
+---
+
+### Dependency Inversion Principle
+
+```mermaid
+classDiagram
+    class ITempFileManager {
+        <<interface>>
+        +createTempFile(InputStream, ArchiveType, String) File
+    }
+    
+    class TempFileManager {
+        +createTempFile(InputStream, ArchiveType, String) File
+    }
+    
+    class ZipExtractor {
+        -tempFileManager: ITempFileManager
+    }
+    
+    class RarExtractor {
+        -tempFileManager: ITempFileManager
+    }
+    
+    class SevenZipExtractor {
+        -tempFileManager: ITempFileManager
+    }
+    
+    class ApacheTarExtractor {
+        -tempFileManager: ITempFileManager
+    }
+    
+    ITempFileManager <|.. TempFileManager : implements
+    
+    ZipExtractor --> ITempFileManager : depends on
+    RarExtractor --> ITempFileManager : depends on
+    SevenZipExtractor --> ITempFileManager : depends on
+    ApacheTarExtractor --> ITempFileManager : depends on
+    
+    note for ITempFileManager "High-level modules depend on<br/>abstraction, not concrete class"
+```
+
+**Benefits**:
+- High-level extractors don't depend on concrete TempFileManager
+- Easy to mock ITempFileManager for unit tests
+- Can swap implementation without changing extractors
+
+---
+
+### Single Responsibility Principle (Class Extraction)
+
+```mermaid
+graph TB
+    A[BaseArchiveExtractor<br/>300+ LOC<br/>Too many responsibilities] --> B[BaseArchiveExtractor<br/>Template Method only]
+    A --> C[TempFileManager<br/>Temp file management]
+    A --> D[ExtractionLogger<br/>Logging with throttling]
+    A --> E[SevenZipExtractorHelper<br/>7-Zip extraction logic]
+    A --> F[ProgressCalculator<br/>Progress calculation strategies]
+    
+    style A fill:#ffcccc
+    style B fill:#ccffcc
+    style C fill:#ccffcc
+    style D fill:#ccffcc
+    style E fill:#ccffcc
+    style F fill:#ccffcc
+```
+
+**Benefits**:
+- Each class has one clear responsibility
+- Easier to test (smaller, focused classes)
+- Easier to maintain and modify
+
+---
+
+### Extraction Flow with Progress Tracking
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Extractor as BaseArchiveExtractor
+    participant Progress as ProgressCalculator
+    participant Callback as onProgress
+
+    User->>Extractor: extract()
+    activate Extractor
+    
+    Extractor->>Extractor: extractInternal() [Hook Method]
+    
+    loop For each file
+        Extractor->>Progress: calculate(extracted, total)
+        Progress-->>Extractor: progress value
+        Extractor->>Callback: onProgress(progress)
+    end
+    
+    Note over Extractor: Extraction complete
+    
+    Extractor->>Progress: calculate(total, total)
+    Progress-->>Extractor: 1.0 (100%)
+    Extractor->>Callback: onProgress(100%)
+    
+    Extractor-->>User: ExtractionResult.Success
+    deactivate Extractor
+    
+    Note over Callback: Final 100% callback<br/>GUARANTEED by<br/>Template Method
+```
+
+---
+
 ## Performance Considerations
 
 ### ZIP Extraction Optimizations (Issue #9)

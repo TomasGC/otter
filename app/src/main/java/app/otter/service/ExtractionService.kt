@@ -10,25 +10,18 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
-import android.provider.DocumentsContract
-import android.provider.OpenableColumns
 import timber.log.Timber
-import androidx.documentfile.provider.DocumentFile
 import androidx.core.app.NotificationCompat
-import androidx.core.content.FileProvider
 import app.otter.BuildConfig
 import app.otter.R
 import app.otter.domain.model.ExtractionProgress
-import app.otter.domain.model.ExtractionResult
 import app.otter.domain.usecase.ExtractArchiveUseCase
-import app.otter.util.MimeTypeUtil
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import java.io.File
 import javax.inject.Inject
 import app.otter.data.util.ResourcePathConverter
@@ -49,6 +42,9 @@ class ExtractionService : Service() {
     @Inject
     lateinit var archiveFileFactory: app.otter.util.ArchiveFileFactory
 
+    @Inject
+    lateinit var destinationResolver: app.otter.util.ExtractionDestinationResolver
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private lateinit var notificationManager: NotificationManager
 
@@ -59,18 +55,12 @@ class ExtractionService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Handle stop action
-        if (intent?.action == ACTION_STOP_EXTRACTION) {
-            Timber.tag(TAG).d("Extraction cancelled by user")
-            serviceScope.cancel()
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
+        if (handleStopAction(intent)) {
             return START_NOT_STICKY
         }
 
         val archiveUriRaw = intent?.data
         val fileName = intent?.getStringExtra(EXTRA_FILE_NAME) ?: "archive"
-
         Timber.tag(TAG).d("Service started for file: $fileName, uri: $archiveUriRaw")
 
         if (archiveUriRaw == null) {
@@ -80,7 +70,24 @@ class ExtractionService : Service() {
         }
 
         val archiveUri = ResourcePathConverter.fromUri(archiveUriRaw)
+        startForegroundWithNotification(fileName)
+        launchExtractionWorkflow(archiveUri, fileName)
 
+        return START_NOT_STICKY
+    }
+
+    private fun handleStopAction(intent: Intent?): Boolean {
+        if (intent?.action == ACTION_STOP_EXTRACTION) {
+            Timber.tag(TAG).d("Extraction cancelled by user")
+            serviceScope.cancel()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return true
+        }
+        return false
+    }
+
+    private fun startForegroundWithNotification(fileName: String) {
         Timber.tag(TAG).d("Starting foreground service with notification")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
@@ -92,31 +99,30 @@ class ExtractionService : Service() {
             startForeground(NOTIFICATION_ID, createProgressNotification(fileName, 0))
         }
         Timber.tag(TAG).d("Foreground service started, notification ID: $NOTIFICATION_ID")
+    }
 
+    private fun launchExtractionWorkflow(archiveUri: ResourcePath, fileName: String) {
         serviceScope.launch {
-            // Extract this archive
             extractArchive(archiveUri, fileName)
+            processQueuedExtractions()
+        }
+    }
 
-            // Process remaining archives in queue
-            while (true) {
-                extractionQueue.markComplete()
-                val task = extractionQueue.pollNext()
-                if (task == null) {
-                    // Queue empty, emit complete and stop
-                    Timber.tag(TAG).d("Queue empty, stopping service")
-                    eventBus.emitComplete()
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    stopSelf()
-                    break
-                } else {
-                    // Extract next archive
-                    Timber.tag(TAG).d("Processing next archive: ${task.fileName}")
-                    extractArchive(task.archiveUri, task.fileName)
-                }
+    private suspend fun processQueuedExtractions() {
+        while (true) {
+            extractionQueue.markComplete()
+            val task = extractionQueue.pollNext()
+            if (task == null) {
+                Timber.tag(TAG).d("Queue empty, stopping service")
+                eventBus.emitComplete()
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                break
+            } else {
+                Timber.tag(TAG).d("Processing next archive: ${task.fileName}")
+                extractArchive(task.archiveUri, task.fileName)
             }
         }
-
-        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -158,25 +164,7 @@ class ExtractionService : Service() {
                         val progressPercent = (progress.progress * 100).toInt()
                         Timber.tag(TAG).d("Extracting: ${progress.currentFile} ($progressPercent%)")
 
-                        // Send progress via EventBus (more reliable than broadcasts)
-                        serviceScope.launch {
-                            eventBus.emitProgress(
-                                fileName = fileName,
-                                currentFile = progress.currentFile,
-                                extractedCount = progress.extractedCount,
-                                totalCount = progress.totalCount,
-                                progress = progress.progress
-                            )
-                        }
-
-                        // Also send broadcast for backward compatibility
-                        sendProgressBroadcast(
-                            fileName = fileName,
-                            currentFile = progress.currentFile,
-                            extractedCount = progress.extractedCount,
-                            totalCount = progress.totalCount,
-                            progress = progress.progress
-                        )
+                        emitProgressEvent(fileName, progress)
 
                         notificationManager.notify(
                             NOTIFICATION_ID,
@@ -239,61 +227,7 @@ class ExtractionService : Service() {
 
     private fun getDestinationFolder(archivePath: ResourcePath, fileName: String): File {
         val archiveUri = ResourcePathConverter.toUri(archivePath)
-        // Try to get parent folder from URI
-        val documentFile = DocumentFile.fromSingleUri(this, archiveUri)
-        val parentUri = documentFile?.parentFile?.uri
-
-        if (parentUri != null) {
-            // Try to get real path from parent URI
-            val parentPath = getRealPathFromUri(parentUri)
-            if (parentPath != null) {
-                Timber.tag(TAG).d("Extracting to same folder as archive: $parentPath")
-                return File(parentPath, fileName.substringBeforeLast("."))
-            }
-        }
-
-        // Fallback: Extract to Downloads folder
-        Timber.tag(TAG).d("Could not determine archive folder, using Downloads")
-        val downloadFolder = android.os.Environment.getExternalStoragePublicDirectory(
-            android.os.Environment.DIRECTORY_DOWNLOADS
-        )
-        return File(downloadFolder, fileName.substringBeforeLast("."))
-    }
-
-    private fun getRealPathFromUri(uri: Uri): String? {
-        return try {
-            if (DocumentsContract.isDocumentUri(this, uri)) {
-                val docId = DocumentsContract.getDocumentId(uri)
-
-                // Primary storage
-                if (uri.authority == "com.android.externalstorage.documents") {
-                    val split = docId.split(":")
-                    if (split.size >= 2) {
-                        val type = split[0]
-                        val path = split[1]
-
-                        if ("primary".equals(type, ignoreCase = true)) {
-                            return "${android.os.Environment.getExternalStorageDirectory()}/$path"
-                        }
-                    }
-                }
-            }
-
-            // Try direct path query
-            contentResolver.query(uri, arrayOf("_data"), null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val columnIndex = cursor.getColumnIndex("_data")
-                    if (columnIndex != -1) {
-                        return cursor.getString(columnIndex)
-                    }
-                }
-            }
-
-            null
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "Error getting real path from URI")
-            null
-        }
+        return destinationResolver.resolveDestination(archiveUri, fileName)
     }
 
 
@@ -311,6 +245,28 @@ class ExtractionService : Service() {
             }
             notificationManager.createNotificationChannel(channel)
         }
+    }
+
+    private fun emitProgressEvent(fileName: String, progress: ExtractionProgress.Extracting) {
+        // Send progress via EventBus (more reliable than broadcasts)
+        serviceScope.launch {
+            eventBus.emitProgress(
+                fileName = fileName,
+                currentFile = progress.currentFile,
+                extractedCount = progress.extractedCount,
+                totalCount = progress.totalCount,
+                progress = progress.progress
+            )
+        }
+
+        // Also send broadcast for backward compatibility
+        sendProgressBroadcast(
+            fileName = fileName,
+            currentFile = progress.currentFile,
+            extractedCount = progress.extractedCount,
+            totalCount = progress.totalCount,
+            progress = progress.progress
+        )
     }
 
     private fun createProgressNotification(

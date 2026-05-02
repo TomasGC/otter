@@ -39,13 +39,6 @@ class ArchiveRepositoryImpl @Inject constructor(
                 }
 
             val archiveUri = ResourcePathConverter.toUri(archive.path)
-            val inputStream = context.contentResolver.openInputStream(archiveUri)
-                ?: run {
-                    send(ExtractionProgress.Error("Cannot open archive", null))
-                    close()
-                    return@callbackFlow
-                }
-
             val destinationUri = ResourcePathConverter.toUri(destinationPath)
             val destinationFile = File(destinationUri.path ?: run {
                 send(ExtractionProgress.Error("Invalid destination path", null))
@@ -56,9 +49,18 @@ class ArchiveRepositoryImpl @Inject constructor(
                 destinationFile.mkdirs()
             }
 
+            // Extract source filename for extractors that need it (e.g., GZIP)
+            val sourceFileName = getFileNameFromUri(context, archiveUri)
+
             // Emit progress events in real-time
-            val result = extractor.extract(inputStream, destinationFile) { progress ->
-                trySend(progress)
+            val result = context.contentResolver.openInputStream(archiveUri)?.use { inputStream ->
+                extractor.extract(inputStream, destinationFile, archive.type, sourceFileName) { progress ->
+                    trySend(progress)
+                }
+            } ?: run {
+                send(ExtractionProgress.Error("Cannot open archive", null))
+                close()
+                return@callbackFlow
             }
 
             when (result) {
@@ -83,4 +85,26 @@ class ArchiveRepositoryImpl @Inject constructor(
         }
         awaitClose()
     }.flowOn(Dispatchers.IO)
+
+    /**
+     * Extracts the filename from a URI using ContentResolver.
+     * Falls back to the last path segment if query fails.
+     */
+    private fun getFileNameFromUri(context: Context, uri: Uri): String {
+        // Try to query display name from content resolver
+        context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (nameIndex >= 0) {
+                    val displayName = cursor.getString(nameIndex)
+                    if (!displayName.isNullOrBlank()) {
+                        return displayName
+                    }
+                }
+            }
+        }
+
+        // Fallback: extract from URI path
+        return uri.lastPathSegment ?: "unknown"
+    }
 }

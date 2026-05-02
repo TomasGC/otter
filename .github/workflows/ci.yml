@@ -130,7 +130,7 @@ jobs:
 
   security-checks:
     uses: ./.github/workflows/reusable-security-checks.yml
-    needs: build
+    needs: verify-feature-ci
     with:
       retention-days: 7
 

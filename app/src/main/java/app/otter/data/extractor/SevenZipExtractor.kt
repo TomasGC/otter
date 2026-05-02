@@ -5,52 +5,30 @@ import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
 import app.otter.util.PathValidator
 import java.io.File
+import java.io.InputStream
 import javax.inject.Inject
 
 class SevenZipExtractor @Inject constructor(
     private val pathValidator: PathValidator,
-    private val archiveLibraryManager: ArchiveLibraryManager
-) : BaseArchiveExtractor() {
+    private val archiveLibraryManager: ArchiveLibraryManager,
+    tempFileManager: ITempFileManager,
+    sevenZipHelper: SevenZipExtractorHelper
+) : BaseArchiveExtractor(tempFileManager, sevenZipHelper) {
 
     override fun supports(type: ArchiveType): Boolean = type == ArchiveType.SEVEN_ZIP
 
     override fun getTag(): String = "7ZIP"
 
-    override suspend fun extractFromTempFile(
-        tempFile: File,
+    override suspend fun extractInternal(
+        inputStream: InputStream,
         destinationPath: File,
+        archiveType: ArchiveType,
+        sourceFileName: String,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult {
-        val inArchive = archiveLibraryManager.openArchive(tempFile)
-
-        try {
-            val callback = SevenZipCallbackExtractor(
-                inArchive = inArchive,
-                destinationPath = destinationPath,
-                pathValidator = pathValidator
-            ) { extractedCount, totalCount, fileName ->
-                logExtractionProgress(extractedCount, totalCount, fileName)
-                onProgress(
-                    ExtractionProgress.Extracting(
-                        currentFile = fileName,
-                        extractedCount = extractedCount,
-                        totalCount = totalCount,
-                        progress = if (totalCount > 0) extractedCount.toFloat() / totalCount else 0f
-                    )
-                )
-            }
-
-            inArchive.extract(null, false, callback)
-
-            val extractedCount = callback.getExtractedCount()
-            logExtractionComplete(extractedCount)
-
-            return ExtractionResult.Success(
-                outputPath = destinationPath.absolutePath,
-                extractedFilesCount = extractedCount
-            )
-        } finally {
-            inArchive.close()
+        return extractWithTempFile(inputStream, archiveType) { tempFile ->
+            val inArchive = archiveLibraryManager.openArchive(tempFile)
+            sevenZipHelper.extract(inArchive, destinationPath, pathValidator, onProgress, logger)
         }
     }
 }

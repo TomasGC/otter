@@ -1,9 +1,9 @@
 package app.otter.data.extractor
 
-import android.util.Log
 import net.sf.sevenzipjbinding.IInArchive
 import net.sf.sevenzipjbinding.SevenZip
 import net.sf.sevenzipjbinding.impl.RandomAccessFileInStream
+import timber.log.Timber
 import java.io.File
 import java.io.RandomAccessFile
 import javax.inject.Inject
@@ -58,7 +58,7 @@ class ArchiveLibraryManager @Inject constructor() {
             SevenZip.openInArchive(null, RandomAccessFileInStream(randomAccessFile))
                 ?: throw IllegalStateException("Failed to open archive: ${archiveFile.name} ($ERROR_MESSAGE_UNSUPPORTED_FORMAT)")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to open archive: ${archiveFile.name}", e)
+            Timber.tag(TAG).e(e, "Failed to open archive: ${archiveFile.name}")
             throw e
         }
     }

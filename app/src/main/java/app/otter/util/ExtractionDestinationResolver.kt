@@ -3,9 +3,12 @@ package app.otter.util
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import androidx.documentfile.provider.DocumentFile
 import java.io.File
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Resolves destination path for archive extraction.
@@ -15,10 +18,15 @@ import java.io.File
  * 1. Try to extract to same folder as archive (if accessible)
  * 2. Fallback to Downloads folder
  */
-class ExtractionDestinationResolver(private val context: Context) {
+@Singleton
+class ExtractionDestinationResolver @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
     companion object {
         private const val TAG = "DestinationResolver"
+        private const val EXTERNAL_STORAGE_AUTHORITY = "com.android.externalstorage.documents"
+        private const val DOWNLOADS_PROVIDER_AUTHORITY = "com.android.providers.downloads.documents"
     }
 
     /**
@@ -85,7 +93,7 @@ class ExtractionDestinationResolver(private val context: Context) {
                 val docId = DocumentsContract.getDocumentId(uri)
 
                 // Primary storage
-                if (uri.authority == "com.android.externalstorage.documents") {
+                if (uri.authority == EXTERNAL_STORAGE_AUTHORITY) {
                     val split = docId.split(":")
                     if (split.size >= 2) {
                         val type = split[0]
@@ -98,7 +106,7 @@ class ExtractionDestinationResolver(private val context: Context) {
                 }
 
                 // Downloads provider
-                if (uri.authority == "com.android.providers.downloads.documents") {
+                if (uri.authority == DOWNLOADS_PROVIDER_AUTHORITY) {
                     // Try to get path from content resolver
                     context.contentResolver.query(uri, arrayOf("_data"), null, null, null)?.use { cursor ->
                         if (cursor.moveToFirst()) {

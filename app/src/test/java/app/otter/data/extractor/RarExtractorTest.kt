@@ -19,7 +19,9 @@ class RarExtractorTest {
 
     private val realPathValidator = PathValidator()
     private val archiveLibraryManager = ArchiveLibraryManager()
-    private val extractor = RarExtractor(realPathValidator, archiveLibraryManager)
+    private val tempFileManager = TempFileManager()
+    private val sevenZipHelper = SevenZipExtractorHelper()
+    private val extractor = RarExtractor(realPathValidator, archiveLibraryManager, tempFileManager, sevenZipHelper)
 
     @Test
     fun `should support RAR type`() {
