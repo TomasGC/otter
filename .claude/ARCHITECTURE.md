@@ -1,7 +1,7 @@
 # Project Architecture - Otter (Android Archive Extractor)
 
-**Purpose**: System architecture and design decisions for Otter (ZIP + RAR + 7z extraction with background service)
-**Last Updated**: 2026-04-27
+**Purpose**: System architecture and design decisions for Otter (ZIP + RAR + 7z + TAR + RPA extraction with background service)
+**Last Updated**: 2026-05-12
 
 ---
 
@@ -24,6 +24,8 @@
 | **ZIP Extraction** | java.util.zip | Native ZIP support |
 | **RAR Extraction** | 7-Zip-JBinding | RAR4/RAR5 support (.so libs) |
 | **7z Extraction** | 7-Zip-JBinding | 7-Zip format support (.so libs) |
+| **TAR/GZIP Extraction** | Apache Commons Compress | TAR, TAR.GZ, TGZ, GZIP support |
+| **RPA Extraction** | Custom implementation | Ren'Py Archive (binary protocol 2) |
 | **Background Work** | Foreground Service | Progress notifications |
 
 
@@ -161,7 +163,7 @@ sealed class UiState<out T> {
 
 ---
 
-## Module Structure (Otter - ZIP + RAR + Background Service)
+## Module Structure (Otter - Multi-Format Archive Extraction)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -438,7 +440,7 @@ object AppModule {
 7. **Flow / callbackFlow** - Reactive real-time progress updates
 8. **Unidirectional Data Flow** - Activity → Service → Use Case → Repository
 9. **Template Method (BaseArchiveExtractor)** - DRY pattern for common extraction logic
-10. **Strategy Pattern** - Multiple extractors (ZIP, RAR) implementing same interface
+10. **Strategy Pattern** - Multiple extractors (ZIP, RAR, 7z, TAR, GZIP, RPA) implementing same interface
 11. **Foreground Service** - Background work with user-visible notifications
 12. **Observer Pattern** - Progress callbacks with throttling
 

@@ -4,8 +4,18 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ---
 
+2026-05-12 - [#16] RPA-3.0 (Ren'Py Archive) Extraction Support
+- Implemented RPA-3.0 format extraction with binary protocol 2 index parsing
+- Fixed critical bugs: wrong binary opcode (0x75→0x73) and double XOR deobfuscation
+- Created iterative offset calculation algorithm for correct file data positioning
+- Added comprehensive test suite: 6 JVM unit tests (archive creation, extraction, hex dump validation)
+- Fixed TestArchiveHelper in both test/ and androidTest/ directories for consistency
+- Upgraded JaCoCo to 0.8.11 for Java 21 compatibility
+tags: #rpa #extraction #binary-format #testing #debugging
+Ref: https://github.com/TomasGC/otter/issues/16
+Commits: fcabe33, ef9ae52
 
-2026-05-02 - [15] TAR/GZIP extraction + comprehensive SOLID refactoring
+2026-05-02 - [#15] TAR/GZIP extraction + comprehensive SOLID refactoring
 - Implemented Apache Commons Compress extractors for TAR, TAR.GZ, TGZ, and GZIP formats with stream-based extraction
 - Completed comprehensive SOLID refactoring across all archive extractors (eliminated 170+ lines of duplicate code)
 - Applied Template Method pattern: BaseArchiveExtractor provides common flow, subclasses implement extractInternal()

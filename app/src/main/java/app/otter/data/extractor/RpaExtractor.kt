@@ -75,9 +75,9 @@ class RpaExtractor @Inject constructor(
                 index.forEach { entry ->
                     if (!isActive) return@forEach
 
-                    // Decode offset/size with XOR key
-                    val realOffset = entry.offset xor header.key.toLong()
-                    val realSize = entry.size xor header.key.toLong()
+                    // Entry already contains de-obfuscated offset/size from parsePickleIndex
+                    val realOffset = entry.offset
+                    val realSize = entry.size
 
                     Timber.tag(getTag()).d("Extracting: ${entry.name} (offset=$realOffset, size=$realSize)")
 
@@ -203,7 +203,7 @@ class RpaExtractor @Inject constructor(
             Timber.tag(getTag()).d("Decompressed index size: ${decompressed.size} bytes")
 
             // Parse Python pickle format (minimal implementation for RPA index)
-            return parsePickleIndex(decompressed)
+            return parsePickleIndex(decompressed, header.key)
         }
     }
 
@@ -213,10 +213,12 @@ class RpaExtractor @Inject constructor(
      * Expected format:
      * Dict { "file/path.ext": [[offset, size], ...], ... }
      *
+     * Note: offset and size values are XOR-obfuscated with the key.
+     *
      * Security: We parse the binary protocol manually without executing Python code.
      * This is safe - we only extract strings and integers from the serialized format.
      */
-    private fun parsePickleIndex(data: ByteArray): List<RpaFileEntry> {
+    private fun parsePickleIndex(data: ByteArray, key: Int): List<RpaFileEntry> {
         val entries = mutableListOf<RpaFileEntry>()
         val input = DataInputStream(ByteArrayInputStream(data))
         val stack = mutableListOf<Any>()
@@ -284,27 +286,47 @@ class RpaExtractor @Inject constructor(
                         stack.add(listOf(a, b, c))
                     }
                     PICKLE_APPEND -> {
+                        // Pop item from stack
                         val item = stack.removeAt(stack.size - 1)
-                        @Suppress("UNCHECKED_CAST")
-                        val list = stack.last() as? MutableList<Any>
-                        list?.add(item)
+                        // Get the list (should be on top of stack now)
+                        val lastElement = stack.lastOrNull()
+                        android.util.Log.e("RpaExtractor", "APPEND: item=$item (${item?.javaClass?.simpleName}), lastElement=$lastElement (${lastElement?.javaClass?.simpleName})")
+                        Timber.tag(getTag()).d("APPEND: item=$item (${item?.javaClass?.simpleName}), lastElement=$lastElement (${lastElement?.javaClass?.simpleName})")
+
+                        // Try to append to list - handle both MutableList<Any> and MutableList<Any?>
+                        when (lastElement) {
+                            is MutableList<*> -> {
+                                @Suppress("UNCHECKED_CAST")
+                                (lastElement as MutableList<Any?>).add(item)
+                                android.util.Log.e("RpaExtractor", "APPEND: successfully added item, list now has ${lastElement.size} elements")
+                                Timber.tag(getTag()).d("APPEND: successfully added item, list now has ${lastElement.size} elements")
+                            }
+                            else -> {
+                                android.util.Log.e("RpaExtractor", "APPEND: lastElement is not a MutableList, type=${lastElement?.javaClass?.simpleName}")
+                                Timber.tag(getTag()).w("APPEND: lastElement is not a MutableList, type=${lastElement?.javaClass?.simpleName}")
+                            }
+                        }
                     }
                     PICKLE_SETITEM -> {
-                        // Pop value, pop key, set dict[key] = value
+                        // Pop value, pop dictKey, set dict[dictKey] = value
                         val value = stack.removeAt(stack.size - 1)
-                        val key = stack.removeAt(stack.size - 1)
+                        val dictKey = stack.removeAt(stack.size - 1)
 
-                        Timber.tag(getTag()).d("SETITEM: key=$key (${key?.javaClass?.simpleName}), value=$value (${value?.javaClass?.simpleName})")
+                        android.util.Log.e("RpaExtractor", "SETITEM: key=$dictKey (${dictKey?.javaClass?.simpleName}), value=$value (${value?.javaClass?.simpleName})")
+                        Timber.tag(getTag()).d("SETITEM: key=$dictKey (${dictKey?.javaClass?.simpleName}), value=$value (${value?.javaClass?.simpleName})")
 
-                        if (key is String && value is List<*>) {
+                        if (dictKey is String && value is List<*>) {
                             // RPA format: dict[filename] = [(offset, size, prefix)]
                             val tuple = value.firstOrNull() as? List<*>
                             Timber.tag(getTag()).d("  List size: ${value.size}, first element: $tuple (${tuple?.javaClass?.simpleName})")
                             if (tuple != null && tuple.size >= 2) {
-                                val offset = (tuple[0] as? Number)?.toLong() ?: 0L
-                                val size = (tuple[1] as? Number)?.toLong() ?: 0L
-                                Timber.tag(getTag()).d("  Adding entry: $key (offset=$offset, size=$size)")
-                                entries.add(RpaFileEntry(key, offset, size))
+                                // Values are XOR-obfuscated with the RPA key - de-obfuscate them
+                                val obfuscatedOffset = (tuple[0] as? Number)?.toLong() ?: 0L
+                                val obfuscatedSize = (tuple[1] as? Number)?.toLong() ?: 0L
+                                val offset = obfuscatedOffset xor key.toLong()
+                                val size = obfuscatedSize xor key.toLong()
+                                Timber.tag(getTag()).d("  Adding entry: $dictKey (obfuscated offset=$obfuscatedOffset, obfuscated size=$obfuscatedSize, deobfuscated offset=$offset, size=$size)")
+                                entries.add(RpaFileEntry(dictKey, offset, size))
                             }
                         }
                     }
@@ -312,6 +334,16 @@ class RpaExtractor @Inject constructor(
                         // Mark current stack position
                         markIndex = stack.size
                         Timber.tag(getTag()).d("MARK at stack index: $markIndex")
+                    }
+                    PICKLE_LIST -> {
+                        // Create list from items since MARK
+                        if (markIndex >= 0 && markIndex <= stack.size) {
+                            val items = stack.subList(markIndex, stack.size).toMutableList()
+                            stack.subList(markIndex, stack.size).clear()
+                            stack.add(items)
+                            Timber.tag(getTag()).d("LIST: created list with ${items.size} items from mark, type=${items.javaClass.simpleName}")
+                            markIndex = -1
+                        }
                     }
                     PICKLE_BINGET -> {
                         // Get from memo: 1 byte index
@@ -339,21 +371,24 @@ class RpaExtractor @Inject constructor(
 
                             Timber.tag(getTag()).d("SETITEMS: processing ${items.size} items")
 
-                            // Items are alternating key, value, key, value...
+                            // Items are alternating dictKey, value, dictKey, value...
                             for (i in 0 until items.size step 2) {
                                 if (i + 1 < items.size) {
-                                    val key = items[i]
+                                    val dictKey = items[i]
                                     val value = items[i + 1]
 
-                                    Timber.tag(getTag()).d("  key=$key (${key?.javaClass?.simpleName}), value=$value (${value?.javaClass?.simpleName})")
+                                    Timber.tag(getTag()).d("  key=$dictKey (${dictKey?.javaClass?.simpleName}), value=$value (${value?.javaClass?.simpleName})")
 
-                                    if (key is String && value is List<*>) {
+                                    if (dictKey is String && value is List<*>) {
                                         val tuple = value.firstOrNull() as? List<*>
                                         if (tuple != null && tuple.size >= 2) {
-                                            val offset = (tuple[0] as? Number)?.toLong() ?: 0L
-                                            val size = (tuple[1] as? Number)?.toLong() ?: 0L
-                                            entries.add(RpaFileEntry(key, offset, size))
-                                            Timber.tag(getTag()).d("    Added entry: $key (offset=$offset, size=$size)")
+                                            // Values are XOR-obfuscated with the RPA key - de-obfuscate them
+                                            val obfuscatedOffset = (tuple[0] as? Number)?.toLong() ?: 0L
+                                            val obfuscatedSize = (tuple[1] as? Number)?.toLong() ?: 0L
+                                            val offset = obfuscatedOffset xor key.toLong()
+                                            val size = obfuscatedSize xor key.toLong()
+                                            entries.add(RpaFileEntry(dictKey, offset, size))
+                                            Timber.tag(getTag()).d("    Added entry: $dictKey (obfuscated offset=$obfuscatedOffset, obfuscated size=$obfuscatedSize, deobfuscated offset=$offset, size=$size)")
                                         }
                                     }
                                 }
@@ -384,6 +419,7 @@ class RpaExtractor @Inject constructor(
             throw IllegalArgumentException("Failed to parse RPA index", e)
         }
 
+        android.util.Log.e("RpaExtractor", "Parsed ${entries.size} entries from pickle index")
         Timber.tag(getTag()).d("Parsed ${entries.size} entries from pickle index")
         return entries
     }

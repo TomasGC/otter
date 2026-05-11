@@ -68,6 +68,9 @@ class RpaExtractorInstrumentedTest {
         val progressUpdates = mutableListOf<Float>()
 
         // Act
+        android.util.Log.e("RPA_TEST", "Starting extraction of ${rpaFile.length()} bytes")
+        android.util.Log.e("RPA_TEST", "File exists: ${rpaFile.exists()}, canRead: ${rpaFile.canRead()}")
+
         val result = extractor.extract(
             inputStream = rpaFile.inputStream(),
             destinationPath = destinationDir,
@@ -76,20 +79,23 @@ class RpaExtractorInstrumentedTest {
             onProgress = { progress ->
                 if (progress is ExtractionProgress.Extracting) {
                     progressUpdates.add(progress.progress)
+                    android.util.Log.e("RPA_TEST", "Progress ${progress.progress * 100}% - ${progress.currentFile}")
                 }
             }
         )
+        android.util.Log.e("RPA_TEST", "Result type: ${result.javaClass.simpleName}")
+        when (result) {
+            is ExtractionResult.Success -> android.util.Log.e("RPA_TEST", "Success: ${result.extractedFilesCount} files")
+            is ExtractionResult.Failure -> android.util.Log.e("RPA_TEST", "Failure: ${result.errorMessage}, cause: ${result.cause?.message}")
+        }
 
         // Assert with detailed error message
         when (result) {
             is ExtractionResult.Success -> {
                 // Continue with assertions
             }
-            is ExtractionResult.Error -> {
-                fail("Extraction failed: ${result.message}\nCause: ${result.cause?.message}")
-            }
-            else -> {
-                fail("Unexpected result type: ${result::class.simpleName}")
+            is ExtractionResult.Failure -> {
+                fail("Extraction failed: ${result.errorMessage}\nCause: ${result.cause?.message}")
             }
         }
         assertTrue("Extraction should succeed", result is ExtractionResult.Success)
@@ -136,11 +142,8 @@ class RpaExtractorInstrumentedTest {
             is ExtractionResult.Success -> {
                 // Continue with assertions
             }
-            is ExtractionResult.Error -> {
-                fail("Extraction failed: ${result.message}\nCause: ${result.cause?.message}")
-            }
-            else -> {
-                fail("Unexpected result type: ${result::class.simpleName}")
+            is ExtractionResult.Failure -> {
+                fail("Extraction failed: ${result.errorMessage}\nCause: ${result.cause?.message}")
             }
         }
         assertTrue(result is ExtractionResult.Success)
