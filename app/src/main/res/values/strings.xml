@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Otter</string>
+
+    <!-- Extraction Progress -->
+    <string name="extraction_button_stop">Stop</string>
+    <string name="extraction_button_background">Background</string>
+    <string name="extraction_button_close">Close</string>
+    <string name="extraction_title">Extracting %1$s</string>
+    <string name="extraction_complete_title">Extraction Complete</string>
+    <string name="extraction_files_count">%1$d files extracted</string>
+    <string name="extraction_progress_files">%1$d / %2$d files</string>
 </resources>

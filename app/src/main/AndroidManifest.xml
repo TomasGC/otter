@@ -27,7 +27,7 @@
             android:name=".ExtractionActivity"
             android:exported="true"
             android:theme="@style/Theme.Otter">
-            <!-- Intent filter for "Open with" archives - Auto-extraction -->
+            <!-- Intent filter for "Open with" archives - Auto-extraction (content URIs) -->
             <intent-filter android:label="Otter (Extract here)">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -37,6 +37,30 @@
                 <data android:mimeType="application/rar" />
                 <data android:mimeType="application/x-rar-compressed" />
                 <data android:mimeType="application/vnd.rar" />
+                <data android:mimeType="application/x-rpa" />
+            </intent-filter>
+
+            <!-- Intent filter for "Open with" RPA files (file URIs) -->
+            <intent-filter android:label="Otter (Extract here)">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.rpa" />
+                <data android:pathPattern=".*\\..*\\.rpa" />
+                <data android:pathPattern=".*\\..*\\..*\\.rpa" />
+            </intent-filter>
+
+            <!-- Intent filter for content URIs with any MIME (fallback for unknown types) -->
+            <intent-filter android:label="Otter (Extract here)">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.rpa" />
+                <data android:pathPattern=".*\\..*\\.rpa" />
+                <data android:pathPattern=".*\\..*\\..*\\.rpa" />
             </intent-filter>
         </activity>
 
@@ -52,7 +76,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Intent filter for "Open with" archives - Browse mode -->
+            <!-- Intent filter for "Open with" archives - Browse mode (content URIs) -->
             <intent-filter android:label="Otter (Browse)">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -62,6 +86,30 @@
                 <data android:mimeType="application/rar" />
                 <data android:mimeType="application/x-rar-compressed" />
                 <data android:mimeType="application/vnd.rar" />
+                <data android:mimeType="application/x-rpa" />
+            </intent-filter>
+
+            <!-- Intent filter for "Open with" RPA files - Browse mode (file URIs) -->
+            <intent-filter android:label="Otter (Browse)">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.rpa" />
+                <data android:pathPattern=".*\\..*\\.rpa" />
+                <data android:pathPattern=".*\\..*\\..*\\.rpa" />
+            </intent-filter>
+
+            <!-- Intent filter for content URIs with any MIME - Browse mode (fallback for unknown types) -->
+            <intent-filter android:label="Otter (Browse)">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.rpa" />
+                <data android:pathPattern=".*\\..*\\.rpa" />
+                <data android:pathPattern=".*\\..*\\..*\\.rpa" />
             </intent-filter>
         </activity>
 

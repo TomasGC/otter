@@ -58,6 +58,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.otter.domain.model.FileItem
 import app.otter.service.ExtractionEventBus
 import app.otter.service.ExtractionService
+import app.otter.ui.component.ExtractionProgressView
 import app.otter.ui.viewmodel.FileBrowserUiState
 import app.otter.ui.viewmodel.FileBrowserViewModel
 import app.otter.ui.viewmodel.SortOrder
@@ -331,71 +332,20 @@ fun FileBrowserScreen(
                 }
 
                 is FileBrowserUiState.Extracting -> {
-                    // Log every recomposition
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "Extracting ${state.fileName}",
-                            style = MaterialTheme.typography.headlineSmall,
-                            modifier = Modifier.padding(bottom = 24.dp)
-                        )
-
-                        CircularProgressIndicator(
-                            progress = state.progress,
-                            modifier = Modifier
-                                .size(120.dp)
-                                .padding(bottom = 16.dp),
-                        )
-
-                        Text(
-                            text = "${(state.progress * 100).toInt()}%",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-
-                        Text(
-                            text = "${state.extractedCount} / ${state.totalCount} files",
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-
-                        Text(
-                            text = state.currentFile,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(bottom = 32.dp)
-                        )
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            TextButton(
-                                onClick = {
-                                    context.startService(ExtractionService.newStopIntent(context))
-                                    viewModel.moveExtractionToBackground()
-                                }
-                            ) {
-                                Text("Stop")
-                            }
-
-                            TextButton(
-                                onClick = {
-                                    viewModel.moveExtractionToBackground()
-                                }
-                            ) {
-                                Text("Background")
-                            }
+                    ExtractionProgressView(
+                        fileName = state.fileName,
+                        progress = state.progress,
+                        extractedCount = state.extractedCount,
+                        totalCount = state.totalCount,
+                        currentFile = state.currentFile,
+                        onStop = {
+                            context.startService(ExtractionService.newStopIntent(context))
+                            viewModel.moveExtractionToBackground()
+                        },
+                        onBackground = {
+                            viewModel.moveExtractionToBackground()
                         }
-                    }
+                    )
                 }
 
                 is FileBrowserUiState.Success -> {

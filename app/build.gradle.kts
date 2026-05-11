@@ -15,8 +15,8 @@ android {
         applicationId = "app.otter"
         minSdk = 26
         targetSdk = 34
-        versionCode = 73
-        versionName = "0.0.73"
+        versionCode = 94
+        versionName = "0.0.94"
 
         testInstrumentationRunner = "app.otter.HiltTestRunner"
         vectorDrawables {
@@ -93,7 +93,7 @@ android {
 
     // Force inclusion of test archive files in androidTest APK
     androidResources {
-        noCompress += listOf("tar", "gz", "tgz", "tar.gz", "7z", "rar", "zip")
+        noCompress += listOf("tar", "gz", "tgz", "tar.gz", "7z", "rar", "zip", "rpa")
     }
 
     testOptions {

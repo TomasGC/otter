@@ -27,5 +27,6 @@ data class FileItem(
             "application/x-7z-compressed",
             "application/x-tar",
             "application/gzip",
+            "application/x-rpa",
         )
 }
