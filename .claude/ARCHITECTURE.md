@@ -33,7 +33,111 @@
 
 ## System Architecture
 
-{{ARCHITECTURE_DIAGRAM}}
+### High-Level Architecture
+
+```mermaid
+graph TB
+    subgraph "UI Layer"
+        Screen[FileBrowserScreen<br/>Compose UI]
+        Activity[ExtractionActivity<br/>Intent Handler]
+        ViewModel[FileBrowserViewModel<br/>State Management]
+        Service[ExtractionService<br/>Foreground Service]
+    end
+    
+    subgraph "Domain Layer"
+        BrowseUC[BrowseFilesUseCase]
+        ExtractUC[ExtractArchiveUseCase]
+        RepoInterface[ArchiveRepository<br/>interface]
+        Models[Domain Models<br/>ArchiveFile, ArchiveType<br/>ExtractionResult]
+    end
+    
+    subgraph "Data Layer"
+        RepoImpl[ArchiveRepositoryImpl]
+        BaseExtractor[BaseArchiveExtractor<br/>Template Method Pattern]
+        
+        subgraph "Extractors (Strategy Pattern)"
+            ZipExt[ZipExtractor<br/>java.util.zip]
+            RarExt[RarExtractor<br/>7-Zip-JBinding]
+            SevenZipExt[SevenZipExtractor<br/>7-Zip-JBinding]
+            TarExt[TarExtractor<br/>Commons Compress]
+            GzipExt[GzipExtractor<br/>Commons Compress]
+            RpaExt[RpaExtractor<br/>Custom Binary]
+        end
+        
+        LibMgr[ArchiveLibraryManager<br/>Singleton]
+        PathVal[PathValidator<br/>Security]
+        TempMgr[TempFileManager]
+        Logger[ExtractionLogger]
+    end
+    
+    Activity --> Screen
+    Screen --> ViewModel
+    Service -.broadcasts progress.-> ViewModel
+    ViewModel --> BrowseUC
+    ViewModel --> ExtractUC
+    Service --> ExtractUC
+    BrowseUC --> RepoInterface
+    ExtractUC --> RepoInterface
+    RepoInterface -.implements.-> RepoImpl
+    RepoImpl --> BaseExtractor
+    BaseExtractor --> ZipExt
+    BaseExtractor --> RarExt
+    BaseExtractor --> SevenZipExt
+    BaseExtractor --> TarExt
+    BaseExtractor --> GzipExt
+    BaseExtractor --> RpaExt
+    RarExt --> LibMgr
+    SevenZipExt --> LibMgr
+    BaseExtractor --> PathVal
+    BaseExtractor --> TempMgr
+    BaseExtractor --> Logger
+    
+    style Screen fill:#e1f5ff
+    style ViewModel fill:#fff4e1
+    style Service fill:#ffe1f5
+    style BrowseUC fill:#f0ffe1
+    style ExtractUC fill:#f0ffe1
+    style RepoImpl fill:#ffe1e1
+    style BaseExtractor fill:#ffebcc
+    style ZipExt fill:#ccf5ff
+    style RarExt fill:#ccf5ff
+    style SevenZipExt fill:#ccf5ff
+    style TarExt fill:#ccf5ff
+    style GzipExt fill:#ccf5ff
+    style RpaExt fill:#ccf5ff
+```
+
+### Extraction Flow Sequence
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Activity as ExtractionActivity
+    participant Service as ExtractionService
+    participant UseCase as ExtractArchiveUseCase
+    participant Repo as ArchiveRepositoryImpl
+    participant Extractor as BaseArchiveExtractor
+    participant FS as File System
+    
+    User->>Activity: Open archive file (Intent)
+    Activity->>Service: Start foreground service
+    Service->>UseCase: extract(uri, destination)
+    UseCase->>Repo: extract(inputStream, type)
+    Repo->>Repo: Select extractor by type
+    Repo->>Extractor: extract(stream, dest, callback)
+    
+    loop For each file in archive
+        Extractor->>Extractor: Validate path (security)
+        Extractor->>FS: Write file
+        Extractor->>Service: Progress update
+        Service->>User: Notification progress
+    end
+    
+    Extractor-->>Repo: ExtractionResult.Success
+    Repo-->>UseCase: Result
+    UseCase-->>Service: Result
+    Service->>User: Completion notification
+```
 
 ## 📐 Architecture Details
 
@@ -165,84 +269,81 @@ sealed class UiState<out T> {
 
 ## Module Structure (Otter - Multi-Format Archive Extraction)
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                UI Layer (Activity + Service)                 │
-│  ┌──────────────────┐         ┌─────────────────────────┐  │
-│  │ExtractionActivity│────────►│  ExtractionService      │  │
-│  │  (launcher)      │         │  (foreground service)   │  │
-│  └──────────────────┘         │  - Progress notifications│  │
-│                                │  - User cancellation     │  │
-│                                │  - FileLogger           │  │
-│                                └─────────────────────────┘  │
-│                                           │                  │
-└───────────────────────────────────────────┼──────────────────┘
-                                            ▼
-                              ┌──────────────────────┐
-                              │  Domain Layer (Pure) │
-                              │  ┌──────────────────┐│
-                              │  │ExtractArchiveUseCase││
-                              │  └──────────────────┘│
-                              │         ▼            │
-                              │  ┌──────────────────┐│
-                              │  │ArchiveRepository │ (interface)
-                              │  └──────────────────┘│
-                              │         ▲            │
-                              │  ┌──────────────────┐│
-                              │  │  Domain Models   ││
-                              │  │ (ArchiveFile,    ││
-                              │  │  ExtractionResult│
-                              │  │  ExtractionProgress)││
-                              │  └──────────────────┘│
-                              └──────────────────────┘
-                                        │
-                                        ▼
-                              ┌───────────────────────────────┐
-                              │   Data Layer (Android)         │
-                              │  ┌──────────────────────────┐ │
-                              │  │  ArchiveRepositoryImpl   │ │
-                              │  │  (callbackFlow)          │ │
-                              │  └──────────────────────────┘ │
-                              │           ▼                    │
-                              │  ┌──────────────────────────┐ │
-                              │  │  BaseArchiveExtractor    │ │
-                              │  │  (Template Method)       │ │
-                              │  └──────────────────────────┘ │
-                              │     ▲           ▲          ▲   │
-                              │     │           │          │   │
-                              │  ┌──┴───┐  ┌───┴───┐  ┌───┴──┐│
-                              │  │ Zip  │  │  Rar  │  │ 7Zip ││
-                              │  │(zip) │  │(7-Zip │  │(7-Zip││
-                              │  │      │  │JBind) │  │JBind)││
-                              │  └──────┘  └───┬───┘  └───┬──┘│
-                              │                │          │    │
-                              │                └────┬─────┘    │
-                              │                     ▼          │
-                              │  ┌──────────────────────────┐ │
-                              │  │SevenZipCallbackExtractor │ │
-                              │  │(shared extraction logic) │ │
-                              │  └──────────────────────────┘ │
-                              │                ▼               │
-                              │  ┌──────────────────────────┐ │
-                              │  │ ArchiveLibraryManager    │ │
-                              │  │ (@Singleton, lifecycle)  │ │
-                              │  └──────────────────────────┘ │
-                              │           ▼                    │
-                              │  ┌──────────────────────────┐ │
-                              │  │  Android Storage         │ │
-                              │  │  (same folder as archive)│ │
-                              │  └──────────────────────────┘ │
-                              │           ▼                    │
-                              │  ┌──────────────────────────┐ │
-                              │  │  FileLogger (util)       │ │
-                              │  │  (extraction logs .txt)  │ │
-                              │  └──────────────────────────┘ │
-                              └───────────────────────────────┘
-                                        │
-                                        ▼
-                              ┌─────────────────────┐
-                              │  Hilt DI (AppModule)│
-                              └─────────────────────┘
+### Complete Module Hierarchy
+
+```mermaid
+graph TD
+    subgraph "UI Layer"
+        Activity[ExtractionActivity<br/>Intent Launcher]
+        Service[ExtractionService<br/>Foreground Service]
+    end
+    
+    subgraph "Domain Layer - Pure Kotlin"
+        ExtractUC[ExtractArchiveUseCase]
+        RepoIface[ArchiveRepository<br/>interface]
+        Models[Domain Models<br/>ArchiveFile<br/>ExtractionResult<br/>ExtractionProgress]
+    end
+    
+    subgraph "Data Layer - Android"
+        RepoImpl[ArchiveRepositoryImpl<br/>callbackFlow]
+        Base[BaseArchiveExtractor<br/>Template Method Pattern]
+        
+        subgraph "Extractors - Strategy Pattern"
+            Zip[ZipExtractor<br/>java.util.zip]
+            Rar[RarExtractor<br/>7-Zip-JBinding]
+            SevenZ[SevenZipExtractor<br/>7-Zip-JBinding]
+            Tar[TarExtractor<br/>Commons Compress]
+            Gzip[GzipExtractor<br/>Commons Compress]
+            Rpa[RpaExtractor<br/>Custom Binary Protocol 2]
+        end
+        
+        subgraph "Supporting Components"
+            CallbackExt[SevenZipCallbackExtractor<br/>Shared RAR/7z Logic]
+            LibMgr[ArchiveLibraryManager<br/>@Singleton - Native Lifecycle]
+            PathVal[PathValidator<br/>Security Validation]
+            TempMgr[TempFileManager<br/>Resource Management]
+            Logger[ExtractionLogger<br/>Logging Abstraction]
+        end
+    end
+    
+    subgraph "Dependency Injection"
+        Hilt[Hilt - AppModule<br/>@Provides Methods]
+    end
+    
+    Activity --> Service
+    Service --> ExtractUC
+    ExtractUC --> RepoIface
+    RepoIface -.implements.-> RepoImpl
+    RepoImpl --> Base
+    Base --> Zip
+    Base --> Rar
+    Base --> SevenZ
+    Base --> Tar
+    Base --> Gzip
+    Base --> Rpa
+    Rar --> CallbackExt
+    SevenZ --> CallbackExt
+    CallbackExt --> LibMgr
+    Base --> PathVal
+    Base --> TempMgr
+    Base --> Logger
+    Hilt -.provides.-> RepoImpl
+    Hilt -.provides.-> Base
+    
+    style Activity fill:#e1f5ff
+    style Service fill:#ffe1f5
+    style ExtractUC fill:#f0ffe1
+    style RepoImpl fill:#ffe1e1
+    style Base fill:#ffebcc
+    style Zip fill:#ccf5ff
+    style Rar fill:#ccf5ff
+    style SevenZ fill:#ccf5ff
+    style Tar fill:#ccf5ff
+    style Gzip fill:#ccf5ff
+    style Rpa fill:#ccf5ff
+    style CallbackExt fill:#ffd9b3
+    style LibMgr fill:#ffffcc
+    style Hilt fill:#e6ccff
 ```
 
 ---
@@ -738,6 +839,49 @@ suspend fun extract(uri: Uri, destination: File): Flow<ExtractionResult> = callb
 
 ## Testing Strategy
 
+```mermaid
+graph TB
+    subgraph "Unit Tests (JVM)"
+        A[Domain Models]
+        B[Use Cases]
+        C[ViewModels]
+        D[Extractors Logic]
+    end
+    
+    subgraph "Instrumented Tests (Android Device)"
+        E[Repository Implementation]
+        F[Activity Intent Handling]
+        G[UI Components]
+        H[File I/O Operations]
+    end
+    
+    subgraph "Test Infrastructure"
+        I[TestArchiveHelper<br/>Programmatic archive creation]
+        J[MockK<br/>Dependency mocking]
+        K[Robolectric<br/>Android framework simulation]
+    end
+    
+    A --> I
+    B --> J
+    C --> J
+    D --> I
+    E --> I
+    F --> H
+    G --> I
+    
+    style A fill:#e1f5ff
+    style B fill:#e1f5ff
+    style C fill:#e1f5ff
+    style D fill:#e1f5ff
+    style E fill:#fff4e1
+    style F fill:#fff4e1
+    style G fill:#fff4e1
+    style H fill:#fff4e1
+    style I fill:#f0f0f0
+    style J fill:#f0f0f0
+    style K fill:#f0f0f0
+```
+
 **Unit Tests** (JUnit + MockK):
 - Domain models (ArchiveInfo, ExtractionResult validation)
 - Use cases (ExtractArchiveUseCase with mocked repository)
@@ -748,6 +892,11 @@ suspend fun extract(uri: Uri, destination: File): Flow<ExtractionResult> = callb
 - Repository implementation (real file I/O)
 - Activity intent handling
 - UI components (ExtractionScreen with test archives)
+
+**Test Infrastructure** (Issue #15):
+- **TestArchiveHelper**: Programmatic archive generation to bypass AAPT filtering
+- **MockK**: Mocking framework for dependencies
+- **Robolectric**: Android framework simulation for unit tests
 
 **Test Coverage Goal**: ≥ 80%
 
@@ -839,18 +988,8 @@ Pipeline:
 
 **Security**: Release keystore in GitHub Secrets (RELEASE_KEYSTORE_BASE64)
 
-## CI/CD Pipeline
-
-**GitHub Actions workflows** (`.github/workflows/ci.yml`):
-
-### Build & Test Job
-- Docker-based build (reproducible environment)
-- Gradle assembly (debug APK)
-- Unit tests execution
-- Lint checks (Android Lint)
-- Artifact uploads (APK, test results, lint reports)
-
 ### Code Quality Checks
+
 **ktlint** - Kotlin style enforcement
 - Official ktlint CLI + reviewdog/action-setup (no third-party actions)
 - Checkstyle format output piped to reviewdog
@@ -874,6 +1013,7 @@ Pipeline:
 - Uses official reviewdog/action-setup (supply chain security)
 
 ### Security & Compliance
+
 **OWASP Dependency Check**
 - Vulnerability scanning for dependencies
 - CVSS threshold: 7.0 (High/Critical only)
@@ -886,6 +1026,7 @@ Pipeline:
 - Runs on every PR
 
 ### Coverage & Quality Gates
+
 **Jacoco Test Coverage**
 - Minimum threshold: 80%
 - XML and HTML reports generated
@@ -903,18 +1044,11 @@ Pipeline:
 - Automatic PR comments for missing updates
 
 ### PR Validation
+
 **Title format**: `#123: type: description`
 - Types: feat, fix, refactor, test, docs, chore, style, perf
 - Enforced via regex validation
 - Blocks merge on format violations
-
-### Instrumented Tests (Separate Job)
-- Android Emulator (API 29)
-- AVD caching for performance
-- RAR5 extraction validation (native .so libs)
-- Real device testing for file I/O
-
-**All checks run in parallel** with non-blocking failures to provide comprehensive feedback without preventing rapid iteration.
 
 ---
 
