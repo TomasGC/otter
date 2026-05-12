@@ -20,6 +20,7 @@ class MimeTypeUtil @Inject constructor() {
             "tgz" -> "application/x-compressed-tar"
             "tbz2" -> "application/x-bzip-compressed-tar"
             "txz" -> "application/x-xz-compressed-tar"
+            "rpa" -> "application/x-rpa"
             // Common file types
             "txt" -> "text/plain"
             "pdf" -> "application/pdf"

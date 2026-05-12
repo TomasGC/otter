@@ -5,6 +5,11 @@ plugins {
     id("kotlin-kapt")
     id("jacoco")
     id("org.owasp.dependencycheck") version "8.4.0"
+    id("io.gitlab.arturbosch.detekt")
+}
+
+jacoco {
+    toolVersion = "0.8.11"
 }
 
 android {
@@ -15,8 +20,8 @@ android {
         applicationId = "app.otter"
         minSdk = 26
         targetSdk = 34
-        versionCode = 73
-        versionName = "0.0.73"
+        versionCode = 97
+        versionName = "0.0.97"
 
         testInstrumentationRunner = "app.otter.HiltTestRunner"
         vectorDrawables {
@@ -93,7 +98,7 @@ android {
 
     // Force inclusion of test archive files in androidTest APK
     androidResources {
-        noCompress += listOf("tar", "gz", "tgz", "tar.gz", "7z", "rar", "zip")
+        noCompress += listOf("tar", "gz", "tgz", "tar.gz", "7z", "rar", "zip", "rpa")
     }
 
     testOptions {
@@ -101,9 +106,14 @@ android {
             isReturnDefaultValues = true
             isIncludeAndroidResources = true
             all {
+                // Disable JaCoCo for unit tests to avoid double instrumentation
                 it.extensions.configure(JacocoTaskExtension::class.java) {
-                    isIncludeNoLocationClasses = true
-                    excludes = listOf("jdk.internal.*")
+                    isEnabled = false
+                }
+                // Enable test output logging to see println() statements
+                it.testLogging {
+                    events("passed", "skipped", "failed", "standardOut", "standardError")
+                    showStandardStreams = true
                 }
             }
         }
@@ -236,4 +246,22 @@ dependencyCheck {
     analyzers.assemblyEnabled = false
     failBuildOnCVSS = 7.0f
     suppressionFile = file("dependency-check-suppressions.xml").absolutePath
+}
+
+// Detekt configuration
+detekt {
+    buildUponDefaultConfig = true
+    allRules = false
+    config.setFrom(files("$rootDir/config/detekt/detekt.yml"))
+    baseline = file("$rootDir/config/detekt/baseline.xml")
+}
+
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+    reports {
+        html.required.set(true)
+        xml.required.set(true)
+        txt.required.set(true)
+        sarif.required.set(true)
+        md.required.set(true)
+    }
 }

@@ -1,7 +1,7 @@
 # Project Instructions - Otter
 
-**Purpose**: Android Archive Extractor (MVP: ZIP) project instructions
-**Last Updated**: 2026-04-13
+**Purpose**: Android Archive Extractor (ZIP + RAR + 7z + TAR + RPA) project instructions
+**Last Updated**: 2026-05-12
 
 ---
 
@@ -280,6 +280,23 @@ app/
 | `ArchiveRepository.kt` | Data access abstraction |
 | `ZipExtractor.kt` | ZIP extraction implementation |
 | `proguard-rules.pro` | Code obfuscation and optimization rules |
+
+---
+
+## Project Documentation Files
+
+**Core Documentation** (`.claude/` directory):
+- `.claude/CLAUDE.md` - This file (project instructions)
+- `.claude/KANBAN.md` - Task tracking, backlog, session history
+- `.claude/ARCHITECTURE.md` - Architecture diagrams, design patterns, tech decisions
+
+**Public Documentation** (committed to git):
+- `README.md` - Project overview, features, quick start
+- `.github/README.md` - CI/CD pipeline documentation
+
+**Auto-Loaded Rules** (`.claude/rules/` directory):
+- Pattern-based standards loaded automatically by Claude Code
+- See References section below for list
 
 ---
 

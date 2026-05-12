@@ -6,7 +6,8 @@ enum class ArchiveType(val extensions: List<String>) {
     SEVEN_ZIP(listOf(".7z")),
     TAR(listOf(".tar")),
     TAR_GZ(listOf(".tar.gz", ".tgz")),
-    GZIP(listOf(".gz", ".gzip"));
+    GZIP(listOf(".gz", ".gzip")),
+    RPA(listOf(".rpa"));
 
     companion object {
         fun fromFileName(name: String): ArchiveType? {

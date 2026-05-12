@@ -9,6 +9,7 @@ import app.otter.data.extractor.ArchiveLibraryManager
 import app.otter.data.extractor.ExtractionLogger
 import app.otter.data.extractor.ITempFileManager
 import app.otter.data.extractor.RarExtractor
+import app.otter.data.extractor.RpaExtractor
 import app.otter.data.extractor.SevenZipExtractor
 import app.otter.data.extractor.SevenZipExtractorHelper
 import app.otter.data.extractor.StandardProgressCalculator
@@ -61,7 +62,8 @@ object AppModule {
         RarExtractor(pathValidator, archiveLibraryManager, tempFileManager, sevenZipHelper),
         SevenZipExtractor(pathValidator, archiveLibraryManager, tempFileManager, sevenZipHelper),
         ApacheTarExtractor(pathValidator, tempFileManager, sevenZipHelper),  // Uses Apache Commons Compress (works with InputStream)
-        ApacheGzipExtractor(pathValidator, tempFileManager, sevenZipHelper)  // Uses Apache Commons Compress (works with InputStream)
+        ApacheGzipExtractor(pathValidator, tempFileManager, sevenZipHelper),  // Uses Apache Commons Compress (works with InputStream)
+        RpaExtractor(pathValidator, tempFileManager, sevenZipHelper)  // RPA-3.0: manual binary parser (safe, no code execution) + zlib
     )
 
     @Provides

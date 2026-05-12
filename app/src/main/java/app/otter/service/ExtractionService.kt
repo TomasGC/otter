@@ -141,17 +141,18 @@ class ExtractionService : Service() {
             val archiveFile = archiveFileFactory.createFromPath(archiveUri, fileName)
                 ?: throw IllegalStateException("Cannot create archive file")
 
-            // Try to extract in the same folder as the archive
+            // Resolve destination folder first
             val destinationFolder = getDestinationFolder(archiveUri, fileName)
             destinationFolder.mkdirs()
-            Timber.tag(TAG).d("Destination folder: ${destinationFolder.absolutePath}")
 
-            // Add file logging tree for this extraction (debug builds only)
+            // Enable file logging in the extraction destination folder (to capture all logs)
             if (BuildConfig.DEBUG) {
                 fileLoggingTree = app.otter.util.FileLoggingTree(this, destinationFolder)
                 Timber.plant(fileLoggingTree)
                 Timber.tag(TAG).d("File logging enabled at: ${fileLoggingTree.getLogPath()}")
             }
+
+            Timber.tag(TAG).d("Destination folder: ${destinationFolder.absolutePath}")
 
             val destinationPath = ResourcePathConverter.fromUri(Uri.fromFile(destinationFolder))
 
@@ -228,6 +229,14 @@ class ExtractionService : Service() {
     private fun getDestinationFolder(archivePath: ResourcePath, fileName: String): File {
         val archiveUri = ResourcePathConverter.toUri(archivePath)
         return destinationResolver.resolveDestination(archiveUri, fileName)
+    }
+
+    private fun createDownloadsDestination(fileName: String): File {
+        val downloadFolder = android.os.Environment.getExternalStoragePublicDirectory(
+            android.os.Environment.DIRECTORY_DOWNLOADS
+        )
+        val folderName = fileName.substringBeforeLast(".")
+        return File(downloadFolder, "archive")
     }
 
 
