@@ -7,12 +7,15 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.view.View
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import app.otter.R
 
 /**
  * Helper class for creating and managing extraction notifications.
  * Extracted from ExtractionService for testability.
+ * Uses custom layout to display file list (Samsung My Files style).
  */
 class NotificationHelper(
     private val context: Context,
@@ -43,8 +46,10 @@ class NotificationHelper(
         fileName: String,
         progress: Int,
         extractedCount: Int = 0,
-        totalCount: Int = 0
+        totalCount: Int = 0,
+        recentFiles: List<String> = emptyList()
     ): Notification {
+        // Create stop intent
         val stopIntent = Intent(context, ExtractionService::class.java).apply {
             action = "STOP_EXTRACTION"
         }
@@ -55,13 +60,16 @@ class NotificationHelper(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val contentText = when {
-            totalCount > 0 -> "Extracting: $extractedCount/$totalCount files ($progress%)"
-            extractedCount > 0 -> "Extracting: $extractedCount files"
-            else -> "Preparing extraction..."
+        // Build content text with file counter
+        val contentText = if (totalCount > 0) {
+            "$extractedCount/$totalCount files ($progress%)"
+        } else if (extractedCount > 0) {
+            "$extractedCount files"
+        } else {
+            "Preparing extraction..."
         }
 
-        return NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle("Extracting $fileName")
             .setContentText(contentText)
             .setSmallIcon(android.R.drawable.stat_sys_download)
@@ -72,7 +80,31 @@ class NotificationHelper(
                 "Stop",
                 stopPendingIntent
             )
-            .build()
+
+        // Add InboxStyle with recent files if available
+        if (recentFiles.isNotEmpty()) {
+            val inboxStyle = NotificationCompat.InboxStyle()
+
+            // Add recent files (last 3)
+            val filesToShow = recentFiles.takeLast(3)
+            filesToShow.forEachIndexed { index, file ->
+                val isLast = index == filesToShow.size - 1
+                val prefix = if (isLast) "→" else "✓"
+                inboxStyle.addLine("$prefix $file")
+            }
+
+            // Summary line
+            val summaryText = if (totalCount > 0) {
+                "$extractedCount/$totalCount files"
+            } else {
+                "$extractedCount files"
+            }
+            inboxStyle.setSummaryText(summaryText)
+
+            builder.setStyle(inboxStyle)
+        }
+
+        return builder.build()
     }
 
     fun createSuccessNotification(

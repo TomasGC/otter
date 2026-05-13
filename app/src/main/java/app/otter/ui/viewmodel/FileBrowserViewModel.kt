@@ -44,23 +44,12 @@ class FileBrowserViewModel @Inject constructor(
         browseDirectory(currentPath)
     }
 
+
     /**
-     * Updates extraction progress in UI.
+     * Starts extraction and switches to extraction screen.
      */
-    fun updateExtractionProgress(
-        fileName: String,
-        currentFile: String,
-        extractedCount: Int,
-        totalCount: Int,
-        progress: Float
-    ) {
-        _uiState.value = FileBrowserUiState.Extracting(
-            fileName = fileName,
-            currentFile = currentFile,
-            extractedCount = extractedCount,
-            totalCount = totalCount,
-            progress = progress
-        )
+    fun startExtraction(fileName: String) {
+        _uiState.value = FileBrowserUiState.Extracting(fileName = fileName)
     }
 
     /**
@@ -72,12 +61,6 @@ class FileBrowserViewModel @Inject constructor(
         } ?: refresh()
     }
 
-    /**
-     * Extraction completed, refresh directory.
-     */
-    fun onExtractionComplete() {
-        refresh()
-    }
 
     /**
      * Toggles archive-only filter.
@@ -103,6 +86,16 @@ class FileBrowserViewModel @Inject constructor(
 
         navigationStack.push(fileItem.path)
         currentPath = fileItem.path
+        browseDirectory(currentPath)
+    }
+
+    /**
+     * Navigates to a specific path directly (used for initial navigation from intents).
+     */
+    fun navigateToPath(path: ResourcePath) {
+        navigationStack.clear()
+        navigationStack.push(path)
+        currentPath = path
         browseDirectory(currentPath)
     }
 
@@ -273,11 +266,7 @@ sealed class FileBrowserUiState {
     ) : FileBrowserUiState()
 
     data class Extracting(
-        val fileName: String,
-        val currentFile: String,
-        val extractedCount: Int,
-        val totalCount: Int,
-        val progress: Float,
+        val fileName: String
     ) : FileBrowserUiState()
 
     data class Error(

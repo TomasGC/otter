@@ -203,7 +203,8 @@ class FileBrowserViewModelTest {
             currentFile = "file1.txt",
             extractedCount = 10,
             totalCount = 100,
-            progress = 0.1f
+            progress = 0.1f,
+            recentFiles = listOf("file1.txt", "file2.jpg")
         )
 
         // Then
@@ -215,6 +216,7 @@ class FileBrowserViewModelTest {
         assertEquals(10, extractingState.extractedCount)
         assertEquals(100, extractingState.totalCount)
         assertEquals(0.1f, extractingState.progress, 0.001f)
+        assertEquals(listOf("file1.txt", "file2.jpg"), extractingState.recentFiles)
     }
 
     @Test

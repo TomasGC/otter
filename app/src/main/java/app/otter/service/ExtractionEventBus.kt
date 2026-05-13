@@ -22,7 +22,8 @@ class ExtractionEventBus @Inject constructor() {
         val currentFile: String,
         val extractedCount: Int,
         val totalCount: Int,
-        val progress: Float
+        val progress: Float,
+        val recentFiles: List<String> = emptyList()
     )
 
     private val _progressEvents = MutableSharedFlow<ProgressEvent>(replay = 1)
@@ -36,7 +37,8 @@ class ExtractionEventBus @Inject constructor() {
         currentFile: String,
         extractedCount: Int,
         totalCount: Int,
-        progress: Float
+        progress: Float,
+        recentFiles: List<String> = emptyList()
     ) {
         _progressEvents.emit(
             ProgressEvent(
@@ -44,12 +46,23 @@ class ExtractionEventBus @Inject constructor() {
                 currentFile = currentFile,
                 extractedCount = extractedCount,
                 totalCount = totalCount,
-                progress = progress
+                progress = progress,
+                recentFiles = recentFiles
             )
         )
     }
 
     suspend fun emitComplete() {
         _completeEvents.emit(Unit)
+    }
+
+    /**
+     * Resets the event bus state by clearing replay cache.
+     * Should be called after extraction completes to prevent stale events
+     * from being replayed to new subscribers.
+     */
+    fun reset() {
+        _progressEvents.resetReplayCache()
+        _completeEvents.resetReplayCache()
     }
 }
