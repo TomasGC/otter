@@ -51,12 +51,14 @@ fun ExtractionScreen(
     )
 
     LaunchedEffect(Unit) {
-        eventBus.progressEvents.collect { event ->
-            currentFile = event.currentFile
-            extractedCount = event.extractedCount
-            totalCount = event.totalCount
-            progress = event.progress
-            recentFiles = event.recentFiles
+        eventBus.progressState.collect { event ->
+            event?.let {
+                currentFile = it.currentFile
+                extractedCount = it.extractedCount
+                totalCount = it.totalCount
+                progress = it.progress
+                recentFiles = it.recentFiles
+            }
         }
     }
 

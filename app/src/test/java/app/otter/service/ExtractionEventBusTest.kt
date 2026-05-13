@@ -23,21 +23,13 @@ class ExtractionEventBusTest {
     }
 
     @Test
-    fun `emitProgress should emit event to progressEvents flow`() = runTest {
+    fun `emitProgress should emit event to progressState flow`() = runTest {
         // Given
         val fileName = "test.zip"
         val currentFile = "file.txt"
         val extractedCount = 5
         val totalCount = 10
         val progress = 0.5f
-
-        var capturedEvent: ExtractionEventBus.ProgressEvent? = null
-        val eventJob = launch {
-            capturedEvent = eventBus.progressEvents.first()
-        }
-
-        // Ensure collector is ready
-        advanceUntilIdle()
 
         // When
         eventBus.emitProgress(
@@ -48,16 +40,15 @@ class ExtractionEventBusTest {
             progress = progress
         )
 
-        // Then - Advance coroutines and verify
-        advanceUntilIdle()
-        eventJob.cancel()
+        // Then
+        val capturedEvent = eventBus.progressState.first { it != null }
 
         assertNotNull(capturedEvent)
-        assertEquals(fileName, capturedEvent!!.fileName)
-        assertEquals(currentFile, capturedEvent!!.currentFile)
-        assertEquals(extractedCount, capturedEvent!!.extractedCount)
-        assertEquals(totalCount, capturedEvent!!.totalCount)
-        assertEquals(progress, capturedEvent!!.progress, 0.001f)
+        assertEquals(fileName, capturedEvent?.fileName)
+        assertEquals(currentFile, capturedEvent?.currentFile)
+        assertEquals(extractedCount, capturedEvent?.extractedCount)
+        assertEquals(totalCount, capturedEvent?.totalCount)
+        assertEquals(progress, capturedEvent?.progress ?: 0f, 0.001f)
     }
 
     @Test
@@ -69,14 +60,6 @@ class ExtractionEventBusTest {
         val totalCount = 100
         val progress = 0.42f
 
-        var capturedEvent: ExtractionEventBus.ProgressEvent? = null
-        val eventJob = launch {
-            capturedEvent = eventBus.progressEvents.first()
-        }
-
-        // Ensure collector is ready
-        advanceUntilIdle()
-
         // When
         eventBus.emitProgress(
             fileName = fileName,
@@ -86,20 +69,19 @@ class ExtractionEventBusTest {
             progress = progress
         )
 
-        // Then - Advance coroutines and verify
-        advanceUntilIdle()
-        eventJob.cancel()
+        // Then
+        val capturedEvent = eventBus.progressState.first { it != null }
 
         assertNotNull(capturedEvent)
-        assertEquals("archive.zip", capturedEvent!!.fileName)
-        assertEquals("readme.txt", capturedEvent!!.currentFile)
-        assertEquals(42, capturedEvent!!.extractedCount)
-        assertEquals(100, capturedEvent!!.totalCount)
-        assertEquals(0.42f, capturedEvent!!.progress, 0.001f)
+        assertEquals("archive.zip", capturedEvent?.fileName)
+        assertEquals("readme.txt", capturedEvent?.currentFile)
+        assertEquals(42, capturedEvent?.extractedCount)
+        assertEquals(100, capturedEvent?.totalCount)
+        assertEquals(0.42f, capturedEvent?.progress ?: 0f, 0.001f)
     }
 
     @Test
-    fun `progressEvents should have replay of 1`() = runTest {
+    fun `progressState should retain last value`() = runTest {
         // Given
         eventBus.emitProgress(
             fileName = "test.zip",
@@ -110,11 +92,11 @@ class ExtractionEventBusTest {
         )
 
         // When - Collect after emission
-        val event = eventBus.progressEvents.first()
+        val event = eventBus.progressState.first { it != null }
 
-        // Then - Should receive replayed event
-        assertEquals("test.zip", event.fileName)
-        assertEquals(1, event.extractedCount)
+        // Then - Should receive current state value
+        assertEquals("test.zip", event?.fileName)
+        assertEquals(1, event?.extractedCount)
     }
 
     @Test
@@ -142,16 +124,16 @@ class ExtractionEventBusTest {
     }
 
     @Test
-    fun `multiple collectors should receive same progress event`() = runTest {
+    fun `multiple collectors should receive same progress state`() = runTest {
         // Given
-        val collector1 = mutableListOf<ExtractionEventBus.ProgressEvent>()
-        val collector2 = mutableListOf<ExtractionEventBus.ProgressEvent>()
+        val collector1 = mutableListOf<ExtractionEventBus.ProgressEvent?>()
+        val collector2 = mutableListOf<ExtractionEventBus.ProgressEvent?>()
 
         val job1 = launch {
-            eventBus.progressEvents.collect { collector1.add(it) }
+            eventBus.progressState.collect { collector1.add(it) }
         }
         val job2 = launch {
-            eventBus.progressEvents.collect { collector2.add(it) }
+            eventBus.progressState.collect { collector2.add(it) }
         }
 
         // Ensure collectors are ready
@@ -163,10 +145,10 @@ class ExtractionEventBusTest {
         // Then - Advance coroutines to ensure collection completes
         advanceUntilIdle()
 
-        assertEquals(1, collector1.size)
-        assertEquals(1, collector2.size)
-        assertEquals("test.zip", collector1[0].fileName)
-        assertEquals("test.zip", collector2[0].fileName)
+        assertEquals(2, collector1.size) // null + event
+        assertEquals(2, collector2.size) // null + event
+        assertEquals("test.zip", collector1[1]?.fileName)
+        assertEquals("test.zip", collector2[1]?.fileName)
 
         job1.cancel()
         job2.cancel()
@@ -201,11 +183,11 @@ class ExtractionEventBusTest {
     }
 
     @Test
-    fun `cancelling collection should stop receiving events`() = runTest {
+    fun `cancelling collection should stop receiving state updates`() = runTest {
         // Given
-        val receivedEvents = mutableListOf<ExtractionEventBus.ProgressEvent>()
+        val receivedEvents = mutableListOf<ExtractionEventBus.ProgressEvent?>()
         val job = launch {
-            eventBus.progressEvents.collect { receivedEvents.add(it) }
+            eventBus.progressState.collect { receivedEvents.add(it) }
         }
 
         // Ensure collector is ready
@@ -222,8 +204,8 @@ class ExtractionEventBusTest {
         eventBus.emitProgress("test2.zip", "file2.txt", 2, 10, 0.2f)
         advanceUntilIdle()
 
-        // Then - Should only have received first event
-        assertEquals(1, receivedEvents.size)
-        assertEquals("test1.zip", receivedEvents[0].fileName)
+        // Then - Should only have received null + first event
+        assertEquals(2, receivedEvents.size) // null + first event
+        assertEquals("test1.zip", receivedEvents[1]?.fileName)
     }
 }
