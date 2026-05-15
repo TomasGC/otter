@@ -136,7 +136,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Find Feature-CI run
+      - name: Find Push-CI run
         id: find-run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -144,22 +144,22 @@ jobs:
           BRANCH="${{ github.head_ref }}"
           REPO="${{ github.repository }}"
 
-          echo "Looking for latest Feature-CI run on branch: $BRANCH"
+          echo "Looking for latest Push-CI run on branch: $BRANCH"
 
-          RUN=$(gh run list --repo "$REPO" --workflow=feature-ci.yml --branch "$BRANCH" --limit 1 --json databaseId,conclusion --jq '.[0]')
+          RUN=$(gh run list --repo "$REPO" --workflow=push-ci.yml --branch "$BRANCH" --limit 1 --json databaseId,conclusion --jq '.[0]')
 
           if [ -z "$RUN" ] || [ "$RUN" = "null" ]; then
-            echo "No Feature-CI run found for branch $BRANCH"
+            echo "No Push-CI run found for branch $BRANCH"
             exit 1
           fi
 
           RUN_ID=$(echo "$RUN" | jq -r '.databaseId')
           CONCLUSION=$(echo "$RUN" | jq -r '.conclusion')
 
-          echo "Found Feature-CI run: $RUN_ID (conclusion: $CONCLUSION)"
+          echo "Found Push-CI run: $RUN_ID (conclusion: $CONCLUSION)"
 
           if [ "$CONCLUSION" != "success" ]; then
-            echo "Feature-CI run did not succeed, skipping APK size check"
+            echo "Push-CI run did not succeed, skipping APK size check"
             exit 1
           fi
 

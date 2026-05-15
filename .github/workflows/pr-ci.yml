@@ -1,4 +1,4 @@
-name: CI
+name: PR-CI
 
 on:
   pull_request:
@@ -9,26 +9,26 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  verify-feature-ci:
-    name: Verify Feature-CI Passed
+  verify-push-ci:
+    name: Verify Push-CI Passed
     runs-on: ubuntu-latest
     outputs:
-      feature_ci_passed: ${{ steps.check.outputs.passed }}
+      push_ci_passed: ${{ steps.check.outputs.passed }}
     steps:
-      - name: Check Feature-CI status
+      - name: Check Push-CI status
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="${{ github.head_ref }}"
           REPO="${{ github.repository }}"
-          echo "Checking Feature-CI status for branch: $BRANCH"
+          echo "Checking Push-CI status for branch: $BRANCH"
 
-          # Get latest feature-ci.yml run for this branch
-          RUN=$(gh run list --repo "$REPO" --workflow=feature-ci.yml --branch "$BRANCH" --limit 1 --json status,conclusion --jq '.[0]')
+          # Get latest push-ci.yml run for this branch
+          RUN=$(gh run list --repo "$REPO" --workflow=push-ci.yml --branch "$BRANCH" --limit 1 --json status,conclusion --jq '.[0]')
 
           if [ -z "$RUN" ] || [ "$RUN" = "null" ]; then
-            echo "No Feature-CI run found for branch $BRANCH - skipping downstream jobs"
+            echo "No Push-CI run found for branch $BRANCH - skipping downstream jobs"
             echo "passed=false" >> $GITHUB_OUTPUT
             exit 0
           fi
@@ -36,21 +36,21 @@ jobs:
           STATUS=$(echo "$RUN" | jq -r '.status')
           CONCLUSION=$(echo "$RUN" | jq -r '.conclusion')
 
-          echo "Feature-CI status: $STATUS (conclusion: $CONCLUSION)"
+          echo "Push-CI status: $STATUS (conclusion: $CONCLUSION)"
 
           if [ "$STATUS" = "completed" ] && [ "$CONCLUSION" = "success" ]; then
-            echo "Feature-CI passed - proceeding with PR-CI"
+            echo "Push-CI passed - proceeding with PR-CI"
             echo "passed=true" >> $GITHUB_OUTPUT
           else
-            echo "Feature-CI not completed or failed - skipping downstream jobs"
+            echo "Push-CI not completed or failed - skipping downstream jobs"
             echo "passed=false" >> $GITHUB_OUTPUT
           fi
 
   pr-validation:
     name: Validate PR Format
     runs-on: ubuntu-latest
-    needs: verify-feature-ci
-    if: needs.verify-feature-ci.outputs.feature_ci_passed == 'true'
+    needs: verify-push-ci
+    if: needs.verify-push-ci.outputs.push_ci_passed == 'true'
     steps:
       - name: Check PR title format
         run: |
@@ -68,8 +68,8 @@ jobs:
   context-check:
     name: Verify Context Files Updated
     runs-on: ubuntu-latest
-    needs: verify-feature-ci
-    if: needs.verify-feature-ci.outputs.feature_ci_passed == 'true'
+    needs: verify-push-ci
+    if: needs.verify-push-ci.outputs.push_ci_passed == 'true'
     permissions:
       contents: read
       pull-requests: write
@@ -118,8 +118,8 @@ jobs:
 
   security-checks:
     name: Security Validation
-    needs: verify-feature-ci
-    if: needs.verify-feature-ci.outputs.feature_ci_passed == 'true'
+    needs: verify-push-ci
+    if: needs.verify-push-ci.outputs.push_ci_passed == 'true'
     uses: ./.github/workflows/reusable-security-checks.yml
     permissions:
       contents: read
