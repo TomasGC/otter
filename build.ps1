@@ -69,22 +69,44 @@ function Update-AppVersion {
     return $true
 }
 
+function Get-GradlewCommand {
+    <#
+    .SYNOPSIS
+        Get the correct Gradle wrapper command for the platform
+    #>
+    if ($IsWindows -or ($PSVersionTable.PSVersion.Major -le 5)) {
+        $gradlewPath = [System.IO.Path]::Combine($PSScriptRoot, "gradlew.bat")
+        if ([System.IO.File]::Exists($gradlewPath)) {
+            return $gradlewPath
+        }
+    }
+
+    # Fallback to Unix gradlew
+    return [System.IO.Path]::Combine($PSScriptRoot, "gradlew")
+}
+
 function Invoke-ApkBuild {
     <#
     .SYNOPSIS
-        Build APK via Docker
+        Build APK via Gradle
     #>
 
-    Write-Host "🐳 Building APK via Docker..." -ForegroundColor Yellow
+    Write-Host "🔨 Building APK via Gradle..." -ForegroundColor Yellow
 
-    $dockerBuildScript = [System.IO.Path]::Combine($PSScriptRoot, "docker-build.ps1")
+    $gradlewPath = Get-GradlewCommand
 
-    if (-not [System.IO.File]::Exists($dockerBuildScript)) {
-        Write-Error "docker-build.ps1 not found at $dockerBuildScript"
+    if (-not [System.IO.File]::Exists($gradlewPath)) {
+        Write-Error "gradlew not found at $gradlewPath"
         return $false
     }
 
-    & $dockerBuildScript assembleDebug
+    # Stop any running Gradle daemons first
+    Write-Host "🛑 Stopping Gradle daemons..." -ForegroundColor Gray
+    & $gradlewPath --stop | Out-Null
+
+    # Build APK
+    Write-Host "▶️ Running: ./gradlew assembleDebug" -ForegroundColor Gray
+    & $gradlewPath assembleDebug
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host ""

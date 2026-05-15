@@ -1,9 +1,7 @@
 package app.otter.ui.screen
 
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
 import timber.log.Timber
@@ -42,7 +40,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,7 +55,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.otter.domain.model.FileItem
 import app.otter.service.ExtractionEventBus
 import app.otter.service.ExtractionService
-import app.otter.ui.component.ExtractionProgressView
+import app.otter.ui.component.ExtractionScreen
+import app.otter.ui.component.FileItemRow
+import app.otter.ui.component.ExtractionConfirmDialog
 import app.otter.ui.viewmodel.FileBrowserUiState
 import app.otter.ui.viewmodel.FileBrowserViewModel
 import app.otter.ui.viewmodel.SortOrder
@@ -79,93 +78,54 @@ fun FileBrowserScreen(
     initialArchiveUri: Uri? = null,
     viewModel: FileBrowserViewModel = hiltViewModel(),
 ) {
-    // TODO: Handle initialArchiveUri - navigate into archive
-    // For Phase 2: implement archive browsing
-
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showConfirmDialog by remember { mutableStateOf(false) }
     var fileToExtract by remember { mutableStateOf<FileItem?>(null) }
 
-    // Collect extraction progress from EventBus (injected via ViewModel)
-    LaunchedEffect(Unit) {
-        try {
-            viewModel.eventBus.progressEvents.collect { event ->
-                try {
-                    viewModel.updateExtractionProgress(
-                        fileName = event.fileName,
-                        currentFile = event.currentFile,
-                        extractedCount = event.extractedCount,
-                        totalCount = event.totalCount,
-                        progress = event.progress
-                    )
-                } catch (e: Exception) {
-                    Timber.tag("FileBrowserScreen").e(e, "Error updating progress")
-                }
-            }
-        } catch (e: Exception) {
-            Timber.tag("FileBrowserScreen").e(e, "Error collecting progress")
-        }
-    }
+    // Navigate to archive's parent directory when opened with "Open with Browser"
+    LaunchedEffect(initialArchiveUri) {
+        initialArchiveUri?.let { uri ->
+            try {
+                val archivePath = ResourcePathConverter.fromUri(uri)
+                val archiveFileUri = ResourcePathConverter.toUri(archivePath)
 
-    LaunchedEffect(Unit) {
-        try {
-            viewModel.eventBus.completeEvents.collect {
-                try {
-                    viewModel.onExtractionComplete()
-                } catch (e: Exception) {
-                    Timber.tag("FileBrowserScreen").e(e, "Error on extraction complete")
-                }
-            }
-        } catch (e: Exception) {
-            Timber.tag("FileBrowserScreen").e(e, "Error collecting complete")
-        }
-    }
+                // Navigate to parent directory
+                when (archiveFileUri.scheme) {
+                    "file" -> {
+                        archiveFileUri.path?.let { filePath ->
+                            java.io.File(filePath).parent?.let { parentPath ->
+                                val parentUri = android.net.Uri.fromFile(java.io.File(parentPath))
+                                val parentResourcePath = ResourcePathConverter.fromUri(parentUri)
+                                viewModel.navigateToPath(parentResourcePath)
+                            }
+                        }
+                    }
+                    "content" -> {
+                        // Try to get real path from content URI
+                        val realPath = getRealPathFromContentUri(context, archiveFileUri)
+                        if (realPath != null) {
+                            val parentPath = java.io.File(realPath).parent
+                            if (parentPath != null) {
+                                val parentUri = android.net.Uri.fromFile(java.io.File(parentPath))
+                                val parentResourcePath = ResourcePathConverter.fromUri(parentUri)
+                                viewModel.navigateToPath(parentResourcePath)
+                                return@let
+                            }
+                        }
 
-    // Register broadcast receiver for extraction progress (backup)
-    DisposableEffect(Unit) {
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                when (intent.action) {
-                    ExtractionService.ACTION_EXTRACTION_PROGRESS -> {
-                        val fileName = intent.getStringExtra("extra_file_name") ?: ""
-                        val currentFile = intent.getStringExtra("extra_current_file") ?: ""
-                        val extractedCount = intent.getIntExtra("extra_extracted_count", 0)
-                        val totalCount = intent.getIntExtra("extra_total_count", 0)
-                        val progress = intent.getFloatExtra("extra_progress", 0f)
-
-
-                        viewModel.updateExtractionProgress(
-                            fileName = fileName,
-                            currentFile = currentFile,
-                            extractedCount = extractedCount,
-                            totalCount = totalCount,
-                            progress = progress
+                        // Fallback: navigate to Downloads folder
+                        val downloadsPath = android.os.Environment.getExternalStoragePublicDirectory(
+                            android.os.Environment.DIRECTORY_DOWNLOADS
                         )
-                    }
-                    ExtractionService.ACTION_EXTRACTION_COMPLETE -> {
-                        viewModel.onExtractionComplete()
+                        val downloadsUri = android.net.Uri.fromFile(downloadsPath)
+                        val downloadsResourcePath = ResourcePathConverter.fromUri(downloadsUri)
+                        viewModel.navigateToPath(downloadsResourcePath)
                     }
                 }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to navigate to archive location")
             }
-        }
-
-        val filter = IntentFilter().apply {
-            addAction(ExtractionService.ACTION_EXTRACTION_PROGRESS)
-            addAction(ExtractionService.ACTION_EXTRACTION_COMPLETE)
-        }
-
-        // Register receiver with RECEIVER_NOT_EXPORTED flag (Android 13+)
-        // For older versions, ContextCompat handles compatibility
-        androidx.core.content.ContextCompat.registerReceiver(
-            context,
-            receiver,
-            filter,
-            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
-        )
-
-        onDispose {
-            context.unregisterReceiver(receiver)
         }
     }
 
@@ -253,13 +213,7 @@ fun FileBrowserScreen(
                                     viewModel.extractionQueue.enqueueAll(tasks)
 
                                     // Show extraction UI immediately
-                                    viewModel.updateExtractionProgress(
-                                        fileName = "${selected.size} archives",
-                                        currentFile = "Starting ${selected.first().name}...",
-                                        extractedCount = 0,
-                                        totalCount = 0,
-                                        progress = 0f
-                                    )
+                                    viewModel.startExtraction(fileName = "${selected.size} archives")
 
                                     // Start processing queue
                                     viewModel.extractionQueue.processNext(context)
@@ -332,17 +286,10 @@ fun FileBrowserScreen(
                 }
 
                 is FileBrowserUiState.Extracting -> {
-                    ExtractionProgressView(
+                    ExtractionScreen(
                         fileName = state.fileName,
-                        progress = state.progress,
-                        extractedCount = state.extractedCount,
-                        totalCount = state.totalCount,
-                        currentFile = state.currentFile,
-                        onStop = {
-                            context.startService(ExtractionService.newStopIntent(context))
-                            viewModel.moveExtractionToBackground()
-                        },
-                        onBackground = {
+                        eventBus = viewModel.eventBus,
+                        onComplete = {
                             viewModel.moveExtractionToBackground()
                         }
                     )
@@ -417,62 +364,33 @@ fun FileBrowserScreen(
                 }
             }
 
+            // Version label in bottom-left corner
+            app.otter.ui.component.VersionLabel(
+                modifier = Modifier.align(Alignment.BottomStart)
+            )
+
             // Confirmation dialog
             if (showConfirmDialog && fileToExtract != null) {
-                AlertDialog(
-                    onDismissRequest = {
+                ExtractionConfirmDialog(
+                    fileItem = fileToExtract!!,
+                    onConfirm = {
+                        fileToExtract?.let { file ->
+                            // Initialize UI to extracting state immediately
+                            viewModel.startExtraction(fileName = file.name)
+
+                            val intent = ExtractionService.newIntent(
+                                context = context,
+                                archiveUri = file.path,
+                                fileName = file.name
+                            )
+                            context.startService(intent)
+                        }
                         showConfirmDialog = false
                         fileToExtract = null
                     },
-                    title = { Text("Extract archive?") },
-                    text = {
-                        Column {
-                            Text("Do you want to extract this archive?")
-                            Text(
-                                text = fileToExtract!!.name,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                fileToExtract?.let { file ->
-
-                                    // Initialize UI to extracting state immediately
-                                    viewModel.updateExtractionProgress(
-                                        fileName = file.name,
-                                        currentFile = "Starting...",
-                                        extractedCount = 0,
-                                        totalCount = 0,
-                                        progress = 0f
-                                    )
-
-                                    val intent = ExtractionService.newIntent(
-                                        context = context,
-                                        archiveUri = file.path,
-                                        fileName = file.name
-                                    )
-                                    context.startService(intent)
-                                }
-                                showConfirmDialog = false
-                                fileToExtract = null
-                            }
-                        ) {
-                            Text("Extract")
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(
-                            onClick = {
-                                showConfirmDialog = false
-                                fileToExtract = null
-                            }
-                        ) {
-                            Text("Cancel")
-                        }
+                    onDismiss = {
+                        showConfirmDialog = false
+                        fileToExtract = null
                     }
                 )
             }
@@ -480,93 +398,68 @@ fun FileBrowserScreen(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun FileItemRow(
-    fileItem: FileItem,
-    isSelectionMode: Boolean,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Checkbox in selection mode
-        if (isSelectionMode) {
-            Checkbox(
-                checked = isSelected,
-                onCheckedChange = { onClick() },
-                modifier = Modifier.size(24.dp)
-            )
+/**
+ * Tries to resolve a real file path from a content:// URI.
+ * Returns null if the path cannot be resolved.
+ */
+private fun getRealPathFromContentUri(context: Context, uri: Uri): String? {
+    // Try different DocumentFile approaches
+    try {
+        // Method 1: Query DATA column (works for some providers)
+        context.contentResolver.query(uri, arrayOf(android.provider.MediaStore.MediaColumns.DATA), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val columnIndex = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.DATA)
+                if (columnIndex >= 0) {
+                    val path = cursor.getString(columnIndex)
+                    if (!path.isNullOrBlank() && java.io.File(path).exists()) {
+                        return path
+                    }
+                }
+            }
         }
 
-        Icon(
-            imageVector = if (fileItem.isDirectory) {
-                Icons.Default.Folder
-            } else {
-                Icons.Default.InsertDriveFile
-            },
-            contentDescription = null,
-            modifier = Modifier.size(24.dp),
-            tint = if (fileItem.isDirectory) {
-                MaterialTheme.colorScheme.primary
-            } else if (isSelected && isSelectionMode) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
+        // Method 2: For DocumentFile URIs (Documents Provider)
+        if (android.provider.DocumentsContract.isDocumentUri(context, uri)) {
+            val docId = android.provider.DocumentsContract.getDocumentId(uri)
+
+            // ExternalStorageProvider
+            if (uri.authority == "com.android.externalstorage.documents") {
+                val split = docId.split(":")
+                val type = split[0]
+                if ("primary".equals(type, ignoreCase = true)) {
+                    return "${android.os.Environment.getExternalStorageDirectory()}/${split[1]}"
+                }
             }
-        )
 
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = fileItem.name,
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            // DownloadsProvider
+            if (uri.authority == "com.android.providers.downloads.documents") {
+                val contentUri = android.content.ContentUris.withAppendedId(
+                    Uri.parse("content://downloads/public_downloads"),
+                    docId.toLongOrNull() ?: return null
+                )
+                return getRealPathFromContentUri(context, contentUri)
+            }
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (fileItem.sizeBytes != null) {
-                    Text(
-                        text = formatFileSize(fileItem.sizeBytes),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+            // MediaProvider
+            if (uri.authority == "com.android.providers.media.documents") {
+                val split = docId.split(":")
+                val type = split[0]
+
+                val contentUri = when (type) {
+                    "image" -> android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                    "video" -> android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                    "audio" -> android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                    else -> return null
                 }
 
-                Text(
-                    text = formatDate(fileItem.lastModified),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                val selection = "_id=?"
+                val selectionArgs = arrayOf(split[1])
+                return getRealPathFromContentUri(context, contentUri)
             }
         }
+    } catch (e: Exception) {
+        Timber.e(e, "Failed to resolve real path from content URI")
     }
-}
 
-private fun formatFileSize(bytes: Long): String {
-    if (bytes < 1024) return "$bytes B"
-    val kb = bytes / 1024.0
-    if (kb < 1024) return String.format("%.1f KB", kb)
-    val mb = kb / 1024.0
-    if (mb < 1024) return String.format("%.1f MB", mb)
-    val gb = mb / 1024.0
-    return String.format("%.1f GB", gb)
-}
-
-private fun formatDate(timestamp: Long): String {
-    val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-    return dateFormat.format(Date(timestamp))
+    return null
 }

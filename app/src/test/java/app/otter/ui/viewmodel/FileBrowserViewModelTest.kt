@@ -196,25 +196,15 @@ class FileBrowserViewModelTest {
     }
 
     @Test
-    fun `updateExtractionProgress changes state to Extracting`() {
+    fun `startExtraction changes state to Extracting`() {
         // When
-        viewModel.updateExtractionProgress(
-            fileName = "test.zip",
-            currentFile = "file1.txt",
-            extractedCount = 10,
-            totalCount = 100,
-            progress = 0.1f
-        )
+        viewModel.startExtraction(fileName = "test.zip")
 
         // Then
         val state = viewModel.uiState.value
         assertTrue(state is FileBrowserUiState.Extracting)
         val extractingState = state as FileBrowserUiState.Extracting
         assertEquals("test.zip", extractingState.fileName)
-        assertEquals("file1.txt", extractingState.currentFile)
-        assertEquals(10, extractingState.extractedCount)
-        assertEquals(100, extractingState.totalCount)
-        assertEquals(0.1f, extractingState.progress, 0.001f)
     }
 
     @Test
@@ -223,7 +213,7 @@ class FileBrowserViewModelTest {
         val initialState = viewModel.uiState.value as FileBrowserUiState.Success
 
         // When - Go to extracting
-        viewModel.updateExtractionProgress("test.zip", "file.txt", 1, 10, 0.1f)
+        viewModel.startExtraction(fileName = "test.zip")
         assertTrue(viewModel.uiState.value is FileBrowserUiState.Extracting)
 
         // Then - Move to background

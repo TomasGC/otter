@@ -47,6 +47,7 @@ class ExtractionService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private lateinit var notificationManager: NotificationManager
+    private val recentFilesBuffer = RecentFilesBuffer(maxSize = 5)
 
     override fun onCreate() {
         super.onCreate()
@@ -102,6 +103,9 @@ class ExtractionService : Service() {
     }
 
     private fun launchExtractionWorkflow(archiveUri: ResourcePath, fileName: String) {
+        // Clear buffer for new extraction
+        recentFilesBuffer.clear()
+
         serviceScope.launch {
             extractArchive(archiveUri, fileName)
             processQueuedExtractions()
@@ -115,6 +119,9 @@ class ExtractionService : Service() {
             if (task == null) {
                 Timber.tag(TAG).d("Queue empty, stopping service")
                 eventBus.emitComplete()
+                // Reset event bus to prevent stale events from being replayed
+                // to new subscribers (e.g., when opening browser after extraction)
+                eventBus.reset()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 break
@@ -165,6 +172,9 @@ class ExtractionService : Service() {
                         val progressPercent = (progress.progress * 100).toInt()
                         Timber.tag(TAG).d("Extracting: ${progress.currentFile} ($progressPercent%)")
 
+                        // Add current file to buffer
+                        recentFilesBuffer.add(progress.currentFile)
+
                         emitProgressEvent(fileName, progress)
 
                         notificationManager.notify(
@@ -174,20 +184,14 @@ class ExtractionService : Service() {
                                 progress = progressPercent,
                                 currentFile = progress.currentFile,
                                 extractedCount = progress.extractedCount,
-                                totalCount = progress.totalCount
+                                totalCount = progress.totalCount,
+                                recentFiles = recentFilesBuffer.getFiles()
                             )
                         )
                     }
                     is ExtractionProgress.Success -> {
                         extractedFilesCount = progress.extractedCount
                         Timber.tag(TAG).d("Extraction success: $extractedFilesCount files")
-
-                        // Emit complete event for this file (for UI refresh)
-                        serviceScope.launch {
-                            eventBus.emitComplete()
-                        }
-
-                        sendCompleteBroadcast()
                     }
                     is ExtractionProgress.Error -> {
                         lastError = progress.message
@@ -264,7 +268,8 @@ class ExtractionService : Service() {
                 currentFile = progress.currentFile,
                 extractedCount = progress.extractedCount,
                 totalCount = progress.totalCount,
-                progress = progress.progress
+                progress = progress.progress,
+                recentFiles = recentFilesBuffer.getFiles()
             )
         }
 
@@ -283,55 +288,18 @@ class ExtractionService : Service() {
         progress: Int,
         currentFile: String? = null,
         extractedCount: Int = 0,
-        totalCount: Int = 0
+        totalCount: Int = 0,
+        recentFiles: List<String> = emptyList()
     ): Notification {
-        val title = if (totalCount > 0) {
-            "Extracting $fileName ($extractedCount/$totalCount)"
-        } else if (extractedCount > 0) {
-            "Extracting $fileName ($extractedCount files)"
-        } else {
-            "Extracting $fileName"
-        }
-
-        val contentText = if (currentFile != null && totalCount > 0) {
-            "$currentFile ($progress%)"
-        } else if (currentFile != null) {
-            currentFile
-        } else {
-            "Preparing extraction..."
-        }
-
-        // Create stop intent
-        val stopIntent = Intent(this, ExtractionService::class.java).apply {
-            action = ACTION_STOP_EXTRACTION
-        }
-        val stopPendingIntent = PendingIntent.getService(
-            this,
-            0,
-            stopIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        // Delegate to NotificationHelper for custom layout rendering
+        val helper = NotificationHelper(this, notificationManager)
+        return helper.createProgressNotification(
+            fileName = fileName,
+            progress = progress,
+            extractedCount = extractedCount,
+            totalCount = totalCount,
+            recentFiles = recentFiles
         )
-
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(title)
-            .setContentText(contentText)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setOngoing(true)
-            .setSilent(true)
-            .addAction(
-                android.R.drawable.ic_delete,
-                "Stop",
-                stopPendingIntent
-            )
-
-        // Show determinate or indeterminate progress
-        if (totalCount > 0) {
-            builder.setProgress(100, progress, false)
-        } else {
-            builder.setProgress(0, 0, true) // Indeterminate progress bar
-        }
-
-        return builder.build()
     }
 
     private fun showCompletionNotification(

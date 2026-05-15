@@ -211,4 +211,94 @@ class NotificationHelperTest {
         // Then
         assertNotNull("Notification should not be null", notification)
     }
+
+    @Test
+    fun `should create notification with file list`() {
+        // Given
+        val fileName = "test.zip"
+        val progress = 50
+        val extractedCount = 3
+        val totalCount = 6
+        val recentFiles = listOf("file1.txt", "file2.jpg", "file3.pdf")
+
+        // When
+        val notification = helper.createProgressNotification(
+            fileName = fileName,
+            progress = progress,
+            extractedCount = extractedCount,
+            totalCount = totalCount,
+            recentFiles = recentFiles
+        )
+
+        // Then
+        assertNotNull("Notification should not be null", notification)
+        // RemoteViews content cannot be easily tested without instrumented tests
+        // This test verifies that the notification builds successfully with file list
+    }
+
+    @Test
+    fun `should create notification with empty file list`() {
+        // Given
+        val fileName = "test.zip"
+        val progress = 0
+        val recentFiles = emptyList<String>()
+
+        // When
+        val notification = helper.createProgressNotification(
+            fileName = fileName,
+            progress = progress,
+            recentFiles = recentFiles
+        )
+
+        // Then
+        assertNotNull("Notification should not be null", notification)
+    }
+
+    @Test
+    fun `should create notification with partial file list`() {
+        // Given
+        val fileName = "test.zip"
+        val progress = 25
+        val extractedCount = 2
+        val totalCount = 8
+        val recentFiles = listOf("file1.txt", "file2.jpg")
+
+        // When
+        val notification = helper.createProgressNotification(
+            fileName = fileName,
+            progress = progress,
+            extractedCount = extractedCount,
+            totalCount = totalCount,
+            recentFiles = recentFiles
+        )
+
+        // Then
+        assertNotNull("Notification should not be null", notification)
+    }
+
+    @Test
+    fun `should handle very long file paths in list`() {
+        // Given
+        val fileName = "test.zip"
+        val progress = 33
+        val extractedCount = 3
+        val totalCount = 9
+        val recentFiles = listOf(
+            "very/long/path/to/deeply/nested/folder/structure/file1.txt",
+            "another/extremely/long/path/with/many/subdirectories/file2.jpg",
+            "yet/another/very/long/path/example/file3.pdf"
+        )
+
+        // When
+        val notification = helper.createProgressNotification(
+            fileName = fileName,
+            progress = progress,
+            extractedCount = extractedCount,
+            totalCount = totalCount,
+            recentFiles = recentFiles
+        )
+
+        // Then
+        assertNotNull("Notification should not be null", notification)
+    }
 }

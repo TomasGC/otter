@@ -28,7 +28,7 @@ import app.otter.service.ExtractionEventBus
 import app.otter.data.util.ResourcePathConverter
 import app.otter.domain.model.ResourcePath
 import app.otter.ui.theme.OtterTheme
-import app.otter.ui.component.ExtractionProgressView
+import app.otter.ui.component.ExtractionScreen
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -145,90 +145,3 @@ class ExtractionActivity : ComponentActivity() {
     }
 }
 
-@Composable
-private fun ExtractionScreen(
-    fileName: String,
-    eventBus: ExtractionEventBus,
-    onComplete: () -> Unit
-) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    var currentFile by remember { mutableStateOf("") }
-    var extractedCount by remember { mutableIntStateOf(0) }
-    var totalCount by remember { mutableIntStateOf(0) }
-    var progress by remember { mutableFloatStateOf(0f) }
-    var isComplete by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        eventBus.progressEvents.collect { event ->
-            currentFile = event.currentFile
-            extractedCount = event.extractedCount
-            totalCount = event.totalCount
-            progress = event.progress
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        eventBus.completeEvents.collect {
-            isComplete = true
-        }
-    }
-
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
-        if (isComplete) {
-            // Show completion screen
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Complete",
-                    modifier = Modifier
-                        .size(120.dp)
-                        .padding(bottom = 24.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-
-                Text(
-                    text = stringResource(R.string.extraction_complete_title),
-                    style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                Text(
-                    text = stringResource(R.string.extraction_files_count, extractedCount),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 32.dp)
-                )
-
-                Button(onClick = onComplete) {
-                    Text(stringResource(R.string.extraction_button_close))
-                }
-            }
-        } else {
-            // Show extraction progress
-            ExtractionProgressView(
-                fileName = fileName,
-                progress = progress,
-                extractedCount = extractedCount,
-                totalCount = totalCount,
-                currentFile = currentFile,
-                onStop = {
-                    val stopIntent = ExtractionService.newStopIntent(context)
-                    context.startService(stopIntent)
-                    onComplete()
-                },
-                onBackground = {
-                    onComplete()
-                }
-            )
-        }
-    }
-}

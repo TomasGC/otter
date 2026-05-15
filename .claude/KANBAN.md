@@ -4,6 +4,17 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ---
 
+2026-05-15 - [#27] Samsung My Files Style Progress UI with StateFlow Migration
+- Implemented horizontal progress bar with real-time file list (last 5 extracted files with ✓/→ indicators)
+- Migrated ExtractionEventBus from SharedFlow to StateFlow for event-driven architecture (eliminates timing issues)
+- Added smooth Animatable animations for progress and file count (no frame-by-frame jumps)
+- Implemented RecentFilesBuffer circular buffer (FIFO, max 5 files) for UI display
+- Added animated "Starting..." dots with InfiniteTransition (cycles 0-3 dots every 2s)
+- Added version label (v0.0.X) in bottom-left corner on all screens and dialogs
+tags: #ui #progress #animation #stateflow #testing
+Ref: https://github.com/TomasGC/otter/issues/27
+Commits: 50e4a40, 51861a3
+
 2026-05-12 - [#16] RPA-3.0 (Ren'Py Archive) Extraction Support
 - Implemented RPA-3.0 format extraction with binary protocol 2 index parsing
 - Fixed critical bugs: wrong binary opcode (0x75→0x73) and double XOR deobfuscation

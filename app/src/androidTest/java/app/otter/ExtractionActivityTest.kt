@@ -1,13 +1,16 @@
 package app.otter
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.otter.service.ExtractionService
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -22,9 +25,26 @@ class ExtractionActivityTest {
     @get:Rule
     val hiltRule = HiltAndroidRule(this)
 
+    private lateinit var context: Context
+
     @Before
     fun init() {
         hiltRule.inject()
+        context = ApplicationProvider.getApplicationContext()
+    }
+
+    @After
+    fun teardown() {
+        // Stop ExtractionService to prevent resource leaks between tests
+        // Service continues running after Activity closes, causing crashes
+        try {
+            val stopIntent = ExtractionService.newStopIntent(context)
+            context.startService(stopIntent)
+            // Give service sufficient time to stop completely
+            TimeUnit.MILLISECONDS.sleep(500)
+        } catch (e: Exception) {
+            // Ignore if service was already stopped
+        }
     }
 
     @Test

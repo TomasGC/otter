@@ -40,6 +40,22 @@ class ExtractionDestinationResolver @Inject constructor(
         Timber.tag(TAG).d("Resolving destination for: $archiveUri, fileName: $fileName")
         Timber.tag(TAG).d("URI scheme: ${archiveUri.scheme}, authority: ${archiveUri.authority}")
 
+        // Try method 0: Direct file:// URI (works for file browser)
+        if (archiveUri.scheme == "file") {
+            val filePath = archiveUri.path
+            Timber.tag(TAG).d("File URI path: $filePath")
+
+            if (filePath != null) {
+                val parentPath = File(filePath).parent
+                Timber.tag(TAG).d("Parent path from file URI: $parentPath")
+
+                if (parentPath != null) {
+                    Timber.tag(TAG).d("Extracting to same folder as archive (file URI): $parentPath")
+                    return createDestinationFolder(parentPath, fileName)
+                }
+            }
+        }
+
         // Try method 1: MediaStore query (works for Samsung My Files with content://media URIs)
         if (archiveUri.authority == "media") {
             val parentPath = getPathFromMediaStore(archiveUri)
