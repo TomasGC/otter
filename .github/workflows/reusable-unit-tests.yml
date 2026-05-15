@@ -48,3 +48,11 @@ jobs:
           name: unit-test-results
           path: app/build/test-results/testDebugUnitTest/
           retention-days: ${{ inputs.retention-days }}
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-coverage-data
+          path: app/build/jacoco/testDebugUnitTest.exec
+          retention-days: ${{ inputs.retention-days }}

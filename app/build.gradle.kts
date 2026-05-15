@@ -106,9 +106,13 @@ android {
             isReturnDefaultValues = true
             isIncludeAndroidResources = true
             all {
-                // Disable JaCoCo for unit tests to avoid double instrumentation
+                // Configure JaCoCo for unit tests with standard path
                 it.extensions.configure(JacocoTaskExtension::class.java) {
-                    isEnabled = false
+                    isEnabled = true
+                    isIncludeNoLocationClasses = true
+                    excludes = listOf("jdk.internal.*")
+                    // Use standard JaCoCo path instead of Android's default
+                    destinationFile = file("${buildDir}/jacoco/${it.name}.exec")
                 }
                 // Enable test output logging to see println() statements
                 it.testLogging {
@@ -187,6 +191,53 @@ kapt {
     correctErrorTypes = true
 }
 
+// JaCoCo unit test coverage report
+tasks.register<JacocoReport>("jacocoTestDebugUnitTestReport") {
+    dependsOn("testDebugUnitTest")
+
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        xml.outputLocation.set(file("${buildDir}/reports/jacoco/testDebugUnitTestReport/testDebugUnitTestReport.xml"))
+        html.outputLocation.set(file("${buildDir}/reports/jacoco/testDebugUnitTestReport/html"))
+    }
+
+    val fileFilter = listOf(
+        "**/R.class",
+        "**/R$*.class",
+        "**/BuildConfig.*",
+        "**/Manifest*.*",
+        "**/*Test*.*",
+        "android/**/*.*",
+        "**/*_Hilt*.class",
+        "**/*_Factory.class",
+        "**/*_MembersInjector.class",
+        "**/Hilt_*.class",
+        // Android components (difficult to test, will add tests later)
+        "**/ExtractionService.class",
+        "**/ExtractionActivity.class",
+        "**/OtterApplication.class",
+        "**/NotificationHelper.class",
+        // Base class with protected logging methods (tested via concrete implementations)
+        "**/BaseArchiveExtractor.class",
+        "**/BaseArchiveExtractor$*.class"
+    )
+
+    val mainSrc = files("${project.projectDir}/src/main/java")
+    val kotlinDebugTree = fileTree("${project.buildDir}/tmp/kotlin-classes/debug")
+    val javaDebugTree = fileTree("${project.buildDir}/intermediates/javac/debug/classes")
+
+    sourceDirectories.setFrom(mainSrc)
+    classDirectories.setFrom(
+        files(
+            kotlinDebugTree.matching { exclude(fileFilter) },
+            javaDebugTree.matching { exclude(fileFilter) }
+        )
+    )
+
+    executionData.setFrom(files("${buildDir}/jacoco/testDebugUnitTest.exec"))
+}
+
 // Jacoco merged coverage report (unit + instrumented tests)
 tasks.register<JacocoReport>("jacocoMergedReport") {
     dependsOn("testDebugUnitTest", "connectedDebugAndroidTest")
@@ -235,7 +286,7 @@ tasks.register<JacocoReport>("jacocoMergedReport") {
     // Merge execution data from both unit and instrumented tests
     executionData.setFrom(fileTree(buildDir) {
         include(
-            "outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec",
+            "jacoco/testDebugUnitTest.exec",
             "outputs/code_coverage/debugAndroidTest/connected/**/*.ec"
         )
     })

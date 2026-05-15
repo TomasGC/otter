@@ -6,6 +6,10 @@ on:
       - 'feature/**'
       - 'bugfix/**'
 
+concurrency:
+  group: push-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -35,7 +39,7 @@ jobs:
             exit 1
           fi
 
-          echo "✓ Branch name format valid"
+          echo "SUCCESS: Branch name format valid"
 
   validate-commits:
     name: Validate Commit Messages
@@ -89,7 +93,7 @@ jobs:
           fi
 
           echo ""
-          echo "✓ All commit messages valid"
+          echo "SUCCESS: All commit messages valid"
   lint-checks:
     name: Lint Checks
     uses: ./.github/workflows/reusable-lint-checks.yml
@@ -135,13 +139,19 @@ jobs:
         with:
           cache-read-only: false
 
+      - name: Download coverage data
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-test-coverage-data
+          path: app/build/jacoco/
+
       - name: Generate coverage report
-        run: ./gradlew testDebugUnitTestCoverage
+        run: ./gradlew app:jacocoTestDebugUnitTestReport
 
       - name: Extract coverage percentage
         id: coverage
         run: |
-          REPORT="app/build/reports/jacoco/testDebugUnitTestCoverage/html/index.html"
+          REPORT="app/build/reports/jacoco/testDebugUnitTestReport/html/index.html"
 
           if [ ! -f "$REPORT" ]; then
             echo "Coverage report not found"
@@ -149,8 +159,9 @@ jobs:
             exit 0
           fi
 
-          # Extract coverage percentage from HTML report
-          COVERAGE=$(grep -oP 'Total.*?(\d+)%' "$REPORT" | grep -oP '\d+%' | head -1 | tr -d '%')
+          # Extract coverage percentage from HTML report (from <tfoot> Total row)
+          # Format: <tfoot><tr><td>Total</td><td class="bar">X of Y</td><td class="ctr2">ZZ%</td>
+          COVERAGE=$(grep -A 1 '<tfoot>' "$REPORT" | grep 'class="ctr2"' | sed -n 's/.*<td class="ctr2">\([0-9]*\)%.*/\1/p' | head -1)
 
           if [ -z "$COVERAGE" ]; then
             COVERAGE=0
@@ -165,18 +176,27 @@ jobs:
             exit 1
           fi
 
-          echo "✓ Coverage ${COVERAGE}% meets 80% threshold"
+          echo "SUCCESS: Coverage ${COVERAGE}% meets 80% threshold"
 
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: app/build/reports/jacoco/testDebugUnitTestCoverage/
+          path: app/build/reports/jacoco/testDebugUnitTestReport/
           retention-days: 7
 
+      - name: Check if coverage gist secret exists
+        id: check-secret
+        run: |
+          if [ -n "${{ secrets.COVERAGE_GIST_ID }}" ]; then
+            echo "has_secret=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_secret=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create coverage badge
-        if: always()
+        if: always() && steps.check-secret.outputs.has_secret == 'true'
         uses: schneegans/dynamic-badges-action@v1.7.0
         with:
           auth: ${{ secrets.GITHUB_TOKEN }}
