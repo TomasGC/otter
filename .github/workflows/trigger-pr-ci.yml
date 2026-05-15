@@ -1,0 +1,56 @@
+name: Trigger PR-CI After Feature-CI
+
+on:
+  workflow_run:
+    workflows: ["Feature-CI"]
+    types:
+      - completed
+    branches:
+      - 'feature/**'
+      - 'bugfix/**'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  trigger-pr-ci:
+    name: Re-trigger PR-CI
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Find associated PR
+        id: find-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+          echo "Looking for PR from branch: $BRANCH"
+
+          PR_NUMBER=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No open PR found for branch $BRANCH"
+            exit 0
+          fi
+
+          echo "Found PR #$PR_NUMBER"
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+
+      - name: Re-run PR-CI workflow
+        if: steps.find-pr.outputs.pr_number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.find-pr.outputs.pr_number }}"
+
+          # Get latest CI workflow run for this PR
+          RUN_ID=$(gh run list --workflow=ci.yml --json databaseId,headBranch,status \
+            --jq ".[] | select(.headBranch == \"${{ github.event.workflow_run.head_branch }}\") | .databaseId" \
+            --limit 1)
+
+          if [ -n "$RUN_ID" ]; then
+            echo "Re-running CI workflow (run $RUN_ID) for PR #$PR_NUMBER"
+            gh run rerun "$RUN_ID"
+          else
+            echo "No CI workflow run found to re-trigger"
+          fi

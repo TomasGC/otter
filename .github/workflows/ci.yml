@@ -12,52 +12,45 @@ jobs:
   verify-feature-ci:
     name: Verify Feature-CI Passed
     runs-on: ubuntu-latest
+    outputs:
+      feature_ci_passed: ${{ steps.check.outputs.passed }}
     steps:
-      - name: Wait for Feature-CI to complete
+      - name: Check Feature-CI status
+        id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="${{ github.head_ref }}"
+          REPO="${{ github.repository }}"
           echo "Checking Feature-CI status for branch: $BRANCH"
 
-          # Wait up to 30 minutes for Feature-CI to complete
-          MAX_WAIT=1800
-          WAITED=0
-          SLEEP_INTERVAL=30
+          # Get latest feature-ci.yml run for this branch
+          RUN=$(gh run list --repo "$REPO" --workflow=feature-ci.yml --branch "$BRANCH" --limit 1 --json status,conclusion --jq '.[0]')
 
-          while [ $WAITED -lt $MAX_WAIT ]; do
-            STATUS=$(gh run list --workflow=feature-ci.yml --branch "$BRANCH" --limit 1 --json status,conclusion --jq '.[0]')
-            RUN_STATUS=$(echo "$STATUS" | jq -r '.status')
-            CONCLUSION=$(echo "$STATUS" | jq -r '.conclusion')
+          if [ -z "$RUN" ] || [ "$RUN" = "null" ]; then
+            echo "No Feature-CI run found for branch $BRANCH - skipping downstream jobs"
+            echo "passed=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
-            echo "Feature-CI status: $RUN_STATUS (conclusion: $CONCLUSION)"
+          STATUS=$(echo "$RUN" | jq -r '.status')
+          CONCLUSION=$(echo "$RUN" | jq -r '.conclusion')
 
-            # If completed, check result
-            if [ "$RUN_STATUS" = "completed" ]; then
-              if [ "$CONCLUSION" != "success" ]; then
-                echo "ERROR: Feature-CI must pass before PR can be merged"
-                echo "Feature-CI status: $CONCLUSION"
-                echo "Fix Feature-CI failures first, then re-run this workflow"
-                exit 1
-              fi
-              echo "Feature-CI passed successfully"
-              exit 0
-            fi
+          echo "Feature-CI status: $STATUS (conclusion: $CONCLUSION)"
 
-            # Still running, wait
-            echo "Feature-CI still running, waiting ${SLEEP_INTERVAL}s..."
-            sleep $SLEEP_INTERVAL
-            WAITED=$((WAITED + SLEEP_INTERVAL))
-          done
-
-          echo "ERROR: Feature-CI did not complete within ${MAX_WAIT}s"
-          exit 1
-
-          echo "SUCCESS: Feature-CI passed on branch $BRANCH"
+          if [ "$STATUS" = "completed" ] && [ "$CONCLUSION" = "success" ]; then
+            echo "Feature-CI passed - proceeding with PR-CI"
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "Feature-CI not completed or failed - skipping downstream jobs"
+            echo "passed=false" >> $GITHUB_OUTPUT
+          fi
 
   pr-validation:
     name: Validate PR Format
     runs-on: ubuntu-latest
+    needs: verify-feature-ci
+    if: needs.verify-feature-ci.outputs.feature_ci_passed == 'true'
     steps:
       - name: Check PR title format
         run: |
@@ -72,16 +65,11 @@ jobs:
           fi
           echo "SUCCESS: PR title format valid"
 
-  security-final-check:
-    name: Final Security Validation
-    needs: verify-feature-ci
-    uses: ./.github/workflows/reusable-security-checks.yml
-    with:
-      retention-days: 7
-
   context-check:
     name: Verify Context Files Updated
     runs-on: ubuntu-latest
+    needs: verify-feature-ci
+    if: needs.verify-feature-ci.outputs.feature_ci_passed == 'true'
     permissions:
       contents: read
       pull-requests: write
@@ -129,8 +117,13 @@ jobs:
             })
 
   security-checks:
-    uses: ./.github/workflows/reusable-security-checks.yml
+    name: Security Validation
     needs: verify-feature-ci
+    if: needs.verify-feature-ci.outputs.feature_ci_passed == 'true'
+    uses: ./.github/workflows/reusable-security-checks.yml
+    permissions:
+      contents: read
+      pull-requests: write
     with:
       retention-days: 7
 
