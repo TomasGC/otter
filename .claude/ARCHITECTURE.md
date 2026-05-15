@@ -348,6 +348,221 @@ graph TD
 
 ---
 
+## Event-Driven Architecture
+
+### ExtractionEventBus (StateFlow Pattern)
+
+**Problem Solved**: SharedFlow replay mechanism caused timing issues where UI subscribers could miss events between flow creation and collection start.
+
+**Solution**: Migrate to StateFlow for continuous state + SharedFlow for one-off completion events.
+
+#### Architecture Comparison
+
+| Aspect | SharedFlow (before) | StateFlow (after) |
+|--------|-------------------|-------------------|
+| **Initial value** | No value before first emit | Always has value (null or ProgressEvent) |
+| **Late subscribers** | Replay buffer = 1 (can miss event if between emit/collect) | Get current state immediately |
+| **Emission** | `suspend fun` required | Simple assignment `.value =` |
+| **Use case** | One-off events | Continuous observable state |
+| **Testing** | Requires `runTest` with timing management | Direct state checks, no timing issues |
+
+#### Current Architecture
+
+```kotlin
+@Singleton
+class ExtractionEventBus @Inject constructor() {
+    data class ProgressEvent(
+        val currentFile: String,
+        val extractedCount: Int,
+        val totalCount: Int,
+        val progress: Float,
+        val recentFiles: List<String>
+    )
+    
+    // StateFlow for continuous progress state
+    private val _progressState = MutableStateFlow<ProgressEvent?>(null)
+    val progressState: StateFlow<ProgressEvent?> = _progressState.asStateFlow()
+    
+    // SharedFlow for one-off completion event
+    private val _completeEvents = MutableSharedFlow<Unit>(replay = 0)
+    val completeEvents: SharedFlow<Unit> = _completeEvents.asSharedFlow()
+    
+    // Simple state update (no suspend needed)
+    fun emitProgress(
+        currentFile: String,
+        extractedCount: Int,
+        totalCount: Int,
+        progress: Float,
+        recentFiles: List<String>
+    ) {
+        _progressState.value = ProgressEvent(
+            currentFile, extractedCount, totalCount, progress, recentFiles
+        )
+    }
+    
+    suspend fun emitComplete() {
+        _completeEvents.emit(Unit)
+    }
+    
+    fun reset() {
+        _progressState.value = null
+    }
+}
+```
+
+#### Event Flow Sequence
+
+```mermaid
+sequenceDiagram
+    participant Service as ExtractionService
+    participant EventBus as ExtractionEventBus
+    participant UI as ExtractionScreen
+    
+    Note over EventBus: _progressState = null (initial)
+    
+    Service->>EventBus: emitProgress(ProgressEvent)
+    EventBus->>EventBus: _progressState.value = event
+    
+    UI->>EventBus: progressState.collect()
+    EventBus-->>UI: event (current state)
+    UI->>UI: Update UI
+    
+    Note over UI: Late subscriber scenario
+    UI->>EventBus: progressState.collect()
+    EventBus-->>UI: event (gets current state immediately!)
+    
+    Note over Service: Extraction complete
+    Service->>EventBus: emitComplete()
+    EventBus->>UI: completeEvents.emit()
+    Service->>EventBus: reset()
+    EventBus->>EventBus: _progressState.value = null
+```
+
+**Benefits**:
+- ✅ No race conditions or timing issues
+- ✅ Late subscribers always get current state
+- ✅ Simpler testing (no `runTest` timing management)
+- ✅ Clear separation: StateFlow for state, SharedFlow for events
+
+---
+
+### RecentFilesBuffer Component
+
+**Purpose**: Circular FIFO buffer maintaining last N extracted files for UI display.
+
+**Characteristics**:
+- **Fixed capacity**: 5 files maximum
+- **FIFO (First In First Out)**: Oldest file evicted when buffer full
+- **No deduplication**: Same file can appear multiple times
+- **Immutable snapshots**: `getFiles()` returns copy for UI thread safety
+
+#### Implementation
+
+```kotlin
+class RecentFilesBuffer(private val maxSize: Int = 5) {
+    private val buffer = LinkedList<String>()
+    
+    fun add(fileName: String) {
+        buffer.addLast(fileName)
+        if (buffer.size > maxSize) {
+            buffer.removeFirst() // FIFO eviction
+        }
+    }
+    
+    fun getFiles(): List<String> = buffer.toList()
+    fun clear() = buffer.clear()
+}
+```
+
+#### State Diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> Empty: init(maxSize=5)
+    Empty --> HasFiles: add("file1.zip")
+    HasFiles --> HasFiles: add("file2.rar")
+    HasFiles --> Full: add until size=5
+    Full --> Full: add("file6.7z")<br/>removeFirst() [FIFO]
+    
+    note right of Full
+        Buffer: [file2, file3, file4, file5, file6]
+        Oldest (file1) evicted
+    end note
+```
+
+#### Component Integration
+
+```mermaid
+graph LR
+    subgraph ExtractionService
+        A[Extract File Loop]
+    end
+    
+    subgraph RecentFilesBuffer
+        B[LinkedList<String>]
+        C[add/getFiles/clear]
+    end
+    
+    subgraph ExtractionEventBus
+        D[StateFlow progressState]
+    end
+    
+    A -->|add fileName| B
+    B -->|getFiles| C
+    C -->|recentFiles List| D
+    D -->|collect| E[UI ExtractionScreen]
+    
+    style B fill:#ffe1e1
+    style D fill:#e1f5ff
+    style E fill:#f0ffe1
+```
+
+**Usage in ExtractionService**:
+```kotlin
+private val recentFilesBuffer = RecentFilesBuffer(maxSize = 5)
+
+private fun updateProgress(
+    currentFile: String,
+    extractedCount: Int,
+    totalCount: Int,
+    progress: Float
+) {
+    recentFilesBuffer.add(currentFile)
+    eventBus.emitProgress(
+        currentFile = currentFile,
+        extractedCount = extractedCount,
+        totalCount = totalCount,
+        progress = progress,
+        recentFiles = recentFilesBuffer.getFiles()
+    )
+}
+```
+
+---
+
+### UI Animation Patterns
+
+**Brief summary** (Compose standards):
+
+- **Animatable**: Smooth progress interpolation (300ms tween) - eliminates frame-by-frame jumps (0→5→10) in favor of smooth transitions
+- **InfiniteTransition**: Animated "Starting..." dots (cycles 0→1→2→3 dots every 2s) - provides visual feedback during initialization
+
+```kotlin
+// Example: Smooth progress animation
+val animatedProgress = remember { Animatable(0f) }
+
+LaunchedEffect(progress) {
+    animatedProgress.animateTo(
+        targetValue = progress,
+        animationSpec = tween(durationMillis = 300)
+    )
+}
+
+LinearProgressIndicator(progress = animatedProgress.value)
+```
+
+---
+
 ## Data Flow (Background Extraction Process)
 
 ```mermaid
