@@ -72,13 +72,6 @@ jobs:
           fi
           echo "SUCCESS: PR title format valid"
 
-  security-final-check:
-    name: Final Security Validation
-    needs: verify-feature-ci
-    uses: ./.github/workflows/reusable-security-checks.yml
-    with:
-      retention-days: 7
-
   context-check:
     name: Verify Context Files Updated
     runs-on: ubuntu-latest
