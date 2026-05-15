@@ -10,6 +10,86 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  validate-branch:
+    name: Validate Branch Name
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch name format
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          echo "Validating branch name: $BRANCH"
+
+          # Expected format: feature/123-description or bugfix/123-description
+          if ! echo "$BRANCH" | grep -qE '^(feature|bugfix)/[0-9]+-[a-z0-9-]+$'; then
+            echo "ERROR: Invalid branch name format"
+            echo ""
+            echo "Expected format:"
+            echo "  - feature/123-description"
+            echo "  - bugfix/123-description"
+            echo ""
+            echo "Examples:"
+            echo "SUCCESS: feature/42-add-zip-support"
+            echo "SUCCESS: bugfix/13-fix-extraction-crash"
+            echo "ERROR: feature/my-feature (missing issue number)"
+            echo "ERROR: feat/42-something (wrong prefix)"
+            exit 1
+          fi
+
+          echo "✓ Branch name format valid"
+
+  validate-commits:
+    name: Validate Commit Messages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check commit message format
+        run: |
+          echo "Validating commit messages..."
+
+          # Get commits in this push
+          COMMITS=$(git log origin/main..HEAD --format="%H %s")
+
+          if [ -z "$COMMITS" ]; then
+            echo "No new commits to validate"
+            exit 0
+          fi
+
+          INVALID_COUNT=0
+
+          while IFS= read -r line; do
+            HASH=$(echo "$line" | cut -d' ' -f1)
+            MSG=$(echo "$line" | cut -d' ' -f2-)
+
+            echo ""
+            echo "Checking: $MSG"
+
+            # Expected format: #123: type: description
+            if ! echo "$MSG" | grep -qE '^#[0-9]+: (feat|fix|refactor|test|docs|chore|style|perf):'; then
+              echo "  INVALID format"
+              echo "  Expected: #123: type: description"
+              echo "  Types: feat, fix, refactor, test, docs, chore, style, perf"
+              INVALID_COUNT=$((INVALID_COUNT + 1))
+            else
+              echo "SUCCESS: Valid format"
+            fi
+          done <<< "$COMMITS"
+
+          if [ $INVALID_COUNT -gt 0 ]; then
+            echo ""
+            echo "ERROR: Found $INVALID_COUNT invalid commit message(s)"
+            echo ""
+            echo "Valid examples:"
+            echo "SUCCESS: #42: feat: add ZIP extraction support"
+            echo "SUCCESS: #13: fix: resolve null pointer in extractor"
+            echo "SUCCESS: #27: refactor: extract repository pattern"
+            exit 1
+          fi
+
+          echo ""
+          echo "✓ All commit messages valid"
   lint-checks:
     name: Lint Checks
     uses: ./.github/workflows/reusable-lint-checks.yml
@@ -36,3 +116,74 @@ jobs:
     uses: ./.github/workflows/reusable-instrumented-tests.yml
     with:
       retention-days: 3
+
+  coverage-report:
+    name: Generate Coverage Report
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
+        with:
+          cache-read-only: false
+
+      - name: Generate coverage report
+        run: ./gradlew testDebugUnitTestCoverage
+
+      - name: Extract coverage percentage
+        id: coverage
+        run: |
+          REPORT="app/build/reports/jacoco/testDebugUnitTestCoverage/html/index.html"
+
+          if [ ! -f "$REPORT" ]; then
+            echo "Coverage report not found"
+            echo "percentage=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Extract coverage percentage from HTML report
+          COVERAGE=$(grep -oP 'Total.*?(\d+)%' "$REPORT" | grep -oP '\d+%' | head -1 | tr -d '%')
+
+          if [ -z "$COVERAGE" ]; then
+            COVERAGE=0
+          fi
+
+          echo "Coverage: ${COVERAGE}%"
+          echo "percentage=$COVERAGE" >> $GITHUB_OUTPUT
+
+          # Fail if coverage < 80%
+          if [ "$COVERAGE" -lt 80 ]; then
+            echo "ERROR: Coverage ${COVERAGE}% is below 80% threshold"
+            exit 1
+          fi
+
+          echo "✓ Coverage ${COVERAGE}% meets 80% threshold"
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: app/build/reports/jacoco/testDebugUnitTestCoverage/
+          retention-days: 7
+
+      - name: Create coverage badge
+        if: always()
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GITHUB_TOKEN }}
+          gistID: ${{ secrets.COVERAGE_GIST_ID }}
+          filename: otter-coverage.json
+          label: Coverage
+          message: ${{ steps.coverage.outputs.percentage }}%
+          valColorRange: ${{ steps.coverage.outputs.percentage }}
+          maxColorRange: 100
+          minColorRange: 0

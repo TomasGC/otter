@@ -81,16 +81,48 @@ jobs:
       - name: Check if contexts are updated
         id: context-check
         run: |
-          CODE_CHANGES=$(git diff --name-only origin/main...HEAD | grep -E '^app/src/' || true)
-          CONTEXT_CHANGES=$(git diff --name-only origin/main...HEAD | grep -E '^\.claude/(KANBAN|ARCHITECTURE)\.md$' || true)
+          echo "Checking context files..."
 
-          if [ -n "$CODE_CHANGES" ] && [ -z "$CONTEXT_CHANGES" ]; then
+          CODE_CHANGES=$(git diff --name-only origin/main...HEAD | grep -E '^app/src/' || true)
+          KANBAN_UPDATED=$(git diff --name-only origin/main...HEAD | grep -E '^\.claude/KANBAN\.md$' || true)
+          ARCHITECTURE_UPDATED=$(git diff --name-only origin/main...HEAD | grep -E '^\.claude/ARCHITECTURE\.md$' || true)
+
+          MISSING_FILES=""
+          WARNINGS=""
+
+          # KANBAN.md is MANDATORY for all code changes
+          if [ -n "$CODE_CHANGES" ] && [ -z "$KANBAN_UPDATED" ]; then
+            echo "ERROR: KANBAN.md not updated (MANDATORY)"
+            MISSING_FILES="KANBAN.md"
+          fi
+
+          # ARCHITECTURE.md is required if architectural changes detected
+          if [ -n "$CODE_CHANGES" ]; then
+            # Check for architectural indicators
+            ARCH_CHANGES=$(git diff origin/main...HEAD -- app/src/ | grep -E '(class |interface |object |enum |data class |sealed |fun |@Inject|@Singleton|@HiltViewModel|Repository|UseCase|ViewModel)' || true)
+
+            if [ -n "$ARCH_CHANGES" ] && [ -z "$ARCHITECTURE_UPDATED" ]; then
+              echo "WARNING: ARCHITECTURE.md not updated (architectural changes detected)"
+              WARNINGS="ARCHITECTURE.md"
+            fi
+          fi
+
+          # Fail if KANBAN.md missing
+          if [ -n "$MISSING_FILES" ]; then
             echo "needs_update=true" >> $GITHUB_OUTPUT
-            echo "WARNING: Code changes detected but context files not updated"
+            echo "missing=$MISSING_FILES" >> $GITHUB_OUTPUT
+            echo "warnings=$WARNINGS" >> $GITHUB_OUTPUT
             exit 1
+          fi
+
+          # Warn if ARCHITECTURE.md missing
+          if [ -n "$WARNINGS" ]; then
+            echo "needs_update=warning" >> $GITHUB_OUTPUT
+            echo "warnings=$WARNINGS" >> $GITHUB_OUTPUT
+            echo "WARNING: Consider updating ARCHITECTURE.md"
           else
             echo "needs_update=false" >> $GITHUB_OUTPUT
-            echo "SUCCESS: Context files updated or no code changes"
+            echo "SUCCESS: Context files updated"
           fi
 
       - name: Comment on PR if contexts need update
@@ -98,23 +130,38 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const missing = '${{ steps.context-check.outputs.missing }}';
+            const warnings = '${{ steps.context-check.outputs.warnings }}';
+
+            let body = `## Context Files Not Updated\n\n`;
+            body += `This PR modifies code but required context files are missing.\n\n`;
+
+            if (missing.includes('KANBAN.md')) {
+              body += `### KANBAN.md (MANDATORY)\n\n`;
+              body += `- Add entry for this PR/issue\n`;
+              body += `- Update task status\n`;
+              body += `- Document what was done\n\n`;
+            }
+
+            if (warnings.includes('ARCHITECTURE.md')) {
+              body += `### ARCHITECTURE.md (Recommended)\n\n`;
+              body += `Architectural changes detected (new classes, interfaces, DI changes).\n`;
+              body += `Consider updating ARCHITECTURE.md if:\n`;
+              body += `- New modules or layers added\n`;
+              body += `- Design patterns changed\n`;
+              body += `- Component responsibilities changed\n\n`;
+            }
+
+            body += `---\n`;
+            body += `**Why this matters**: Context files preserve project knowledge between sessions and make reviews easier.\n\n`;
+            body += `*Tip: Update the files and amend your commit.*`;
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `## Context Files Not Updated
-
-            This PR modifies code but doesn't update context files.
-
-            **Please update**:
-            - \`.claude/KANBAN.md\` - Add session notes and task status
-            - \`.claude/ARCHITECTURE.md\` - Update if architecture changed
-
-            **Why this matters**: Context files preserve project knowledge between sessions.
-
-            ---
-            *Tip: Update manually and amend your commit.*`
-            })
+              body: body
+            });
 
   security-checks:
     name: Security Validation
