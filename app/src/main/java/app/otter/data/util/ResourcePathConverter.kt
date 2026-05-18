@@ -65,4 +65,83 @@ object ResourcePathConverter {
         val path = getFilePathFromUri(uri) ?: return null
         return File(path)
     }
+
+    /**
+     * Resolves a content:// URI to its real file system path.
+     *
+     * Handles various Android content providers:
+     * - MediaStore (images, videos, audio)
+     * - ExternalStorageProvider (primary storage, SD cards)
+     * - DownloadsProvider (downloads folder)
+     *
+     * @param context Android application context
+     * @param uri The content URI to resolve
+     * @return Real file system path, or null if resolution fails
+     */
+    fun getRealPathFromContentUri(context: Context, uri: Uri): String? {
+        try {
+            // Method 1: Query DATA column (works for some providers)
+            context.contentResolver.query(
+                uri,
+                arrayOf(MediaStore.MediaColumns.DATA),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val columnIndex = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                    if (columnIndex >= 0) {
+                        val path = cursor.getString(columnIndex)
+                        if (!path.isNullOrBlank() && File(path).exists()) {
+                            return path
+                        }
+                    }
+                }
+            }
+
+            // Method 2: For DocumentFile URIs (Documents Provider)
+            if (DocumentsContract.isDocumentUri(context, uri)) {
+                val docId = DocumentsContract.getDocumentId(uri)
+
+                // ExternalStorageProvider
+                if (uri.authority == "com.android.externalstorage.documents") {
+                    val split = docId.split(":")
+                    val type = split[0]
+                    if ("primary".equals(type, ignoreCase = true)) {
+                        return "${android.os.Environment.getExternalStorageDirectory()}/${split[1]}"
+                    }
+                }
+
+                // DownloadsProvider
+                if (uri.authority == "com.android.providers.downloads.documents") {
+                    val contentUri = ContentUris.withAppendedId(
+                        Uri.parse("content://downloads/public_downloads"),
+                        docId.toLongOrNull() ?: return null
+                    )
+                    return getRealPathFromContentUri(context, contentUri)
+                }
+
+                // MediaProvider
+                if (uri.authority == "com.android.providers.media.documents") {
+                    val split = docId.split(":")
+                    val type = split[0]
+
+                    val contentUri = when (type) {
+                        "image" -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                        "video" -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                        "audio" -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                        else -> return null
+                    }
+
+                    val selection = "_id=?"
+                    val selectionArgs = arrayOf(split[1])
+                    return getRealPathFromContentUri(context, contentUri)
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to resolve real path from content URI")
+        }
+
+        return null
+    }
 }
