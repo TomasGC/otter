@@ -143,28 +143,34 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: unit-test-coverage-data
-          path: app/build/jacoco/
+          path: app/build/kover/bin-reports/
 
-      - name: Generate coverage report
-        run: ./gradlew app:jacocoTestDebugUnitTestReport
+      - name: Generate coverage reports
+        run: |
+          ./gradlew koverXmlReportDebug
+          ./gradlew koverHtmlReportDebug
 
       - name: Extract coverage percentage
         id: coverage
         run: |
-          REPORT="app/build/reports/jacoco/testDebugUnitTestReport/html/index.html"
+          XML_REPORT="app/build/reports/kover/reportDebug.xml"
 
-          if [ ! -f "$REPORT" ]; then
+          if [ ! -f "$XML_REPORT" ]; then
             echo "Coverage report not found"
             echo "percentage=0" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          # Extract coverage percentage from HTML report (from <tfoot> Total row)
-          # Format: <tfoot><tr><td>Total</td><td class="bar">X of Y</td><td class="ctr2">ZZ%</td>
-          COVERAGE=$(grep -A 1 '<tfoot>' "$REPORT" | grep 'class="ctr2"' | sed -n 's/.*<td class="ctr2">\([0-9]*\)%.*/\1/p' | head -1)
+          # Parse Kover XML format
+          # Format: <counter type="LINE" missed="X" covered="Y"/>
+          MISSED=$(grep '<counter type="LINE"' "$XML_REPORT" | sed -n 's/.*missed="\([0-9]*\)".*/\1/p')
+          COVERED=$(grep '<counter type="LINE"' "$XML_REPORT" | sed -n 's/.*covered="\([0-9]*\)".*/\1/p')
 
-          if [ -z "$COVERAGE" ]; then
+          TOTAL=$((MISSED + COVERED))
+          if [ "$TOTAL" -eq 0 ]; then
             COVERAGE=0
+          else
+            COVERAGE=$((COVERED * 100 / TOTAL))
           fi
 
           echo "Coverage: ${COVERAGE}%"
@@ -183,7 +189,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: app/build/reports/jacoco/testDebugUnitTestReport/
+          path: app/build/reports/kover/
           retention-days: 7
 
       - name: Check if coverage gist secret exists
