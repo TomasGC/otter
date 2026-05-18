@@ -25,7 +25,10 @@ class FileBrowserRepositoryImpl(
         return try {
 
             val files = when (uri.scheme) {
-                "file" -> listFilesFromFile(File(uri.path ?: return Result.success(emptyList())))
+                "file" -> {
+                    val file = ResourcePathConverter.toFile(uri) ?: return Result.success(emptyList())
+                    listFilesFromFile(file)
+                }
                 "content" -> listFilesFromDocumentFile(uri)
                 else -> {
                     return Result.failure(IllegalArgumentException("Unsupported URI scheme: ${uri.scheme}"))
@@ -96,7 +99,7 @@ class FileBrowserRepositoryImpl(
         val currentUri = ResourcePathConverter.toUri(currentPath)
         val parentUri = when (currentUri.scheme) {
             "file" -> {
-                val file = File(currentUri.path ?: return null)
+                val file = ResourcePathConverter.toFile(currentUri) ?: return null
                 val parent = file.parentFile ?: return null
                 if (parent.path == "/" || parent.path == Environment.getExternalStorageDirectory().path) {
                     return null
@@ -124,7 +127,7 @@ class FileBrowserRepositoryImpl(
         val uri = ResourcePathConverter.toUri(path)
         return when (uri.scheme) {
             "file" -> {
-                val filePath = uri.path ?: return true
+                val filePath = ResourcePathConverter.getFilePathFromUri(uri) ?: return true
                 filePath == "/" || filePath == Environment.getExternalStorageDirectory().path
             }
             "content" -> {

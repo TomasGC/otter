@@ -20,7 +20,9 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.ByteArrayInputStream
@@ -28,6 +30,9 @@ import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 class ArchiveRepositoryImplTest {
+
+    @get:Rule
+    val temporaryFolder = TemporaryFolder()
 
     private lateinit var context: Context
     private lateinit var contentResolver: ContentResolver
@@ -133,7 +138,9 @@ class ArchiveRepositoryImplTest {
     @Test
     fun `should use destination path directly`() = runTest {
         val archive = createTestArchive()
-        val destinationPath = ResourcePath.from("file:///downloads/test")
+        // Create temp destination file for cross-platform compatibility
+        val tempDir = temporaryFolder.newFolder("test")
+        val destinationPath = ResourcePathConverter.fromUri(Uri.fromFile(tempDir))
         val inputStream = ByteArrayInputStream(byteArrayOf())
 
         every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns inputStream
@@ -141,7 +148,7 @@ class ArchiveRepositoryImplTest {
             zipExtractor.extract(any(), any(), any(), any(), any())
         } answers {
             val destFile = secondArg<File>()
-            assertEquals("/downloads/test", destFile.path)
+            assertEquals(tempDir.absolutePath, destFile.absolutePath)
             ExtractionResult.Success(destFile.absolutePath, 3)
         }
 

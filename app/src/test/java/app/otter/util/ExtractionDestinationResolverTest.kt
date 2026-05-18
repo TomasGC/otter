@@ -6,7 +6,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -15,6 +17,9 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class ExtractionDestinationResolverTest {
+
+    @get:Rule
+    val temporaryFolder = TemporaryFolder()
 
     private lateinit var context: Context
     private lateinit var resolver: ExtractionDestinationResolver
@@ -28,7 +33,8 @@ class ExtractionDestinationResolverTest {
     @Test
     fun `should create destination folder from file name`() {
         // Given
-        val parentPath = "/storage/emulated/0/Download"
+        val parentDir = temporaryFolder.newFolder("Download")
+        val parentPath = parentDir.absolutePath
         val fileName = "archive.zip"
 
         // When
@@ -251,7 +257,9 @@ class ExtractionDestinationResolverTest {
     @Test
     fun `should handle nested parent path`() {
         // Given
-        val parentPath = "/storage/emulated/0/Download/folder1/folder2"
+        val rootDir = temporaryFolder.newFolder("Download")
+        val nestedDir = temporaryFolder.newFolder("Download", "folder1", "folder2")
+        val parentPath = nestedDir.absolutePath
         val fileName = "archive.zip"
 
         // When

@@ -46,7 +46,7 @@ class ArchiveFileFactory @Inject constructor(
     }
 
     private fun createFromFileUri(path: ResourcePath, uri: Uri, fileName: String): ArchiveFile? {
-        val file = File(uri.path ?: return null)
+        val file = ResourcePathConverter.toFile(uri) ?: return null
         if (!file.exists() || !file.isFile) {
             return null
         }

@@ -3,13 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("com.google.dagger.hilt.android")
     id("kotlin-kapt")
-    id("jacoco")
+    id("org.jetbrains.kotlinx.kover")
     id("org.owasp.dependencycheck") version "8.4.0"
     id("io.gitlab.arturbosch.detekt")
-}
-
-jacoco {
-    toolVersion = "0.8.11"
 }
 
 android {
@@ -53,7 +49,7 @@ android {
 
     buildTypes {
         debug {
-            isTestCoverageEnabled = true
+            // Kover handles coverage automatically, no need for explicit flags
             signingConfig = signingConfigs.getByName("debug")
         }
         release {
@@ -106,15 +102,9 @@ android {
             isReturnDefaultValues = true
             isIncludeAndroidResources = true
             all {
-                // Configure JaCoCo for unit tests with standard path
-                it.extensions.configure(JacocoTaskExtension::class.java) {
-                    isEnabled = true
-                    isIncludeNoLocationClasses = true
-                    excludes = listOf("jdk.internal.*")
-                    // Use standard JaCoCo path instead of Android's default
-                    destinationFile = file("${buildDir}/jacoco/${it.name}.exec")
-                }
-                // Enable test output logging to see println() statements
+                // Increase heap for tests
+                it.maxHeapSize = "2048m"
+                // Enable test output logging
                 it.testLogging {
                     events("passed", "skipped", "failed", "standardOut", "standardError")
                     showStandardStreams = true
@@ -191,105 +181,39 @@ kapt {
     correctErrorTypes = true
 }
 
-// JaCoCo unit test coverage report
-tasks.register<JacocoReport>("jacocoTestDebugUnitTestReport") {
-    dependsOn("testDebugUnitTest")
-
-    reports {
-        xml.required.set(true)
-        html.required.set(true)
-        xml.outputLocation.set(file("${buildDir}/reports/jacoco/testDebugUnitTestReport/testDebugUnitTestReport.xml"))
-        html.outputLocation.set(file("${buildDir}/reports/jacoco/testDebugUnitTestReport/html"))
+// Kover configuration (coverage tool optimized for Kotlin + Robolectric)
+koverReport {
+    filters {
+        excludes {
+            classes(
+                "**/R.class",
+                "**/R$*.class",
+                "**/BuildConfig.*",
+                "**/Manifest*.*",
+                "**/*Test*.*",
+                "android.*",
+                "androidx.*",
+                "**/*_Hilt*",
+                "**/*_Factory",
+                "**/*_MembersInjector",
+                "**/Hilt_*",
+                // Android components (difficult to test, will add tests later)
+                "**/ExtractionService",
+                "**/ExtractionActivity",
+                "**/OtterApplication",
+                "**/NotificationHelper",
+                // Base class with protected logging methods (tested via concrete implementations)
+                "**/BaseArchiveExtractor",
+                "**/BaseArchiveExtractor$*"
+            )
+        }
     }
 
-    val fileFilter = listOf(
-        "**/R.class",
-        "**/R$*.class",
-        "**/BuildConfig.*",
-        "**/Manifest*.*",
-        "**/*Test*.*",
-        "android/**/*.*",
-        "**/*_Hilt*.class",
-        "**/*_Factory.class",
-        "**/*_MembersInjector.class",
-        "**/Hilt_*.class",
-        // Android components (difficult to test, will add tests later)
-        "**/ExtractionService.class",
-        "**/ExtractionActivity.class",
-        "**/OtterApplication.class",
-        "**/NotificationHelper.class",
-        // Base class with protected logging methods (tested via concrete implementations)
-        "**/BaseArchiveExtractor.class",
-        "**/BaseArchiveExtractor$*.class"
-    )
-
-    val mainSrc = files("${project.projectDir}/src/main/java")
-    val kotlinDebugTree = fileTree("${project.buildDir}/tmp/kotlin-classes/debug")
-    val javaDebugTree = fileTree("${project.buildDir}/intermediates/javac/debug/classes")
-
-    sourceDirectories.setFrom(mainSrc)
-    classDirectories.setFrom(
-        files(
-            kotlinDebugTree.matching { exclude(fileFilter) },
-            javaDebugTree.matching { exclude(fileFilter) }
-        )
-    )
-
-    executionData.setFrom(files("${buildDir}/jacoco/testDebugUnitTest.exec"))
-}
-
-// Jacoco merged coverage report (unit + instrumented tests)
-tasks.register<JacocoReport>("jacocoMergedReport") {
-    dependsOn("testDebugUnitTest", "connectedDebugAndroidTest")
-
-    reports {
-        xml.required.set(true)
-        html.required.set(true)
-        xml.outputLocation.set(file("${buildDir}/reports/jacoco/jacocoMergedReport/jacocoMergedReport.xml"))
-        html.outputLocation.set(file("${buildDir}/reports/jacoco/jacocoMergedReport/html"))
+    verify {
+        rule {
+            minBound(80) // Minimum 80% coverage
+        }
     }
-
-    val fileFilter = listOf(
-        "**/R.class",
-        "**/R$*.class",
-        "**/BuildConfig.*",
-        "**/Manifest*.*",
-        "**/*Test*.*",
-        "android/**/*.*",
-        "**/*_Hilt*.class",
-        "**/*_Factory.class",
-        "**/*_MembersInjector.class",
-        "**/Hilt_*.class",
-        // Android components (difficult to test, will add tests later)
-        "**/ExtractionService.class",
-        "**/ExtractionActivity.class",
-        "**/OtterApplication.class",
-        "**/NotificationHelper.class",
-        // Base class with protected logging methods (tested via concrete implementations)
-        "**/BaseArchiveExtractor.class",
-        "**/BaseArchiveExtractor$*.class"
-    )
-
-    val mainSrc = files("${project.projectDir}/src/main/java")
-
-    val kotlinDebugTree = fileTree("${project.buildDir}/tmp/kotlin-classes/debug")
-    val javaDebugTree = fileTree("${project.buildDir}/intermediates/javac/debug/classes")
-
-    sourceDirectories.setFrom(mainSrc)
-    classDirectories.setFrom(
-        files(
-            kotlinDebugTree.matching { exclude(fileFilter) },
-            javaDebugTree.matching { exclude(fileFilter) }
-        )
-    )
-
-    // Merge execution data from both unit and instrumented tests
-    executionData.setFrom(fileTree(buildDir) {
-        include(
-            "jacoco/testDebugUnitTest.exec",
-            "outputs/code_coverage/debugAndroidTest/connected/**/*.ec"
-        )
-    })
 }
 
 // Dependency check configuration

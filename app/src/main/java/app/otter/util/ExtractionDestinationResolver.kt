@@ -3,6 +3,7 @@ package app.otter.util
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import app.otter.data.util.ResourcePathConverter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import androidx.documentfile.provider.DocumentFile
@@ -42,11 +43,11 @@ class ExtractionDestinationResolver @Inject constructor(
 
         // Try method 0: Direct file:// URI (works for file browser)
         if (archiveUri.scheme == "file") {
-            val filePath = archiveUri.path
-            Timber.tag(TAG).d("File URI path: $filePath")
+            val file = ResourcePathConverter.toFile(archiveUri)
+            Timber.tag(TAG).d("File URI path: ${file?.absolutePath}")
 
-            if (filePath != null) {
-                val parentPath = File(filePath).parent
+            if (file != null) {
+                val parentPath = file.parent
                 Timber.tag(TAG).d("Parent path from file URI: $parentPath")
 
                 if (parentPath != null) {
