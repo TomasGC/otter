@@ -1,6 +1,7 @@
 package app.otter.data.util
 
 import android.content.ContentResolver
+import android.content.ContentUris
 import android.content.Context
 import android.database.MatrixCursor
 import android.net.Uri
@@ -290,6 +291,105 @@ class ResourcePathConverterTest {
 
         val result = ResourcePathConverter.getRealPathFromContentUri(mockContext, uri)
 
+        assertNull(result)
+    }
+
+    @Test
+    fun `getRealPathFromContentUri handles MediaProvider with image type`() {
+        val uri = Uri.parse("content://com.android.providers.media.documents/document/image%3A123")
+
+        mockkStatic(DocumentsContract::class)
+        every { DocumentsContract.isDocumentUri(mockContext, uri) } returns true
+        every { DocumentsContract.getDocumentId(uri) } returns "image:123"
+
+        // Mock query to return null (so it falls through to Document provider logic)
+        every {
+            mockContentResolver.query(any(), any(), any(), any(), any())
+        } returns null
+
+        // The method will call getRealPathFromContentUri recursively with MediaStore.Images URI
+        // which will return null (no DATA column)
+        val result = ResourcePathConverter.getRealPathFromContentUri(mockContext, uri)
+
+        // Expected: null because recursive call returns null
+        assertNull(result)
+    }
+
+    @Test
+    fun `getRealPathFromContentUri handles MediaProvider with video type`() {
+        val uri = Uri.parse("content://com.android.providers.media.documents/document/video%3A456")
+
+        mockkStatic(DocumentsContract::class)
+        every { DocumentsContract.isDocumentUri(mockContext, uri) } returns true
+        every { DocumentsContract.getDocumentId(uri) } returns "video:456"
+
+        // Mock query to return null
+        every {
+            mockContentResolver.query(any(), any(), any(), any(), any())
+        } returns null
+
+        val result = ResourcePathConverter.getRealPathFromContentUri(mockContext, uri)
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `getRealPathFromContentUri handles MediaProvider with audio type`() {
+        val uri = Uri.parse("content://com.android.providers.media.documents/document/audio%3A789")
+
+        mockkStatic(DocumentsContract::class)
+        every { DocumentsContract.isDocumentUri(mockContext, uri) } returns true
+        every { DocumentsContract.getDocumentId(uri) } returns "audio:789"
+
+        // Mock query to return null
+        every {
+            mockContentResolver.query(any(), any(), any(), any(), any())
+        } returns null
+
+        val result = ResourcePathConverter.getRealPathFromContentUri(mockContext, uri)
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `getRealPathFromContentUri handles MediaProvider with unknown type`() {
+        val uri = Uri.parse("content://com.android.providers.media.documents/document/other%3A999")
+
+        mockkStatic(DocumentsContract::class)
+        every { DocumentsContract.isDocumentUri(mockContext, uri) } returns true
+        every { DocumentsContract.getDocumentId(uri) } returns "other:999"
+
+        // Mock query to return null
+        every {
+            mockContentResolver.query(any(), any(), any(), any(), any())
+        } returns null
+
+        val result = ResourcePathConverter.getRealPathFromContentUri(mockContext, uri)
+
+        // Expected: null because type "other" is not handled
+        assertNull(result)
+    }
+
+    @Test
+    fun `getRealPathFromContentUri handles DownloadsProvider with valid docId`() {
+        val uri = Uri.parse("content://com.android.providers.downloads.documents/document/123")
+
+        mockkStatic(DocumentsContract::class)
+        every { DocumentsContract.isDocumentUri(mockContext, uri) } returns true
+        every { DocumentsContract.getDocumentId(uri) } returns "123"
+
+        mockkStatic(ContentUris::class)
+        val downloadsUri = Uri.parse("content://downloads/public_downloads/123")
+        every { ContentUris.withAppendedId(any(), 123) } returns downloadsUri
+
+        // Mock query to return null (recursive call returns null)
+        every {
+            mockContentResolver.query(any(), any(), any(), any(), any())
+        } returns null
+
+        val result = ResourcePathConverter.getRealPathFromContentUri(mockContext, uri)
+
+        // Expected: null because recursive call returns null
         assertNull(result)
     }
 }
