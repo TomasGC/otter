@@ -131,145 +131,61 @@ fun FileBrowserScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    when (val state = uiState) {
-                        is FileBrowserUiState.Success -> {
-                            if (state.isSelectionMode) {
-                                Text("${state.selectedCount} selected")
-                            } else {
-                                Text(
-                                    text = state.currentPath,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+            FileBrowserTopAppBar(
+                uiState = uiState,
+                onNavigateUp = { viewModel.navigateUp() },
+                onExitSelectionMode = { viewModel.exitSelectionMode() },
+                onSelectAll = { viewModel.selectAllArchives() },
+                onExtractSelected = {
+                    val selected = viewModel.getSelectedFiles().filter { it.isArchive }
+                    if (selected.isNotEmpty()) {
+                        // Take persistent permissions for content:// URIs
+                        selected.forEach { file ->
+                            val uri = ResourcePathConverter.toUri(file.path)
+                            if (uri.scheme == "content") {
+                                try {
+                                    context.contentResolver.takePersistableUriPermission(
+                                        uri,
+                                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                    )
+                                } catch (e: Exception) {
+                                    // Permission already held or not available
+                                }
                             }
                         }
-                        else -> Text("File Browser")
+
+                        // Add all to queue
+                        val tasks = selected.map { file ->
+                            app.otter.service.ExtractionQueue.ExtractionTask(
+                                archiveUri = file.path,
+                                fileName = file.name
+                            )
+                        }
+                        viewModel.extractionQueue.enqueueAll(tasks)
+
+                        // Show extraction UI immediately
+                        viewModel.startExtraction(fileName = "${selected.size} archives")
+
+                        // Start processing queue
+                        viewModel.extractionQueue.processNext(context)
+
+                        viewModel.exitSelectionMode()
                     }
                 },
-                navigationIcon = {
+                onToggleFilter = { viewModel.toggleArchiveFilter() },
+                onCycleSortOrder = {
                     val state = uiState as? FileBrowserUiState.Success
-                    if (state?.isSelectionMode == true) {
-                        IconButton(onClick = { viewModel.exitSelectionMode() }) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Exit selection mode"
-                            )
-                        }
-                    } else {
-                        val canNavigateUp = state?.canNavigateUp == true
-                        IconButton(
-                            onClick = { viewModel.navigateUp() },
-                            enabled = canNavigateUp
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Navigate up"
-                            )
-                        }
+                    val currentOrder = state?.sortOrder ?: SortOrder.ARCHIVES_FIRST
+                    val nextOrder = when (currentOrder) {
+                        SortOrder.ARCHIVES_FIRST -> SortOrder.NAME_ASC
+                        SortOrder.NAME_ASC -> SortOrder.NAME_DESC
+                        SortOrder.NAME_DESC -> SortOrder.SIZE_DESC
+                        SortOrder.SIZE_DESC -> SortOrder.ARCHIVES_FIRST
+                        SortOrder.SIZE_ASC -> SortOrder.ARCHIVES_FIRST
                     }
+                    viewModel.setSortOrder(nextOrder)
                 },
-                actions = {
-                    val state = uiState as? FileBrowserUiState.Success
-
-                    if (state?.isSelectionMode == true) {
-                        // Select All button
-                        TextButton(
-                            onClick = {
-                                viewModel.selectAllArchives()
-                            }
-                        ) {
-                            Text("Select All")
-                        }
-
-                        // Extract button in selection mode
-                        IconButton(
-                            onClick = {
-                                val selected = viewModel.getSelectedFiles().filter { it.isArchive }
-                                if (selected.isNotEmpty()) {
-
-                                    // Take persistent permissions for content:// URIs
-                                    selected.forEach { file ->
-                                        val uri = ResourcePathConverter.toUri(file.path)
-                                        if (uri.scheme == "content") {
-                                            try {
-                                                context.contentResolver.takePersistableUriPermission(
-                                                    uri,
-                                                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                                                )
-                                            } catch (e: Exception) {
-                                            }
-                                        }
-                                    }
-
-                                    // Add all to queue
-                                    val tasks = selected.map { file ->
-                                        app.otter.service.ExtractionQueue.ExtractionTask(
-                                            archiveUri = file.path,
-                                            fileName = file.name
-                                        )
-                                    }
-                                    viewModel.extractionQueue.enqueueAll(tasks)
-
-                                    // Show extraction UI immediately
-                                    viewModel.startExtraction(fileName = "${selected.size} archives")
-
-                                    // Start processing queue
-                                    viewModel.extractionQueue.processNext(context)
-
-                                    viewModel.exitSelectionMode()
-                                }
-                            },
-                            enabled = state.selectedCount > 0
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Archive,
-                                contentDescription = "Extract selected"
-                            )
-                        }
-                    } else {
-                        // Filter archives only
-                        val isFilterActive = state?.filterArchivesOnly == true
-                        IconButton(onClick = { viewModel.toggleArchiveFilter() }) {
-                            Icon(
-                                imageVector = Icons.Default.FilterList,
-                                contentDescription = "Filter archives only",
-                                tint = if (isFilterActive) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                }
-                            )
-                        }
-
-                        // Sort options (cycle through)
-                        IconButton(onClick = {
-                            val currentOrder = state?.sortOrder ?: SortOrder.ARCHIVES_FIRST
-                            val nextOrder = when (currentOrder) {
-                                SortOrder.ARCHIVES_FIRST -> SortOrder.NAME_ASC
-                                SortOrder.NAME_ASC -> SortOrder.NAME_DESC
-                                SortOrder.NAME_DESC -> SortOrder.SIZE_DESC
-                                SortOrder.SIZE_DESC -> SortOrder.ARCHIVES_FIRST
-                                SortOrder.SIZE_ASC -> SortOrder.ARCHIVES_FIRST
-                            }
-                            viewModel.setSortOrder(nextOrder)
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.Sort,
-                                contentDescription = "Sort order"
-                            )
-                        }
-
-                        // Refresh
-                        IconButton(onClick = { viewModel.refresh() }) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Refresh"
-                            )
-                        }
-                    }
-                }
+                onRefresh = { viewModel.refresh() }
             )
         }
     ) { paddingValues ->
@@ -278,91 +194,33 @@ fun FileBrowserScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            when (val state = uiState) {
-                is FileBrowserUiState.Loading -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                }
-
-                is FileBrowserUiState.Extracting -> {
-                    ExtractionScreen(
-                        fileName = state.fileName,
-                        eventBus = viewModel.eventBus,
-                        onComplete = {
-                            viewModel.moveExtractionToBackground()
-                        }
-                    )
-                }
-
-                is FileBrowserUiState.Success -> {
-                    if (state.files.isEmpty()) {
-                        Text(
-                            text = "Empty directory",
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .padding(16.dp),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+            FileBrowserContent(
+                uiState = uiState,
+                eventBus = viewModel.eventBus,
+                isFileSelected = { file -> viewModel.isFileSelected(file) },
+                onMoveExtractionToBackground = { viewModel.moveExtractionToBackground() },
+                onFileClick = { file ->
+                    val state = uiState as? FileBrowserUiState.Success
+                    if (state?.isSelectionMode == true) {
+                        viewModel.toggleFileSelection(file)
                     } else {
-                        LazyColumn {
-                            items(
-                                items = state.files,
-                                key = { file -> file.path.toString() }
-                            ) { file ->
-                                FileItemRow(
-                                    fileItem = file,
-                                    isSelectionMode = state.isSelectionMode,
-                                    isSelected = viewModel.isFileSelected(file),
-                                    onClick = {
-                                        if (state.isSelectionMode) {
-                                            viewModel.toggleFileSelection(file)
-                                        } else {
-                                            if (file.isDirectory) {
-                                                viewModel.navigateInto(file)
-                                            } else if (file.isArchive) {
-                                                // Show confirmation dialog
-                                                fileToExtract = file
-                                                showConfirmDialog = true
-                                            } else {
-                                                // Regular files - do nothing for now
-                                            }
-                                        }
-                                    },
-                                    onLongClick = {
-                                        if (!state.isSelectionMode) {
-                                            viewModel.enterSelectionMode()
-                                            viewModel.toggleFileSelection(file)
-                                        }
-                                    }
-                                )
+                        when {
+                            file.isDirectory -> viewModel.navigateInto(file)
+                            file.isArchive -> {
+                                fileToExtract = file
+                                showConfirmDialog = true
                             }
                         }
                     }
-                }
-
-                is FileBrowserUiState.Error -> {
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "Error",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                        Text(
-                            text = state.message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                },
+                onFileLongClick = { file ->
+                    val state = uiState as? FileBrowserUiState.Success
+                    if (state?.isSelectionMode == false) {
+                        viewModel.enterSelectionMode()
+                        viewModel.toggleFileSelection(file)
                     }
                 }
-            }
+            )
 
             // Version label in bottom-left corner
             app.otter.ui.component.VersionLabel(

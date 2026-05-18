@@ -1,124 +1,31 @@
 #!/usr/bin/env pwsh
 #Requires -Version 7.0
 
+# ============================================================================
+# CRITICAL: using module MUST be at the very top (parse-time, not runtime)
+# ============================================================================
+using module "./scripts/BuildHelper.psm1"
+
 <#
 .SYNOPSIS
     Build Otter APK with automatic version increment
 .DESCRIPTION
-    Increments version (versionCode and versionName) and builds APK via Docker.
+    Increments version (versionCode and versionName) and builds APK.
+    Supports both local Gradle and Docker execution.
 .PARAMETER IncrementOnly
     Only increment version without building
+.PARAMETER Docker
+    Run build inside Docker container
 .EXAMPLE
     .\build.ps1
     .\build.ps1 -IncrementOnly
+    .\build.ps1 -Docker
 #>
 
 param(
-    [switch]$IncrementOnly
+    [switch]$IncrementOnly,
+    [switch]$Docker
 )
-
-function Update-AppVersion {
-    <#
-    .SYNOPSIS
-        Increment version in build.gradle.kts
-    #>
-
-    $buildFile = [System.IO.Path]::Combine($PSScriptRoot, "app", "build.gradle.kts")
-
-    if (-not [System.IO.File]::Exists($buildFile)) {
-        Write-Error "build.gradle.kts not found at $buildFile"
-        return $false
-    }
-
-    $content = [System.IO.File]::ReadAllText($buildFile)
-
-    # Extract and increment versionCode
-    if ($content -match 'versionCode = (\d+)') {
-        $currentVersionCode = [int]$matches[1]
-        $newVersionCode = $currentVersionCode + 1
-        Write-Host "Incrementing versionCode: $currentVersionCode -> $newVersionCode"
-        $content = $content -replace 'versionCode = \d+', "versionCode = $newVersionCode"
-    }
-    else {
-        Write-Error "Could not find versionCode in build.gradle.kts"
-        return $false
-    }
-
-    # Extract and increment versionName (patch)
-    if ($content -match 'versionName = "(\d+)\.(\d+)\.(\d+)"') {
-        $major = $matches[1]
-        $minor = $matches[2]
-        $patch = [int]$matches[3]
-        $newPatch = $patch + 1
-        $newVersionName = "$major.$minor.$newPatch"
-        Write-Host "Incrementing versionName: $major.$minor.$patch -> $newVersionName"
-        $content = $content -replace 'versionName = "\d+\.\d+\.\d+"', "versionName = `"$newVersionName`""
-    }
-    else {
-        Write-Error "Could not find versionName in build.gradle.kts"
-        return $false
-    }
-
-    # Write back to file
-    [System.IO.File]::WriteAllText($buildFile, $content)
-
-    Write-Host "✅ Version incremented successfully!" -ForegroundColor Green
-    Write-Host "   versionCode: $newVersionCode" -ForegroundColor Cyan
-    Write-Host "   versionName: $newVersionName" -ForegroundColor Cyan
-
-    return $true
-}
-
-function Get-GradlewCommand {
-    <#
-    .SYNOPSIS
-        Get the correct Gradle wrapper command for the platform
-    #>
-    if ($IsWindows -or ($PSVersionTable.PSVersion.Major -le 5)) {
-        $gradlewPath = [System.IO.Path]::Combine($PSScriptRoot, "gradlew.bat")
-        if ([System.IO.File]::Exists($gradlewPath)) {
-            return $gradlewPath
-        }
-    }
-
-    # Fallback to Unix gradlew
-    return [System.IO.Path]::Combine($PSScriptRoot, "gradlew")
-}
-
-function Invoke-ApkBuild {
-    <#
-    .SYNOPSIS
-        Build APK via Gradle
-    #>
-
-    Write-Host "🔨 Building APK via Gradle..." -ForegroundColor Yellow
-
-    $gradlewPath = Get-GradlewCommand
-
-    if (-not [System.IO.File]::Exists($gradlewPath)) {
-        Write-Error "gradlew not found at $gradlewPath"
-        return $false
-    }
-
-    # Stop any running Gradle daemons first
-    Write-Host "🛑 Stopping Gradle daemons..." -ForegroundColor Gray
-    & $gradlewPath --stop | Out-Null
-
-    # Build APK
-    Write-Host "▶️ Running: ./gradlew assembleDebug" -ForegroundColor Gray
-    & $gradlewPath assembleDebug
-
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host ""
-        Write-Host "✅ APK built successfully!" -ForegroundColor Green
-        Write-Host "📦 Location: app\build\outputs\apk\debug\app-debug.apk" -ForegroundColor Cyan
-        return $true
-    }
-    else {
-        Write-Error "Build failed with exit code $LASTEXITCODE"
-        return $false
-    }
-}
 
 # ============================================================================
 # Main Script
@@ -128,27 +35,35 @@ Write-Host "🚀 Otter Build Script" -ForegroundColor Cyan
 Write-Host ""
 
 # Step 1: Increment version
-Write-Host "Step 1: Incrementing version..." -ForegroundColor Yellow
-$versionSuccess = Update-AppVersion
+Write-Header "Step 1: Incrementing version"
+$buildFile = [System.IO.Path]::Combine($PSScriptRoot, "app", "build.gradle.kts")
+$versionSuccess = [VersionManager]::IncrementVersion($buildFile)
 
 if (-not $versionSuccess) {
-    Write-Error "Failed to increment version"
+    Write-Failure "Failed to increment version"
     exit 1
 }
-
-Write-Host ""
 
 # Step 2: Build APK (unless -IncrementOnly)
 if ($IncrementOnly) {
-    Write-Host "✅ Version incremented (build skipped)" -ForegroundColor Green
+    Write-Success "Version incremented (build skipped)"
     exit 0
 }
 
-Write-Host "Step 2: Building APK..." -ForegroundColor Yellow
-$buildSuccess = Invoke-ApkBuild
+Write-Header "Step 2: Building APK"
+$runner = [GradleRunner]::new($PSScriptRoot, $Docker)
+$runner.StopDaemons()
 
-if (-not $buildSuccess) {
+Write-Step "Running assembleDebug..."
+$buildSuccess = $runner.ExecuteTask("assembleDebug", @())
+
+if ($buildSuccess) {
+    Write-Host ""
+    Write-Success "APK built successfully!"
+    Write-Info "Location: app\build\outputs\apk\debug\app-debug.apk"
+    exit 0
+}
+else {
+    Write-Failure "Build failed"
     exit 1
 }
-
-exit 0
