@@ -1,0 +1,186 @@
+name: PR-CI
+
+on:
+  pull_request:
+    branches: [ main ]
+    types: [ opened, synchronize, reopened ]
+
+concurrency:
+  group: pr-ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  verify-push-ci:
+    name: Verify Push-CI Passed
+    runs-on: ubuntu-latest
+    outputs:
+      push_ci_passed: ${{ steps.check.outputs.passed }}
+    steps:
+      - name: Check Push-CI status
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          REPO="${{ github.repository }}"
+          echo "Checking Push-CI status for branch: $BRANCH"
+
+          # Get latest push-ci.yml run for this branch
+          RUN=$(gh run list --repo "$REPO" --workflow=push-ci.yml --branch "$BRANCH" --limit 1 --json status,conclusion --jq '.[0]')
+
+          if [ -z "$RUN" ] || [ "$RUN" = "null" ]; then
+            echo "No Push-CI run found for branch $BRANCH - skipping downstream jobs"
+            echo "passed=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          STATUS=$(echo "$RUN" | jq -r '.status')
+          CONCLUSION=$(echo "$RUN" | jq -r '.conclusion')
+
+          echo "Push-CI status: $STATUS (conclusion: $CONCLUSION)"
+
+          if [ "$STATUS" = "completed" ] && [ "$CONCLUSION" = "success" ]; then
+            echo "Push-CI passed - proceeding with PR-CI"
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "Push-CI not completed or failed - skipping downstream jobs"
+            echo "passed=false" >> $GITHUB_OUTPUT
+          fi
+
+  pr-validation:
+    name: Validate PR Format
+    runs-on: ubuntu-latest
+    needs: verify-push-ci
+    if: needs.verify-push-ci.outputs.push_ci_passed == 'true'
+    steps:
+      - name: Check PR title format
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          if ! echo "$PR_TITLE" | grep -qE '^#[0-9]+: (feat|fix|refactor|test|docs|chore|style|perf):'; then
+            echo "ERROR: PR title must follow format: #123: type: description"
+            echo "Examples:"
+            echo "  #1: feat: add ZIP extraction"
+            echo "  #2: fix: resolve null pointer in extractor"
+            echo "  #3: refactor: extract repository pattern"
+            exit 1
+          fi
+          echo "SUCCESS: PR title format valid"
+
+  context-check:
+    name: Verify Context Files Updated
+    runs-on: ubuntu-latest
+    needs: verify-push-ci
+    if: needs.verify-push-ci.outputs.push_ci_passed == 'true'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if contexts are updated
+        id: context-check
+        run: |
+          echo "Checking context files..."
+
+          CODE_CHANGES=$(git diff --name-only origin/main...HEAD | grep -E '^app/src/' || true)
+          KANBAN_UPDATED=$(git diff --name-only origin/main...HEAD | grep -E '^\.claude/KANBAN\.md$' || true)
+          ARCHITECTURE_UPDATED=$(git diff --name-only origin/main...HEAD | grep -E '^\.claude/ARCHITECTURE\.md$' || true)
+
+          MISSING_FILES=""
+          WARNINGS=""
+
+          # KANBAN.md is MANDATORY for all code changes
+          if [ -n "$CODE_CHANGES" ] && [ -z "$KANBAN_UPDATED" ]; then
+            echo "ERROR: KANBAN.md not updated (MANDATORY)"
+            MISSING_FILES="KANBAN.md"
+          fi
+
+          # ARCHITECTURE.md is required if architectural changes detected
+          if [ -n "$CODE_CHANGES" ]; then
+            # Check for architectural indicators
+            ARCH_CHANGES=$(git diff origin/main...HEAD -- app/src/ | grep -E '(class |interface |object |enum |data class |sealed |fun |@Inject|@Singleton|@HiltViewModel|Repository|UseCase|ViewModel)' || true)
+
+            if [ -n "$ARCH_CHANGES" ] && [ -z "$ARCHITECTURE_UPDATED" ]; then
+              echo "WARNING: ARCHITECTURE.md not updated (architectural changes detected)"
+              WARNINGS="ARCHITECTURE.md"
+            fi
+          fi
+
+          # Fail if KANBAN.md missing
+          if [ -n "$MISSING_FILES" ]; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "missing=$MISSING_FILES" >> $GITHUB_OUTPUT
+            echo "warnings=$WARNINGS" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          # Warn if ARCHITECTURE.md missing
+          if [ -n "$WARNINGS" ]; then
+            echo "needs_update=warning" >> $GITHUB_OUTPUT
+            echo "warnings=$WARNINGS" >> $GITHUB_OUTPUT
+            echo "WARNING: Consider updating ARCHITECTURE.md"
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "SUCCESS: Context files updated"
+          fi
+
+      - name: Comment on PR if contexts need update
+        if: failure() && steps.context-check.outputs.needs_update == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const missing = '${{ steps.context-check.outputs.missing }}';
+            const warnings = '${{ steps.context-check.outputs.warnings }}';
+
+            let body = `## Context Files Not Updated\n\n`;
+            body += `This PR modifies code but required context files are missing.\n\n`;
+
+            if (missing.includes('KANBAN.md')) {
+              body += `### KANBAN.md (MANDATORY)\n\n`;
+              body += `- Add entry for this PR/issue\n`;
+              body += `- Update task status\n`;
+              body += `- Document what was done\n\n`;
+            }
+
+            if (warnings.includes('ARCHITECTURE.md')) {
+              body += `### ARCHITECTURE.md (Recommended)\n\n`;
+              body += `Architectural changes detected (new classes, interfaces, DI changes).\n`;
+              body += `Consider updating ARCHITECTURE.md if:\n`;
+              body += `- New modules or layers added\n`;
+              body += `- Design patterns changed\n`;
+              body += `- Component responsibilities changed\n\n`;
+            }
+
+            body += `---\n`;
+            body += `**Why this matters**: Context files preserve project knowledge between sessions and make reviews easier.\n\n`;
+            body += `*Tip: Update the files and amend your commit.*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  security-checks:
+    name: Security Validation
+    needs: verify-push-ci
+    if: needs.verify-push-ci.outputs.push_ci_passed == 'true'
+    uses: ./.github/workflows/reusable-security-checks.yml
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      retention-days: 7
+
+  # Optional: Matrix testing across multiple API levels
+  # Uncomment to test on API 26 (min), 30 (stable), 34 (max)
+  # instrumented-tests-matrix:
+  #   uses: ./.github/workflows/reusable-instrumented-tests-matrix.yml
+  #   with:
+  #     retention-days: 7

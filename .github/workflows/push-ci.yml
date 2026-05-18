@@ -1,0 +1,215 @@
+name: Push-CI
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+      - 'bugfix/**'
+
+concurrency:
+  group: push-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  validate-branch:
+    name: Validate Branch Name
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch name format
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          echo "Validating branch name: $BRANCH"
+
+          # Expected format: feature/123-description or bugfix/123-description
+          if ! echo "$BRANCH" | grep -qE '^(feature|bugfix)/[0-9]+-[a-z0-9-]+$'; then
+            echo "ERROR: Invalid branch name format"
+            echo ""
+            echo "Expected format:"
+            echo "  - feature/123-description"
+            echo "  - bugfix/123-description"
+            echo ""
+            echo "Examples:"
+            echo "SUCCESS: feature/42-add-zip-support"
+            echo "SUCCESS: bugfix/13-fix-extraction-crash"
+            echo "ERROR: feature/my-feature (missing issue number)"
+            echo "ERROR: feat/42-something (wrong prefix)"
+            exit 1
+          fi
+
+          echo "SUCCESS: Branch name format valid"
+
+  validate-commits:
+    name: Validate Commit Messages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check commit message format
+        run: |
+          echo "Validating commit messages..."
+
+          # Get commits in this push
+          COMMITS=$(git log origin/main..HEAD --format="%H %s")
+
+          if [ -z "$COMMITS" ]; then
+            echo "No new commits to validate"
+            exit 0
+          fi
+
+          INVALID_COUNT=0
+
+          while IFS= read -r line; do
+            HASH=$(echo "$line" | cut -d' ' -f1)
+            MSG=$(echo "$line" | cut -d' ' -f2-)
+
+            echo ""
+            echo "Checking: $MSG"
+
+            # Expected format: #123: type: description
+            if ! echo "$MSG" | grep -qE '^#[0-9]+: (feat|fix|refactor|test|docs|chore|style|perf):'; then
+              echo "  INVALID format"
+              echo "  Expected: #123: type: description"
+              echo "  Types: feat, fix, refactor, test, docs, chore, style, perf"
+              INVALID_COUNT=$((INVALID_COUNT + 1))
+            else
+              echo "SUCCESS: Valid format"
+            fi
+          done <<< "$COMMITS"
+
+          if [ $INVALID_COUNT -gt 0 ]; then
+            echo ""
+            echo "ERROR: Found $INVALID_COUNT invalid commit message(s)"
+            echo ""
+            echo "Valid examples:"
+            echo "SUCCESS: #42: feat: add ZIP extraction support"
+            echo "SUCCESS: #13: fix: resolve null pointer in extractor"
+            echo "SUCCESS: #27: refactor: extract repository pattern"
+            exit 1
+          fi
+
+          echo ""
+          echo "SUCCESS: All commit messages valid"
+  lint-checks:
+    name: Lint Checks
+    uses: ./.github/workflows/reusable-lint-checks.yml
+    with:
+      retention-days: 3
+
+  unit-tests:
+    name: Unit Tests
+    uses: ./.github/workflows/reusable-unit-tests.yml
+    with:
+      retention-days: 3
+
+  build:
+    name: Build APK
+    needs: [lint-checks, unit-tests]
+    uses: ./.github/workflows/reusable-build-apk.yml
+    with:
+      variant: debug
+      retention-days: 3
+
+  ui-tests:
+    name: UI Tests
+    needs: build
+    uses: ./.github/workflows/reusable-instrumented-tests.yml
+    with:
+      retention-days: 3
+
+  coverage-report:
+    name: Generate Coverage Report
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
+        with:
+          cache-read-only: false
+
+      - name: Download coverage data
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-test-coverage-data
+          path: app/build/kover/bin-reports/
+
+      - name: Generate coverage reports
+        run: |
+          ./gradlew koverXmlReportDebug
+          ./gradlew koverHtmlReportDebug
+
+      - name: Extract coverage percentage
+        id: coverage
+        run: |
+          XML_REPORT="app/build/reports/kover/reportDebug.xml"
+
+          if [ ! -f "$XML_REPORT" ]; then
+            echo "Coverage report not found"
+            echo "percentage=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Parse Kover XML format
+          # Format: <counter type="LINE" missed="X" covered="Y"/>
+          MISSED=$(grep '<counter type="LINE"' "$XML_REPORT" | sed -n 's/.*missed="\([0-9]*\)".*/\1/p')
+          COVERED=$(grep '<counter type="LINE"' "$XML_REPORT" | sed -n 's/.*covered="\([0-9]*\)".*/\1/p')
+
+          TOTAL=$((MISSED + COVERED))
+          if [ "$TOTAL" -eq 0 ]; then
+            COVERAGE=0
+          else
+            COVERAGE=$((COVERED * 100 / TOTAL))
+          fi
+
+          echo "Coverage: ${COVERAGE}%"
+          echo "percentage=$COVERAGE" >> $GITHUB_OUTPUT
+
+          # Fail if coverage < 80%
+          if [ "$COVERAGE" -lt 80 ]; then
+            echo "ERROR: Coverage ${COVERAGE}% is below 80% threshold"
+            exit 1
+          fi
+
+          echo "SUCCESS: Coverage ${COVERAGE}% meets 80% threshold"
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: app/build/reports/kover/
+          retention-days: 7
+
+      - name: Check if coverage gist secret exists
+        id: check-secret
+        run: |
+          if [ -n "${{ secrets.COVERAGE_GIST_ID }}" ]; then
+            echo "has_secret=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_secret=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create coverage badge
+        if: always() && steps.check-secret.outputs.has_secret == 'true'
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GITHUB_TOKEN }}
+          gistID: ${{ secrets.COVERAGE_GIST_ID }}
+          filename: otter-coverage.json
+          label: Coverage
+          message: ${{ steps.coverage.outputs.percentage }}%
+          valColorRange: ${{ steps.coverage.outputs.percentage }}
+          maxColorRange: 100
+          minColorRange: 0

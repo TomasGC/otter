@@ -3,6 +3,7 @@ package app.otter.util
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import app.otter.data.util.ResourcePathConverter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import androidx.documentfile.provider.DocumentFile
@@ -42,11 +43,11 @@ class ExtractionDestinationResolver @Inject constructor(
 
         // Try method 0: Direct file:// URI (works for file browser)
         if (archiveUri.scheme == "file") {
-            val filePath = archiveUri.path
-            Timber.tag(TAG).d("File URI path: $filePath")
+            val file = ResourcePathConverter.toFile(archiveUri)
+            Timber.tag(TAG).d("File URI path: ${file?.absolutePath}")
 
-            if (filePath != null) {
-                val parentPath = File(filePath).parent
+            if (file != null) {
+                val parentPath = file.parent
                 Timber.tag(TAG).d("Parent path from file URI: $parentPath")
 
                 if (parentPath != null) {
@@ -257,50 +258,15 @@ class ExtractionDestinationResolver @Inject constructor(
     fun getRealPathFromUri(uri: Uri): String? {
         return try {
             Timber.tag(TAG).d("getRealPathFromUri: $uri, authority: ${uri.authority}")
+            val realPath = ResourcePathConverter.getRealPathFromContentUri(context, uri)
 
-            if (DocumentsContract.isDocumentUri(context, uri)) {
-                val docId = DocumentsContract.getDocumentId(uri)
-                Timber.tag(TAG).d("Document ID: $docId")
-
-                // Primary storage
-                if (uri.authority == EXTERNAL_STORAGE_AUTHORITY) {
-                    val split = docId.split(":")
-                    Timber.tag(TAG).d("Split: $split")
-
-                    if (split.size >= 2) {
-                        val type = split[0]
-                        val path = split[1]
-
-                        if ("primary".equals(type, ignoreCase = true)) {
-                            val realPath = "${android.os.Environment.getExternalStorageDirectory()}/$path"
-                            Timber.tag(TAG).d("Resolved primary storage path: $realPath")
-                            return realPath
-                        }
-                    }
-                }
-
-                // Downloads provider
-                if (uri.authority == DOWNLOADS_PROVIDER_AUTHORITY) {
-                    Timber.tag(TAG).d("Downloads provider URI")
-                    // Try to get path from content resolver
-                    context.contentResolver.query(uri, arrayOf("_data"), null, null, null)?.use { cursor ->
-                        if (cursor.moveToFirst()) {
-                            val columnIndex = cursor.getColumnIndex("_data")
-                            if (columnIndex >= 0) {
-                                val path = cursor.getString(columnIndex)
-                                if (path != null) {
-                                    val parentPath = File(path).parent
-                                    Timber.tag(TAG).d("Resolved downloads path: $parentPath")
-                                    return parentPath
-                                }
-                            }
-                        }
-                    }
-                }
+            if (realPath != null) {
+                Timber.tag(TAG).d("Resolved real path: $realPath")
+            } else {
+                Timber.tag(TAG).d("Could not resolve real path, returning null")
             }
 
-            Timber.tag(TAG).d("Could not resolve real path, returning null")
-            null
+            realPath
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Error getting real path from URI")
             null

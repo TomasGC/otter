@@ -290,6 +290,9 @@ app/
 - `.claude/KANBAN.md` - Task tracking, backlog, session history
 - `.claude/ARCHITECTURE.md` - Architecture diagrams, design patterns, tech decisions
 
+**Reference Documentation** (`.claude/docs/` directory):
+- `.claude/docs/CICD.md` - CI/CD pipeline documentation (GitHub Actions, workflows, coverage)
+
 **Public Documentation** (committed to git):
 - `README.md` - Project overview, features, quick start
 - `.github/README.md` - CI/CD pipeline documentation

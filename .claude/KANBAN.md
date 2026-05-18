@@ -4,6 +4,17 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ---
 
+2026-05-18 - [#33] CI/CD Pipeline Optimization and Kover Migration
+- Migrated test coverage from Jacoco to Kover (Kotlin-optimized coverage tool)
+- Fixed CI coverage report generation (artifact upload/download with .ic binary format)
+- Refactored FileBrowserScreen from 407 to 265 lines (-35%) by extracting reusable components
+- Modernized PowerShell build scripts with OOP architecture (BuildHelper.psm1 module with GradleRunner, DockerManager classes)
+- Added comprehensive unit tests: ResourcePathConverterTest (21 tests, 71%→89.9% coverage), FileFormattersTest (15 tests)
+- Improved CI workflows: renamed feature-ci→push-ci, added commit/branch validation, fixed concurrency control
+tags: #ci-cd #testing #refactoring #kover #coverage #workflows
+Ref: https://github.com/TomasGC/otter/issues/33
+Commits: 359a83c, 5290a3d, 7eafd58, bdeef72, a400910, 1d811f4, 64d4d2f, 8cb390e, f89ef83, da9dbc2
+
 2026-05-15 - [#27] Samsung My Files Style Progress UI with StateFlow Migration
 - Implemented horizontal progress bar with real-time file list (last 5 extracted files with ✓/→ indicators)
 - Migrated ExtractionEventBus from SharedFlow to StateFlow for event-driven architecture (eliminates timing issues)
