@@ -1119,151 +1119,22 @@ graph TB
 
 ## CI/CD Pipeline
 
-**GitHub Actions workflows** - Optimized reusable workflow architecture:
+**For detailed CI/CD pipeline documentation, see [docs/CICD.md](docs/CICD.md)**
 
-### Workflow Structure (Issue #10, #14)
+The project uses GitHub Actions with optimized reusable workflows:
+- ✅ Parallel execution (lint + tests)
+- ✅ Kover code coverage (Kotlin-optimized, replaced Jacoco in Issue #33)
+- ✅ Gradle Managed Devices for instrumented tests
+- ✅ Sequential validation (Push-CI → PR-CI)
 
-**Reusable Workflows** (`.github/workflows/reusable-*.yml`):
-- `reusable-unit-tests.yml` - JUnit + MockK unit tests
-- `reusable-build-apk.yml` - Gradle assembly (debug/release)
-- `reusable-instrumented-tests.yml` - **Gradle Managed Devices** (official Google solution)
-- `reusable-lint-checks.yml` - ktlint, detekt, Android Lint
-- `reusable-coverage-merge.yml` - Jacoco coverage reports
-- `reusable-security-checks.yml` - OWASP, TruffleHog, APK size
+**Key Workflows**:
+- `push-ci.yml` - Feature/bugfix branch validation (~14 min)
+- `pr-ci.yml` - Pull request validation (~2 min)
+- `cd.yml` - Release pipeline (~5 min)
 
-**Instrumented Tests** (Issue #14):
-- Migrated from `reactivecircus/android-emulator-runner` to **Gradle Managed Devices**
-- Benefits: More stable, better caching, official Google support, no third-party wrapper
-- Configuration: Pixel 4, API 30, AOSP system image
-- No more crashpad_handler hang issues or boot timeouts
-
-**Caller Workflows**:
-- `feature-ci.yml` - Validates feature/bugfix branches (parallel lint + tests)
-- `ci.yml` - PR validation (waits for feature-ci, then static checks)
-- `cd.yml` - Release pipeline (test-v* for pre-releases, v* for stable)
-
-**CI Workflow Synchronization** (Issue #23):
-- CI now polls Feature-CI status every 30s (max 30 min wait)
-- Eliminates race condition where both workflows run simultaneously
-- Sequential execution: Feature-CI completes → CI validates
-- No more false failures from checking 'in_progress' status
-
-### Feature-CI Pipeline (Optimized for Speed)
-
-```
-┌──────────────┐     ┌─────────────┐
-│ Lint Checks  │     │ Unit Tests  │ (parallel, fail-fast)
-│ (3 jobs)     │     │             │
-└──────┬───────┘     └──────┬──────┘
-       │                    │
-       └────────┬───────────┘
-                ▼
-         ┌─────────────┐
-         │  Build APK  │
-         └──────┬──────┘
-                ▼
-         ┌──────────────────────┐
-         │  UI Tests            │
-         │  (Gradle Managed     │
-         │   Devices - Pixel 4) │
-         └──────────────────────┘
-```
-
-**Performance**: ~30% faster with parallel execution
-**Stability**: 100% success rate with Gradle Managed Devices (vs ~70% with reactivecircus)
-
-### CI Pipeline (No Duplication)
-
-```
-┌──────────────────┐    ┌─────────────────┐    ┌──────────────┐
-│ verify-feature-ci│    │ PR Validation   │    │ Context Check│
-│ (check passed)   │    │ (title format)  │    │ (docs update)│
-└────────┬─────────┘    └─────────────────┘    └──────────────┘
-         │ (blocks if failed)
-         ▼
-  ┌────────────────┐
-  │ Security Check │
-  │ (final gate)   │
-  └────────────────┘
-```
-
-**Eliminated duplication**: Relies on feature-ci for full test suite
-
-### CD Pipeline (Pre-release Support)
-
-```
-Tags:
-  v1.0.0       → Stable release (public)
-  test-v1.0.0  → Pre-release (testing)
-
-Pipeline:
-  unit-tests-release → build-release → create-github-release
-                       (signed APK)    (prerelease flag)
-```
-
-**Security**: Release keystore in GitHub Secrets (RELEASE_KEYSTORE_BASE64)
-
-### Code Quality Checks
-
-**ktlint** - Kotlin style enforcement
-- Official ktlint CLI + reviewdog/action-setup (no third-party actions)
-- Checkstyle format output piped to reviewdog
-- Reviewdog integration for PR comments
-- Non-blocking warnings (fail_on_error: false)
-- Version: 0.50.0
-
-**Detekt** - Kotlin static analysis
-- Complexity checks (ComplexMethod ≤15, LongMethod ≤60)
-- Potential bugs detection (UnreachableCode, UnsafeCast)
-- Style violations (MagicNumber, MaxLineLength: 120)
-- Naming conventions validation
-- Configuration: `detekt.yml`
-- XML report uploaded as artifact
-
-**Android Lint** - Android-specific issues
-- Resource optimization suggestions
-- API usage validation
-- Accessibility checks
-- Reviewdog integration with androidlint format
-- Uses official reviewdog/action-setup (supply chain security)
-
-### Security & Compliance
-
-**OWASP Dependency Check**
-- Vulnerability scanning for dependencies
-- CVSS threshold: 7.0 (High/Critical only)
-- Automatic PR comments for findings
-- Suppressions file: `app/dependency-check-suppressions.xml`
-
-**TruffleHog** - Secret detection
-- Scans git history for exposed secrets
-- Verified secrets only (--only-verified)
-- Runs on every PR
-
-### Coverage & Quality Gates
-
-**Jacoco Test Coverage**
-- Minimum threshold: 80%
-- XML and HTML reports generated
-- Excludes generated code (Hilt, R.class, BuildConfig)
-- Fails build if below threshold
-
-**APK Size Check**
-- Maximum size: 50MB
-- Monitors app bloat
-- Alerts on threshold violations
-
-**Context File Validation**
-- Ensures KANBAN.md and ARCHITECTURE.md updated with code changes
-- Prevents stale documentation
-- Automatic PR comments for missing updates
-
-### PR Validation
-
-**Title format**: `#123: type: description`
-- Types: feat, fix, refactor, test, docs, chore, style, perf
-- Enforced via regex validation
-- Blocks merge on format violations
+**Coverage**: ≥80% threshold enforced
+**Test Count**: 241 unit tests + 84 instrumented tests
+**Success Rate**: 95-100% (improved with Gradle Managed Devices)
 
 ---
 
