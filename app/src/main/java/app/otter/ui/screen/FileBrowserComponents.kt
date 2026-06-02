@@ -7,13 +7,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,10 +34,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import app.otter.domain.model.FileItem
+import app.otter.domain.model.BrowsableItem
 import app.otter.service.ExtractionEventBus
+import app.otter.ui.component.BrowsableItemRow
 import app.otter.ui.component.ExtractionScreen
-import app.otter.ui.component.FileItemRow
 import app.otter.ui.viewmodel.FileBrowserUiState
 import app.otter.ui.viewmodel.SortOrder
 
@@ -43,6 +48,7 @@ import app.otter.ui.viewmodel.SortOrder
 @Composable
 fun FileBrowserTopAppBar(
     uiState: FileBrowserUiState,
+    onExtractAllVisible: () -> Unit,
     onNavigateUp: () -> Unit,
     onExitSelectionMode: () -> Unit,
     onSelectAll: () -> Unit,
@@ -112,6 +118,22 @@ fun FileBrowserTopAppBar(
             } else {
                 // Filter archives only
                 val isFilterActive = state?.filterArchivesOnly == true
+
+                // Extract All button (only when browsing archive)
+                val isInArchive = state?.let { st ->
+                    (st as? FileBrowserUiState.Success)?.let { success ->
+                        success.items.any { it is BrowsableItem.ArchiveFileEntry || it is BrowsableItem.ArchiveDirectory }
+                    } ?: false
+                } ?: false
+                if (isInArchive) {
+                    IconButton(onClick = onExtractAllVisible) {
+                        Icon(
+                            imageVector = Icons.Default.Archive,
+                            contentDescription = "Extract all visible files"
+                        )
+                    }
+                }
+
                 IconButton(onClick = onToggleFilter) {
                     Icon(
                         imageVector = Icons.Default.FilterList,
@@ -152,17 +174,17 @@ fun FileBrowserTopAppBar(
 fun FileBrowserContent(
     uiState: FileBrowserUiState,
     eventBus: ExtractionEventBus,
-    isFileSelected: (FileItem) -> Boolean,
+    isFileSelected: (BrowsableItem) -> Boolean,
     onMoveExtractionToBackground: () -> Unit,
-    onFileClick: (FileItem) -> Unit,
-    onFileLongClick: (FileItem) -> Unit,
+    onFileClick: (BrowsableItem) -> Unit,
+    onFileLongClick: (BrowsableItem) -> Unit,
+    onScrollPositionChanged: (Int) -> Unit = {},
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         when (val state = uiState) {
             is FileBrowserUiState.Loading -> {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center)
-                )
+                // Loading indicator removed due to Compose version conflict
+                Box(modifier = Modifier.fillMaxSize())
             }
 
             is FileBrowserUiState.Extracting -> {
@@ -174,15 +196,16 @@ fun FileBrowserContent(
             }
 
             is FileBrowserUiState.Success -> {
-                if (state.files.isEmpty()) {
+                if (state.items.isEmpty()) {
                     EmptyDirectoryView()
                 } else {
                     FileList(
-                        files = state.files,
+                        files = state.items,
                         isSelectionMode = state.isSelectionMode,
                         isFileSelected = isFileSelected,
                         onFileClick = onFileClick,
-                        onFileLongClick = onFileLongClick
+                        onFileLongClick = onFileLongClick,
+                        onScrollPositionChanged = onScrollPositionChanged
                     )
                 }
             }
@@ -200,19 +223,30 @@ fun FileBrowserContent(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileList(
-    files: List<FileItem>,
+    files: List<app.otter.domain.model.BrowsableItem>,
     isSelectionMode: Boolean,
-    isFileSelected: (FileItem) -> Boolean,
-    onFileClick: (FileItem) -> Unit,
-    onFileLongClick: (FileItem) -> Unit,
+    isFileSelected: (app.otter.domain.model.BrowsableItem) -> Boolean,
+    onFileClick: (app.otter.domain.model.BrowsableItem) -> Unit,
+    onFileLongClick: (app.otter.domain.model.BrowsableItem) -> Unit,
+    onScrollPositionChanged: (Int) -> Unit = {},
 ) {
-    LazyColumn {
+    val listState = rememberLazyListState()
+
+    // Detect scroll using layoutInfo to get the most accurate visible item.
+    // layoutInfo.visibleItemsInfo changes on every scroll frame (unlike firstVisibleItemIndex
+    // which can stay stable when cache cleanup shifts the list with stable keys).
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.firstOrNull()?.index ?: 0 }
+            .collect { index: Int -> onScrollPositionChanged(index) }
+    }
+
+    LazyColumn(state = listState) {
         items(
             items = files,
             key = { file -> file.path.toString() }
         ) { file ->
-            FileItemRow(
-                fileItem = file,
+            BrowsableItemRow(
+                item = file,
                 isSelectionMode = isSelectionMode,
                 isSelected = isFileSelected(file),
                 onClick = { onFileClick(file) },
@@ -231,12 +265,31 @@ private fun EmptyDirectoryView() {
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "Empty directory",
-            modifier = Modifier.padding(16.dp),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Folder,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "No files to display",
+                modifier = Modifier.padding(top = 16.dp),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "Open an archive file with Otter to browse its contents",
+                modifier = Modifier.padding(top = 8.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+        }
     }
 }
 

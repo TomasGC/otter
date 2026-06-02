@@ -37,18 +37,41 @@ class ArchiveFileFactoryTest {
         factory = ArchiveFileFactory(context, mimeTypeUtil)
     }
 
+    /**
+     * Creates a Uri using URL encoding that works with ResourcePathConverter.
+     *
+     * ResourcePathConverter.getFilePathFromUri() expects:
+     * - Windows: file://C%3A%5CUsers%5C... (URL-encoded, matching Uri.fromFile() output)
+     * - Unix: file:///path/to/file (standard format with 3 slashes)
+     *
+     * This matches Robolectric's Uri.fromFile() behavior, but works correctly.
+     */
+    private fun createFileUri(file: File): Uri {
+        val absolutePath = file.absolutePath
+
+        // Windows paths need URL encoding: C:\Users\ -> file://C%3A%5CUsers%5C
+        // Unix paths are standard: /path/to/file -> file:///path/to/file
+        val uriString = if (absolutePath.matches(Regex("^[A-Z]:.*"))) {
+            "file://" + java.net.URLEncoder.encode(absolutePath, "UTF-8")
+        } else {
+            "file://$absolutePath"
+        }
+
+        return Uri.parse(uriString)
+    }
+
     @Test
     fun `createFromUri with file URI should create ArchiveFile`() {
         // Given
         val testFile = tempFolder.newFile("test.zip")
         testFile.writeText("fake zip content")
-        val uri = Uri.fromFile(testFile)
+        val uri = createFileUri(testFile)
 
         // When
         val archiveFile = factory.createFromUri(uri, "test.zip")
 
         // Then
-        assertNotNull(archiveFile)
+        assertNotNull("ArchiveFile should not be null for valid ZIP file", archiveFile)
         assertEquals("test.zip", archiveFile!!.name)
         assertEquals(ArchiveType.ZIP, archiveFile.type)
         assertEquals("application/zip", archiveFile.mimeType)
@@ -60,7 +83,7 @@ class ArchiveFileFactoryTest {
         // Given
         val testFile = tempFolder.newFile("archive.rar")
         testFile.writeText("fake rar content")
-        val uri = Uri.fromFile(testFile)
+        val uri = createFileUri(testFile)
 
         // When
         val archiveFile = factory.createFromUri(uri, "archive.rar")
@@ -87,7 +110,7 @@ class ArchiveFileFactoryTest {
     fun `createFromUri with directory should return null`() {
         // Given
         val directory = tempFolder.newFolder("testdir")
-        val uri = Uri.fromFile(directory)
+        val uri = createFileUri(directory)
 
         // When
         val archiveFile = factory.createFromUri(uri, "testdir")
@@ -101,7 +124,7 @@ class ArchiveFileFactoryTest {
         // Given
         val textFile = tempFolder.newFile("document.txt")
         textFile.writeText("not an archive")
-        val uri = Uri.fromFile(textFile)
+        val uri = createFileUri(textFile)
 
         // When
         val archiveFile = factory.createFromUri(uri, "document.txt")
@@ -143,8 +166,8 @@ class ArchiveFileFactoryTest {
         rarFile.writeText("rar")
 
         // When
-        val zip = factory.createFromUri(Uri.fromFile(zipFile), "test.zip")
-        val rar = factory.createFromUri(Uri.fromFile(rarFile), "test.rar")
+        val zip = factory.createFromUri(createFileUri(zipFile), "test.zip")
+        val rar = factory.createFromUri(createFileUri(rarFile), "test.rar")
 
         // Then
         assertNotNull(zip)
@@ -159,7 +182,7 @@ class ArchiveFileFactoryTest {
         val testFile = tempFolder.newFile("test.zip")
         val content = "This is test content with some length"
         testFile.writeText(content)
-        val uri = Uri.fromFile(testFile)
+        val uri = createFileUri(testFile)
 
         // When
         val archiveFile = factory.createFromUri(uri, "test.zip")
@@ -173,7 +196,7 @@ class ArchiveFileFactoryTest {
     fun `createFromUri with empty file should create ArchiveFile with zero size`() {
         // Given
         val emptyFile = tempFolder.newFile("empty.zip")
-        val uri = Uri.fromFile(emptyFile)
+        val uri = createFileUri(emptyFile)
 
         // When
         val archiveFile = factory.createFromUri(uri, "empty.zip")
@@ -194,5 +217,33 @@ class ArchiveFileFactoryTest {
         // Then
         // Without proper ContentResolver mock, this returns null
         assertNull(archiveFile)
+    }
+
+    // ========== content:// path fallback (Samsung bug fix) ==========
+
+    @Test
+    fun `createFromPath with content URI string falls back to content URI handler`() {
+        // Arrange: ResourcePath.FileSystem whose path is a content:// URI string
+        // (Samsung My Files stores it this way after ResourcePathConverter.fromUri fallback)
+        val contentUriPath = "content://com.sec.android.app.myfiles.FileProvider/sdcard/test.zip"
+        val resourcePath = app.otter.domain.model.ResourcePath.FileSystem(contentUriPath)
+
+        // Mock ContentResolver to return size for the content URI
+        val mockContentResolver = io.mockk.mockk<android.content.ContentResolver>(relaxed = true)
+        io.mockk.every { context.contentResolver } returns mockContentResolver
+
+        // Simulate cursor with file size and display name
+        val cursor = android.database.MatrixCursor(
+            arrayOf(android.provider.OpenableColumns.SIZE, android.provider.OpenableColumns.DISPLAY_NAME)
+        )
+        cursor.addRow(arrayOf(1024L, "test.zip"))
+        io.mockk.every { mockContentResolver.query(any(), any(), any(), any(), any()) } returns cursor
+        io.mockk.every { mockContentResolver.getType(any()) } returns "application/zip"
+
+        // Act
+        val result = factory.createFromPath(resourcePath, "test.zip")
+
+        // Assert: content:// URI was detected and routed to createFromContentUri
+        assertNotNull("createFromPath should handle content:// URI string via content URI fallback", result)
     }
 }

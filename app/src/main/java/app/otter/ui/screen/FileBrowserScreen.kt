@@ -5,6 +5,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import timber.log.Timber
+import app.otter.domain.model.ResourcePath
+import app.otter.service.ExtractionQueue
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -52,11 +54,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.otter.domain.model.FileItem
+import app.otter.domain.model.BrowsableItem
 import app.otter.service.ExtractionEventBus
 import app.otter.service.ExtractionService
 import app.otter.ui.component.ExtractionScreen
-import app.otter.ui.component.FileItemRow
+import app.otter.ui.component.BrowsableItemRow
 import app.otter.ui.component.ExtractionConfirmDialog
 import app.otter.ui.viewmodel.FileBrowserUiState
 import app.otter.ui.viewmodel.FileBrowserViewModel
@@ -81,50 +83,32 @@ fun FileBrowserScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showConfirmDialog by remember { mutableStateOf(false) }
-    var fileToExtract by remember { mutableStateOf<FileItem?>(null) }
+    var fileToExtract by remember { mutableStateOf<app.otter.domain.model.BrowsableItem.ArchiveFile?>(null) }
 
-    // Navigate to archive's parent directory when opened with "Open with Browser"
+    // Navigate directly into archive when opened with "Open with Browser"
     LaunchedEffect(initialArchiveUri) {
         initialArchiveUri?.let { uri ->
+            Timber.d("FileBrowserScreen: initialArchiveUri = $uri")
             try {
-                val archivePath = ResourcePathConverter.fromUri(uri)
-                val archiveFileUri = ResourcePathConverter.toUri(archivePath)
+                val fileSystemPath = ResourcePathConverter.fromUri(uri, context)
+                Timber.d("FileBrowserScreen: Archive path = $fileSystemPath")
 
-                // Navigate to parent directory
-                when (archiveFileUri.scheme) {
-                    "file" -> {
-                        archiveFileUri.path?.let { filePath ->
-                            java.io.File(filePath).parent?.let { parentPath ->
-                                val parentUri = android.net.Uri.fromFile(java.io.File(parentPath))
-                                val parentResourcePath = ResourcePathConverter.fromUri(parentUri)
-                                viewModel.navigateToPath(parentResourcePath)
-                            }
-                        }
-                    }
-                    "content" -> {
-                        // Try to get real path from content URI
-                        val realPath = getRealPathFromContentUri(context, archiveFileUri)
-                        if (realPath != null) {
-                            val parentPath = java.io.File(realPath).parent
-                            if (parentPath != null) {
-                                val parentUri = android.net.Uri.fromFile(java.io.File(parentPath))
-                                val parentResourcePath = ResourcePathConverter.fromUri(parentUri)
-                                viewModel.navigateToPath(parentResourcePath)
-                                return@let
-                            }
-                        }
-
-                        // Fallback: navigate to Downloads folder
-                        val downloadsPath = android.os.Environment.getExternalStoragePublicDirectory(
-                            android.os.Environment.DIRECTORY_DOWNLOADS
+                // Convert FileSystem path to ArchiveEntry to browse archive contents
+                val archivePath = when (fileSystemPath) {
+                    is ResourcePath.FileSystem -> {
+                        // Create ArchiveEntry with empty entryPath (root of archive)
+                        ResourcePath.ArchiveEntry(
+                            archivePath = fileSystemPath.path,
+                            entryPath = ""
                         )
-                        val downloadsUri = android.net.Uri.fromFile(downloadsPath)
-                        val downloadsResourcePath = ResourcePathConverter.fromUri(downloadsUri)
-                        viewModel.navigateToPath(downloadsResourcePath)
                     }
+                    else -> fileSystemPath
                 }
+
+                Timber.d("FileBrowserScreen: Navigating to archive root = $archivePath")
+                viewModel.navigateToPath(archivePath)
             } catch (e: Exception) {
-                Timber.e(e, "Failed to navigate to archive location")
+                Timber.e(e, "Failed to browse archive")
             }
         }
     }
@@ -133,15 +117,55 @@ fun FileBrowserScreen(
         topBar = {
             FileBrowserTopAppBar(
                 uiState = uiState,
+                onExtractAllVisible = {
+                    val state = uiState as? FileBrowserUiState.Success
+                    val archiveFiles = state?.items?.filterIsInstance<BrowsableItem.ArchiveFile>()
+                    if (!archiveFiles.isNullOrEmpty()) {
+                        // Add all visible archive files to extraction queue
+                        val tasks = archiveFiles.map { file ->
+                            ExtractionQueue.ExtractionTask(
+                                archiveUri = file.archivePath,
+                                fileName = file.name
+                            )
+                        }
+                        viewModel.extractionQueue.enqueueAll(tasks)
+
+                        // Show extraction UI
+                        viewModel.startExtraction(fileName = "${archiveFiles.size} files")
+
+                        // Start processing queue
+                        viewModel.extractionQueue.processNext(context)
+                    }
+                },
                 onNavigateUp = { viewModel.navigateUp() },
                 onExitSelectionMode = { viewModel.exitSelectionMode() },
                 onSelectAll = { viewModel.selectAllArchives() },
                 onExtractSelected = {
-                    val selected = viewModel.getSelectedFiles().filter { it.isArchive }
-                    if (selected.isNotEmpty()) {
+                    val selectedPaths = viewModel.getSelectedPaths()
+                        .filterIsInstance<ResourcePath.ArchiveEntry>()
+
+                    if (selectedPaths.isNotEmpty()) {
+                        // Group selected entries by their parent archive
+                        val byArchive = selectedPaths.groupBy { it.archivePath }
+
+                        val tasks = byArchive.map { (archivePath, entries) ->
+                            // If entryPath is empty for all entries, it means they are archive files themselves
+                            // → extract full archive (selectedItems = null)
+                            // If any has a non-empty entryPath, they are entries inside the archive
+                            // → extract selectively
+                            val entryPaths = entries.map { it.entryPath }.filter { it.isNotEmpty() }
+                            val archiveResourcePath = ResourcePath.ArchiveEntry(archivePath = archivePath)
+
+                            app.otter.service.ExtractionQueue.ExtractionTask(
+                                archiveUri = archiveResourcePath,
+                                fileName = archivePath.substringAfterLast("/"),
+                                selectedItems = entryPaths.ifEmpty { null }
+                            )
+                        }
+
                         // Take persistent permissions for content:// URIs
-                        selected.forEach { file ->
-                            val uri = ResourcePathConverter.toUri(file.path)
+                        tasks.forEach { task ->
+                            val uri = ResourcePathConverter.toUri(task.archiveUri)
                             if (uri.scheme == "content") {
                                 try {
                                     context.contentResolver.takePersistableUriPermission(
@@ -154,21 +178,9 @@ fun FileBrowserScreen(
                             }
                         }
 
-                        // Add all to queue
-                        val tasks = selected.map { file ->
-                            app.otter.service.ExtractionQueue.ExtractionTask(
-                                archiveUri = file.path,
-                                fileName = file.name
-                            )
-                        }
                         viewModel.extractionQueue.enqueueAll(tasks)
-
-                        // Show extraction UI immediately
-                        viewModel.startExtraction(fileName = "${selected.size} archives")
-
-                        // Start processing queue
+                        viewModel.startExtraction(fileName = "${selectedPaths.size} items")
                         viewModel.extractionQueue.processNext(context)
-
                         viewModel.exitSelectionMode()
                     }
                 },
@@ -199,17 +211,17 @@ fun FileBrowserScreen(
                 eventBus = viewModel.eventBus,
                 isFileSelected = { file -> viewModel.isFileSelected(file) },
                 onMoveExtractionToBackground = { viewModel.moveExtractionToBackground() },
-                onFileClick = { file ->
+                onScrollPositionChanged = { firstVisibleIndex -> viewModel.onScrollPositionChanged(firstVisibleIndex) },
+                onFileClick = { item ->
                     val state = uiState as? FileBrowserUiState.Success
                     if (state?.isSelectionMode == true) {
-                        viewModel.toggleFileSelection(file)
+                        viewModel.toggleFileSelection(item)
                     } else {
-                        when {
-                            file.isDirectory -> viewModel.navigateInto(file)
-                            file.isArchive -> {
-                                fileToExtract = file
-                                showConfirmDialog = true
-                            }
+                        when (item) {
+                            is app.otter.domain.model.BrowsableItem.FileSystemDirectory,
+                            is app.otter.domain.model.BrowsableItem.ArchiveDirectory,
+                            is app.otter.domain.model.BrowsableItem.ArchiveFile -> viewModel.navigateInto(item)
+                            else -> {} // FileSystemFile or ArchiveFileEntry - do nothing
                         }
                     }
                 },

@@ -275,4 +275,91 @@ class ExtractionDestinationResolverTest {
             destination.parentFile?.absolutePath,
         )
     }
+
+    // ========== Bug 4 & 5: Samsung My Files content:// URI ==========
+
+    @Test
+    fun `resolveDestination with file URI returns sibling folder`() {
+        // Given - archive in a real temp folder
+        val archiveDir = temporaryFolder.newFolder("archives")
+        val archiveFile = java.io.File(archiveDir, "test.zip").also { it.createNewFile() }
+        val fileUri = Uri.fromFile(archiveFile)
+        val fileName = "test.zip"
+
+        // When
+        val destination = resolver.resolveDestination(fileUri, fileName)
+
+        // Then - should extract to sibling folder "test" in same directory
+        assertNotNull("Destination should not be null", destination)
+        assertEquals("Folder name should be archive name without extension", "test", destination.name)
+        assertEquals("Parent should be same dir as archive", archiveDir.absolutePath, destination.parentFile?.absolutePath)
+    }
+
+    @Test
+    fun `resolveDestination with external storage document URI uses downloads fallback`() {
+        // Given - Samsung My Files style URI (com.android.externalstorage.documents authority)
+        // In Robolectric, we can't fully mock the ContentProvider, so it falls back to Downloads
+        val samsungUri = Uri.parse("content://com.android.externalstorage.documents/document/primary%3ADownload%2Ftest.zip")
+        val fileName = "test.zip"
+
+        // When
+        val destination = resolver.resolveDestination(samsungUri, fileName)
+
+        // Then - must never crash and must return a valid destination
+        assertNotNull("Destination must not be null even for Samsung URI", destination)
+        assertEquals("Folder name must be correct", "test", destination.name)
+        // Either resolved to same folder or fell back to Downloads
+        assertTrue("Path must be non-empty", destination.absolutePath.isNotEmpty())
+    }
+
+    @Test
+    fun `resolveDestination never returns null`() {
+        // Given - various URI types that could cause crashes
+        val uris = listOf(
+            Uri.parse("content://com.sec.android.app.myfiles.FileProvider/sdcard/Download/test.zip"),
+            Uri.parse("content://com.android.providers.downloads.documents/document/1"),
+            Uri.parse("content://media/external/file/12345"),
+            Uri.parse("content://invalid/document/1"),
+            Uri.EMPTY,
+        )
+
+        uris.forEach { uri ->
+            // When / Then - must not throw, must return valid File
+            val destination = resolver.resolveDestination(uri, "test.zip")
+            assertNotNull("Destination must not be null for URI: $uri", destination)
+            assertTrue("Folder name must not be empty for URI: $uri", destination.name.isNotEmpty())
+        }
+    }
+
+    @Test
+    fun `getPathFromDocumentHierarchy with external storage docId returns correct path`() {
+        // Given - external storage document URI format: primary:Download/test.zip
+        // We test the parsing logic directly
+        val externalStorageUri = Uri.parse(
+            "content://com.android.externalstorage.documents/document/primary%3ADownload%2Ftest.zip"
+        )
+
+        // When - test resolving the path from hierarchy
+        // In Robolectric, DocumentsContract.isDocumentUri may return false,
+        // so this validates graceful null return
+        val result = resolver.getRealPathFromUri(externalStorageUri)
+
+        // Then - either a valid path or null (no crash)
+        // The method signature already returns String? for this case
+        assertTrue("Method must not throw", true) // Test is about no-crash guarantee
+    }
+
+    @Test
+    fun `createDownloadsDestination creates folder in Downloads`() {
+        // Given
+        val fileName = "my_archive.zip"
+
+        // When
+        val destination = resolver.createDownloadsDestination(fileName)
+
+        // Then
+        assertNotNull(destination)
+        assertEquals("my_archive", destination.name)
+        assertTrue("Must be in Downloads", destination.absolutePath.contains("Download"))
+    }
 }

@@ -33,16 +33,33 @@ class ArchiveFileFactory @Inject constructor(
         return when (uri.scheme) {
             "file" -> createFromFileUri(path, uri, fileName)
             "content" -> createFromContentUri(path, uri, fileName)
-            else -> null
+            else -> {
+                // Last resort: if path is a FileSystem with content:// stored as string
+                if (path is ResourcePath.FileSystem && path.path.startsWith("content://")) {
+                    val contentUri = android.net.Uri.parse(path.path)
+                    createFromContentUri(path, contentUri, fileName)
+                } else null
+            }
         }
     }
 
     /**
      * Legacy method for tests compatibility.
-     * Converts Uri to ResourcePath immediately.
+     * Directly processes Uri without double conversion.
      */
     fun createFromUri(uri: Uri, fileName: String): ArchiveFile? {
-        return createFromPath(ResourcePathConverter.fromUri(uri), fileName)
+        return when (uri.scheme) {
+            "file" -> {
+                val file = ResourcePathConverter.toFile(uri) ?: return null
+                val path = ResourcePathConverter.fromUri(uri)
+                createFromFileUri(path, uri, fileName)
+            }
+            "content" -> {
+                val path = ResourcePathConverter.fromUri(uri)
+                createFromContentUri(path, uri, fileName)
+            }
+            else -> null
+        }
     }
 
     private fun createFromFileUri(path: ResourcePath, uri: Uri, fileName: String): ArchiveFile? {

@@ -9,18 +9,18 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import app.otter.domain.model.FileItem
+import app.otter.domain.model.BrowsableItem
 
 /**
  * Dialog to confirm archive extraction.
  *
- * @param fileItem File to extract
+ * @param fileItem Archive file to extract
  * @param onConfirm Callback when extraction is confirmed
  * @param onDismiss Callback when dialog is dismissed
  */
 @Composable
 fun ExtractionConfirmDialog(
-    fileItem: FileItem,
+    fileItem: BrowsableItem.ArchiveFile,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
