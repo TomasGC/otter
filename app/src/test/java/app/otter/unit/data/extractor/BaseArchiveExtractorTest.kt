@@ -39,6 +39,7 @@ class BaseArchiveExtractorTest {
             destinationPath: File,
             archiveType: ArchiveType,
             sourceFileName: String,
+            selectedItems: List<String>?,
             onProgress: (ExtractionProgress) -> Unit
         ): ExtractionResult {
             wasExtractCalled = true

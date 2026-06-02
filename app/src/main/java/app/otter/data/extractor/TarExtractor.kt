@@ -16,12 +16,13 @@ import java.io.InputStream
 import javax.inject.Inject
 
 /**
- * Extractor for TAR archives using Apache Commons Compress.
+ * Extractor for TAR archives.
  * Supports: .tar, .tar.gz, .tgz
  *
+ * Uses Apache Commons Compress library.
  * Uses InputStream directly (no temp file needed), avoiding asset packaging issues.
  */
-class ApacheTarExtractor @Inject constructor(
+class TarExtractor @Inject constructor(
     private val pathValidator: PathValidator,
     tempFileManager: ITempFileManager,
     sevenZipHelper: SevenZipExtractorHelper
@@ -38,6 +39,7 @@ class ApacheTarExtractor @Inject constructor(
         destinationPath: File,
         archiveType: ArchiveType,
         sourceFileName: String,
+        selectedItems: List<String>?,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult = withContext(Dispatchers.IO) {
         var extractedCount = 0

@@ -11,12 +11,12 @@ import org.junit.Test
 class TarExtractorTest {
 
     private lateinit var pathValidator: PathValidator
-    private lateinit var tarExtractor: ApacheTarExtractor
+    private lateinit var tarExtractor: TarExtractor
 
     @Before
     fun setup() {
         pathValidator = mockk(relaxed = true)
-        tarExtractor = ApacheTarExtractor(pathValidator, TempFileManager(), SevenZipExtractorHelper())
+        tarExtractor = TarExtractor(pathValidator, TempFileManager(), SevenZipExtractorHelper())
     }
 
     @Test

@@ -24,6 +24,7 @@ class RarExtractor @Inject constructor(
         destinationPath: File,
         archiveType: ArchiveType,
         sourceFileName: String,
+        selectedItems: List<String>?,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult {
         return extractWithTempFile(inputStream, archiveType) { tempFile ->

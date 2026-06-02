@@ -14,6 +14,7 @@ interface ArchiveExtractor {
         destinationPath: File,
         archiveType: ArchiveType,
         sourceFileName: String,
+        selectedItems: List<String>? = null,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult
 }

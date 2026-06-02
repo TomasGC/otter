@@ -22,13 +22,13 @@ class ExtractArchiveUseCaseTest {
     @Test
     fun `should return error when archive is empty`() = runTest {
         val emptyArchive = ArchiveFile(
-            path = ResourcePath.from("file:///empty.zip"),
+            path = ResourcePath.FileSystem("file:///empty.zip"),
             name = "empty.zip",
             sizeBytes = 0L,
             mimeType = "application/zip",
             type = ArchiveType.ZIP
         )
-        val destinationPath = ResourcePath.from("file:///downloads")
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
 
         val result = useCase(emptyArchive, destinationPath).first()
 
@@ -39,13 +39,13 @@ class ExtractArchiveUseCaseTest {
     @Test
     fun `should delegate extraction to repository for valid archive`() = runTest {
         val archive = ArchiveFile(
-            path = ResourcePath.from("file:///test.zip"),
+            path = ResourcePath.FileSystem("file:///test.zip"),
             name = "test.zip",
             sizeBytes = 1024L,
             mimeType = "application/zip",
             type = ArchiveType.ZIP
         )
-        val destinationPath = ResourcePath.from("file:///downloads")
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
 
         every { repository.extractArchive(archive, destinationPath) } returns flowOf(
             ExtractionProgress.Success("/downloads/test", 5)
@@ -61,7 +61,7 @@ class ExtractArchiveUseCaseTest {
     @Test
     fun `should propagate progress events from repository`() = runTest {
         val archive = createValidArchive()
-        val destinationPath = ResourcePath.from("file:///downloads")
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
 
         every { repository.extractArchive(archive, destinationPath) } returns flowOf(
             ExtractionProgress.Extracting("file1.txt", 1, 3, 0.33f),
@@ -81,7 +81,7 @@ class ExtractArchiveUseCaseTest {
     @Test
     fun `should propagate errors from repository`() = runTest {
         val archive = createValidArchive()
-        val destinationPath = ResourcePath.from("file:///downloads")
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
 
         every { repository.extractArchive(archive, destinationPath) } returns flowOf(
             ExtractionProgress.Error("Corrupted archive", null)
@@ -96,13 +96,13 @@ class ExtractArchiveUseCaseTest {
     @Test
     fun `should allow extraction of large archives`() = runTest {
         val largeArchive = ArchiveFile(
-            path = ResourcePath.from("file:///large.zip"),
+            path = ResourcePath.FileSystem("file:///large.zip"),
             name = "large.zip",
             sizeBytes = 100_000_000L, // 100 MB
             mimeType = "application/zip",
             type = ArchiveType.ZIP
         )
-        val destinationPath = ResourcePath.from("file:///downloads")
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
 
         every { repository.extractArchive(largeArchive, destinationPath) } returns flowOf(
             ExtractionProgress.Success("/downloads/large", 1000)
@@ -113,8 +113,55 @@ class ExtractArchiveUseCaseTest {
         assertTrue(result is ExtractionProgress.Success)
     }
 
+    // ========== Bug 3: Selective extraction ==========
+
+    @Test
+    fun `should pass selectedItems to repository when provided`() = runTest {
+        val archive = createValidArchive()
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
+        val selectedItems = listOf("subdir/file1.txt", "subdir/file2.txt")
+
+        every { repository.extractArchive(archive, destinationPath, selectedItems) } returns flowOf(
+            ExtractionProgress.Success("/downloads/test", 2)
+        )
+
+        val result = useCase(archive, destinationPath, selectedItems).first()
+
+        assertTrue("Should succeed with selected items", result is ExtractionProgress.Success)
+        assertEquals("Should extract exactly 2 files", 2, (result as ExtractionProgress.Success).extractedCount)
+    }
+
+    @Test
+    fun `should extract all when selectedItems is null`() = runTest {
+        val archive = createValidArchive()
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
+
+        every { repository.extractArchive(archive, destinationPath, null) } returns flowOf(
+            ExtractionProgress.Success("/downloads/test", 10)
+        )
+
+        val result = useCase(archive, destinationPath, null).first()
+
+        assertTrue("Should succeed without selected items", result is ExtractionProgress.Success)
+        assertEquals("Should extract all 10 files", 10, (result as ExtractionProgress.Success).extractedCount)
+    }
+
+    @Test
+    fun `should extract all when selectedItems is empty`() = runTest {
+        val archive = createValidArchive()
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
+
+        every { repository.extractArchive(archive, destinationPath, emptyList()) } returns flowOf(
+            ExtractionProgress.Success("/downloads/test", 10)
+        )
+
+        val result = useCase(archive, destinationPath, emptyList()).first()
+
+        assertTrue(result is ExtractionProgress.Success)
+    }
+
     private fun createValidArchive() = ArchiveFile(
-        path = ResourcePath.from("file:///test.zip"),
+        path = ResourcePath.FileSystem("file:///test.zip"),
         name = "test.zip",
         sizeBytes = 1024L,
         mimeType = "application/zip",

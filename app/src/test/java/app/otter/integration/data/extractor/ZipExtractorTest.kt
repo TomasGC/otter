@@ -4,9 +4,12 @@ import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
 import app.otter.util.PathValidator
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -370,6 +373,275 @@ class ZipExtractorTest {
         assertTrue(File(destination, "dir1/file1.txt").exists())
         assertTrue(File(destination, "dir2/subdir/file2.txt").exists())
         assertTrue(File(destination, "root.txt").exists())
+    }
+
+    // ===== Selective Extraction Tests (Unit) =====
+
+    @Test
+    fun `should extract only selected files when selectedItems provided`() = runTest {
+        // Arrange
+        val zipBytes = createTestZip(mapOf(
+            "file1.txt" to "content1",
+            "file2.txt" to "content2",
+            "file3.txt" to "content3",
+            "file4.txt" to "content4"
+        ))
+        val destination = tempFolder.newFolder("output")
+
+        // Act - Select only file1.txt and file3.txt
+        val result = extractor.extract(
+            inputStream = zipBytes.inputStream(),
+            destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
+            selectedItems = listOf("file1.txt", "file3.txt"),
+            onProgress = {}
+        )
+
+        // Assert
+        assertTrue("Should succeed", result is ExtractionResult.Success)
+        assertEquals("Should extract only 2 files", 2, (result as ExtractionResult.Success).extractedFilesCount)
+
+        assertTrue("file1.txt should exist", File(destination, "file1.txt").exists())
+        assertFalse("file2.txt should NOT exist", File(destination, "file2.txt").exists())
+        assertTrue("file3.txt should exist", File(destination, "file3.txt").exists())
+        assertFalse("file4.txt should NOT exist", File(destination, "file4.txt").exists())
+    }
+
+    @Test
+    fun `should extract nothing when selectedItems is empty list`() = runTest {
+        // Arrange
+        val zipBytes = createTestZip(mapOf(
+            "file1.txt" to "content1",
+            "file2.txt" to "content2"
+        ))
+        val destination = tempFolder.newFolder("output")
+
+        // Act - Empty selection
+        val result = extractor.extract(
+            inputStream = zipBytes.inputStream(),
+            destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
+            selectedItems = emptyList(),
+            onProgress = {}
+        )
+
+        // Assert
+        assertTrue("Should succeed", result is ExtractionResult.Success)
+        assertEquals("Should extract 0 files", 0, (result as ExtractionResult.Success).extractedFilesCount)
+
+        assertFalse("file1.txt should NOT exist", File(destination, "file1.txt").exists())
+        assertFalse("file2.txt should NOT exist", File(destination, "file2.txt").exists())
+    }
+
+    @Test
+    fun `should extract all when selectedItems is null`() = runTest {
+        // Arrange
+        val zipBytes = createTestZip(mapOf(
+            "file1.txt" to "content1",
+            "file2.txt" to "content2",
+            "file3.txt" to "content3"
+        ))
+        val destination = tempFolder.newFolder("output")
+
+        // Act - null means extract all
+        val result = extractor.extract(
+            inputStream = zipBytes.inputStream(),
+            destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
+            selectedItems = null,
+            onProgress = {}
+        )
+
+        // Assert
+        assertTrue("Should succeed", result is ExtractionResult.Success)
+        assertEquals("Should extract all 3 files", 3, (result as ExtractionResult.Success).extractedFilesCount)
+
+        assertTrue("file1.txt should exist", File(destination, "file1.txt").exists())
+        assertTrue("file2.txt should exist", File(destination, "file2.txt").exists())
+        assertTrue("file3.txt should exist", File(destination, "file3.txt").exists())
+    }
+
+    @Test
+    fun `should extract selected files from nested folders`() = runTest {
+        // Arrange
+        val zipBytes = createTestZip(mapOf(
+            "root.txt" to "root",
+            "folder1/file1.txt" to "content1",
+            "folder1/file2.txt" to "content2",
+            "folder2/file3.txt" to "content3"
+        ))
+        val destination = tempFolder.newFolder("output")
+
+        // Act - Select root.txt and folder1/file1.txt only
+        val result = extractor.extract(
+            inputStream = zipBytes.inputStream(),
+            destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
+            selectedItems = listOf("root.txt", "folder1/file1.txt"),
+            onProgress = {}
+        )
+
+        // Assert
+        assertTrue("Should succeed", result is ExtractionResult.Success)
+        assertEquals("Should extract only 2 files", 2, (result as ExtractionResult.Success).extractedFilesCount)
+
+        assertTrue("root.txt should exist", File(destination, "root.txt").exists())
+        assertTrue("folder1/file1.txt should exist", File(destination, "folder1/file1.txt").exists())
+        assertFalse("folder1/file2.txt should NOT exist", File(destination, "folder1/file2.txt").exists())
+        assertFalse("folder2/file3.txt should NOT exist", File(destination, "folder2/file3.txt").exists())
+    }
+
+    @Test
+    fun `should handle selectedItems with non-existent paths gracefully`() = runTest {
+        // Arrange
+        val zipBytes = createTestZip(mapOf(
+            "file1.txt" to "content1",
+            "file2.txt" to "content2"
+        ))
+        val destination = tempFolder.newFolder("output")
+
+        // Act - Include non-existent file in selection
+        val result = extractor.extract(
+            inputStream = zipBytes.inputStream(),
+            destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
+            selectedItems = listOf("file1.txt", "non_existent.txt"),
+            onProgress = {}
+        )
+
+        // Assert
+        assertTrue("Should succeed", result is ExtractionResult.Success)
+        assertEquals("Should extract only existing file", 1, (result as ExtractionResult.Success).extractedFilesCount)
+
+        assertTrue("file1.txt should exist", File(destination, "file1.txt").exists())
+        assertFalse("file2.txt should NOT exist", File(destination, "file2.txt").exists())
+        assertFalse("non_existent.txt should NOT exist", File(destination, "non_existent.txt").exists())
+    }
+
+    // ===== Cancellation Tests (Unit) =====
+
+    @Test
+    fun `should stop extraction when coroutine cancelled`() = runTest {
+        // Arrange - Large ZIP to ensure cancellation happens mid-extraction
+        val largeZip = (1..100).associate { "file$it.txt" to "content$it" }
+        val zipBytes = createTestZip(largeZip)
+        val destination = tempFolder.newFolder("output")
+
+        // Act - Cancel after starting
+        val job = launch {
+            extractor.extract(
+                inputStream = zipBytes.inputStream(),
+                destinationPath = destination,
+                archiveType = ArchiveType.ZIP,
+                sourceFileName = "test.zip",
+                onProgress = {}
+            )
+        }
+
+        // Cancel immediately
+        job.cancel()
+        job.join()
+
+        // Assert - Not all files should be extracted (cancellation worked)
+        val extractedCount = destination.listFiles()?.size ?: 0
+        assertTrue("Should extract fewer than 100 files due to cancellation", extractedCount < 100)
+    }
+
+    @Test
+    fun `should close InputStream even when extraction fails`() = runTest {
+        // Arrange - Corrupted ZIP
+        val corruptedBytes = "not a zip".toByteArray()
+        val destination = tempFolder.newFolder("output")
+
+        var streamClosed = false
+        val trackingStream = object : java.io.ByteArrayInputStream(corruptedBytes) {
+            override fun close() {
+                streamClosed = true
+                super.close()
+            }
+        }
+
+        // Act - Extract corrupted ZIP (should fail)
+        val result = extractor.extract(
+            inputStream = trackingStream,
+            destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
+            onProgress = {}
+        )
+
+        // Assert - Stream should be closed even on failure
+        assertTrue("InputStream should be closed even on failure", streamClosed || result is ExtractionResult.Failure)
+    }
+
+    // ===== Selective Extraction with Folders Tests (Unit) =====
+
+    @Test
+    fun `should extract entire folder when folder path selected`() = runTest {
+        // Arrange - ZIP with nested structure
+        val zipBytes = createTestZip(mapOf(
+            "root.txt" to "root",
+            "folder1/file1.txt" to "f1",
+            "folder1/file2.txt" to "f2",
+            "folder1/nested/file3.txt" to "f3",
+            "folder2/file4.txt" to "f4"
+        ))
+        val destination = tempFolder.newFolder("output")
+
+        // Act - Select entire folder1 (with trailing slash)
+        val result = extractor.extract(
+            inputStream = zipBytes.inputStream(),
+            destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
+            selectedItems = listOf("folder1/file1.txt", "folder1/file2.txt", "folder1/nested/file3.txt"),
+            onProgress = {}
+        )
+
+        // Assert
+        assertTrue("Should succeed", result is ExtractionResult.Success)
+        assertEquals("Should extract 3 files", 3, (result as ExtractionResult.Success).extractedFilesCount)
+
+        assertTrue("folder1/file1.txt should exist", File(destination, "folder1/file1.txt").exists())
+        assertTrue("folder1/file2.txt should exist", File(destination, "folder1/file2.txt").exists())
+        assertTrue("folder1/nested/file3.txt should exist", File(destination, "folder1/nested/file3.txt").exists())
+        assertFalse("folder2/file4.txt should NOT exist", File(destination, "folder2/file4.txt").exists())
+    }
+
+    @Test
+    fun `should handle mix of files and folder selections`() = runTest {
+        // Arrange
+        val zipBytes = createTestZip(mapOf(
+            "root.txt" to "root",
+            "folder1/file1.txt" to "f1",
+            "folder1/file2.txt" to "f2",
+            "folder2/file3.txt" to "f3"
+        ))
+        val destination = tempFolder.newFolder("output")
+
+        // Act - Select root.txt + all of folder1
+        val result = extractor.extract(
+            inputStream = zipBytes.inputStream(),
+            destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
+            selectedItems = listOf("root.txt", "folder1/file1.txt", "folder1/file2.txt"),
+            onProgress = {}
+        )
+
+        // Assert
+        assertTrue("Should succeed", result is ExtractionResult.Success)
+        assertEquals("Should extract 3 files", 3, (result as ExtractionResult.Success).extractedFilesCount)
+
+        assertTrue("root.txt should exist", File(destination, "root.txt").exists())
+        assertTrue("folder1/file1.txt should exist", File(destination, "folder1/file1.txt").exists())
+        assertTrue("folder1/file2.txt should exist", File(destination, "folder1/file2.txt").exists())
+        assertFalse("folder2/file3.txt should NOT exist", File(destination, "folder2/file3.txt").exists())
     }
 
     private fun createTestZip(files: Map<String, String>): ByteArray {

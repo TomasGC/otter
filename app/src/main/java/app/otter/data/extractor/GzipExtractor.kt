@@ -14,17 +14,18 @@ import java.io.InputStream
 import javax.inject.Inject
 
 /**
- * Extractor for GZIP compressed files using Apache Commons Compress.
+ * Extractor for GZIP compressed files.
  * Supports: .gz, .gzip
  *
  * GZIP is a compression format (not an archive format like ZIP or TAR).
  * It compresses a single file without storing directory structure or multiple files.
  *
+ * Uses Apache Commons Compress library.
  * Uses InputStream directly (no temp file needed), avoiding asset packaging issues.
  *
  * Example: photo.jpg.gz → photo.jpg
  */
-class ApacheGzipExtractor @Inject constructor(
+class GzipExtractor @Inject constructor(
     private val pathValidator: PathValidator,
     tempFileManager: ITempFileManager,
     sevenZipHelper: SevenZipExtractorHelper
@@ -39,6 +40,7 @@ class ApacheGzipExtractor @Inject constructor(
         destinationPath: File,
         archiveType: ArchiveType,
         sourceFileName: String,
+        selectedItems: List<String>?,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult = withContext(Dispatchers.IO) {
         // GZIP decompresses to a single file

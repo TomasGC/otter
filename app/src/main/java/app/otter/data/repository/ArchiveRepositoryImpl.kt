@@ -26,7 +26,8 @@ class ArchiveRepositoryImpl @Inject constructor(
 
     override fun extractArchive(
         archive: ArchiveFile,
-        destinationPath: ResourcePath
+        destinationPath: ResourcePath,
+        selectedItems: List<String>?
     ): Flow<ExtractionProgress> = callbackFlow {
         try {
             send(ExtractionProgress.Idle)
@@ -54,7 +55,7 @@ class ArchiveRepositoryImpl @Inject constructor(
 
             // Emit progress events in real-time
             val result = context.contentResolver.openInputStream(archiveUri)?.use { inputStream ->
-                extractor.extract(inputStream, destinationFile, archive.type, sourceFileName) { progress ->
+                extractor.extract(inputStream, destinationFile, archive.type, sourceFileName, selectedItems) { progress ->
                     trySend(progress)
                 }
             } ?: run {
