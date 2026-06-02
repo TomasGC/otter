@@ -16,6 +16,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -56,21 +57,35 @@ class ResourcePathConverterTest {
     // ========================================================================
 
     @Test
-    fun `fromUri converts Android Uri to ResourcePath`() {
+    fun `fromUri converts Android Uri to ResourcePath FileSystem`() {
         val uri = Uri.parse("content://com.example/file/123")
 
         val result = ResourcePathConverter.fromUri(uri)
 
-        assertEquals("content://com.example/file/123", result.value)
+        // content:// URIs that cannot be resolved to a real path are preserved as-is
+        // so they can later be re-parsed by toUri() and handled by content URI extractors.
+        assertEquals(ResourcePath.FileSystem("content://com.example/file/123"), result)
     }
 
     @Test
-    fun `toUri converts ResourcePath to Android Uri`() {
-        val resourcePath = ResourcePath("content://com.example/file/123")
+    fun `toUri converts ResourcePath FileSystem to Android Uri`() {
+        val resourcePath = ResourcePath.FileSystem("content://com.example/file/123")
 
         val result = ResourcePathConverter.toUri(resourcePath)
 
         assertEquals("content://com.example/file/123", result.toString())
+    }
+
+    @Test
+    fun `toUri converts ResourcePath ArchiveEntry to Android Uri using archivePath`() {
+        val resourcePath = ResourcePath.ArchiveEntry(
+            archivePath = "file:///storage/emulated/0/archive.zip",
+            entryPath = "subfolder/file.txt"
+        )
+
+        val result = ResourcePathConverter.toUri(resourcePath)
+
+        assertEquals("file:///storage/emulated/0/archive.zip", result.toString())
     }
 
     // ========================================================================
@@ -391,5 +406,43 @@ class ResourcePathConverterTest {
 
         // Expected: null because recursive call returns null
         assertNull(result)
+    }
+
+    // ========== content:// URI preservation (Samsung bug fix) ==========
+
+    @Test
+    fun `fromUri with content URI preserves URI string when path cannot be resolved`() {
+        // Arrange: content URI that returns null from getRealPathFromContentUri (no query result)
+        val contentUri = Uri.parse("content://com.sec.android.app.myfiles.FileProvider/sdcard/test.zip")
+        every { mockContentResolver.query(any(), any(), any(), any(), any()) } returns null
+
+        val result = ResourcePathConverter.fromUri(contentUri, mockContext) as ResourcePath.FileSystem
+
+        // The URI string itself must be preserved in the path
+        assertTrue("content:// URI should be preserved in path when unresolvable",
+            result.path.startsWith("content://"))
+        assertEquals(contentUri.toString(), result.path)
+    }
+
+    @Test
+    fun `toUri with content URI stored as path returns content Uri directly`() {
+        val contentUriString = "content://com.sec.android.app.myfiles.FileProvider/sdcard/test.zip"
+        val resourcePath = ResourcePath.FileSystem(contentUriString)
+
+        val result = ResourcePathConverter.toUri(resourcePath)
+
+        assertEquals("Should return content:// Uri directly", "content", result.scheme)
+        assertEquals(contentUriString, result.toString())
+    }
+
+    @Test
+    fun `toUri with file URI stored as path returns file Uri directly`() {
+        val fileUriString = "file:///storage/emulated/0/test.zip"
+        val resourcePath = ResourcePath.FileSystem(fileUriString)
+
+        val result = ResourcePathConverter.toUri(resourcePath)
+
+        assertEquals("Should return file:// Uri directly", "file", result.scheme)
+        assertEquals(fileUriString, result.toString())
     }
 }

@@ -37,7 +37,7 @@ class ArchiveBrowserRepositoryImplTest {
     @Test
     fun `listEntries with null URI path should return failure`() = runTest {
         // Given
-        val invalidPath = ResourcePath.from("invalid://test")
+        val invalidPath = ResourcePath.FileSystem("invalid://test")
 
         // When
         val result = repository.listEntries(invalidPath, "")
@@ -49,7 +49,7 @@ class ArchiveBrowserRepositoryImplTest {
     @Test
     fun `listEntries with nonexistent file should return failure`() = runTest {
         // Given
-        val nonexistentPath = ResourcePath.from("file:///nonexistent/archive.zip")
+        val nonexistentPath = ResourcePath.FileSystem("file:///nonexistent/archive.zip")
 
         // When
         val result = repository.listEntries(nonexistentPath, "")
@@ -61,7 +61,7 @@ class ArchiveBrowserRepositoryImplTest {
     @Test
     fun `listEntries with empty path should use root`() = runTest {
         // Given
-        val path = ResourcePath.from("file:///nonexistent.zip")
+        val path = ResourcePath.FileSystem("file:///nonexistent.zip")
 
         // When
         val result = repository.listEntries(path, "")
@@ -74,7 +74,7 @@ class ArchiveBrowserRepositoryImplTest {
     @Test
     fun `listEntries with path with trailing slash should be normalized`() = runTest {
         // Given
-        val path = ResourcePath.from("file:///nonexistent.zip")
+        val path = ResourcePath.FileSystem("file:///nonexistent.zip")
         val pathWithSlash = "folder/"
 
         // When
@@ -88,8 +88,8 @@ class ArchiveBrowserRepositoryImplTest {
     @Test
     fun `extractSelected with invalid archive URI should emit error`() = runTest {
         // Given
-        val invalidPath = ResourcePath.from("invalid://test")
-        val destinationPath = ResourcePath.from("file:///output")
+        val invalidPath = ResourcePath.FileSystem("invalid://test")
+        val destinationPath = ResourcePath.FileSystem("file:///output")
         val entryPaths = listOf("file.txt")
 
         // When
@@ -105,8 +105,8 @@ class ArchiveBrowserRepositoryImplTest {
     @Test
     fun `extractSelected with invalid destination URI should emit error`() = runTest {
         // Given
-        val archivePath = ResourcePath.from("file:///test.zip")
-        val invalidDestination = ResourcePath.from("invalid://output")
+        val archivePath = ResourcePath.FileSystem("file:///test.zip")
+        val invalidDestination = ResourcePath.FileSystem("invalid://output")
         val entryPaths = listOf("file.txt")
 
         // When
@@ -122,8 +122,8 @@ class ArchiveBrowserRepositoryImplTest {
     @Test
     fun `extractSelected with empty entry paths should handle gracefully`() = runTest {
         // Given
-        val archivePath = ResourcePath.from("file:///test.zip")
-        val destinationPath = ResourcePath.from("file:///output")
+        val archivePath = ResourcePath.FileSystem("file:///test.zip")
+        val destinationPath = ResourcePath.FileSystem("file:///output")
         val emptyPaths = emptyList<String>()
 
         // When

@@ -78,10 +78,9 @@ class ArchiveBrowserRepositoryImpl(
                                 entries.add(
                                     ArchiveEntry(
                                         path = itemPath.trimEnd('/'),
-                                        name = name,
                                         isDirectory = isDirectory,
-                                        sizeBytes = size,
-                                        compressedSize = null,
+                                        sizeBytes = size ?: 0L,
+                                        compressedSize = 0L,
                                         lastModified = System.currentTimeMillis()
                                     )
                                 )
@@ -94,10 +93,9 @@ class ArchiveBrowserRepositoryImpl(
                                     entries.add(
                                         ArchiveEntry(
                                             path = dirPath,
-                                            name = dirName,
                                             isDirectory = true,
-                                            sizeBytes = null,
-                                            compressedSize = null,
+                                            sizeBytes = 0L,
+                                            compressedSize = 0L,
                                             lastModified = System.currentTimeMillis()
                                         )
                                     )

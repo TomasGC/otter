@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -54,12 +56,12 @@ class ArchiveRepositoryImplTest {
     @Test
     fun `should select correct extractor for archive type`() = runTest {
         val archive = createTestArchive()
-        val destinationPath = ResourcePath.from("file:///downloads")
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
         val inputStream = ByteArrayInputStream(byteArrayOf())
 
         every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns inputStream
         coEvery {
-            zipExtractor.extract(any(), any(), any(), any(), any())
+            zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } returns ExtractionResult.Success("/downloads/test", 5)
 
         repository.extractArchive(archive, destinationPath).toList()
@@ -75,7 +77,7 @@ class ArchiveRepositoryImplTest {
         val repo = ArchiveRepositoryImpl(context, listOf(unsupportedExtractor))
 
         val archive = createTestArchive()
-        val destinationPath = ResourcePath.from("file:///downloads")
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
 
         val results = repo.extractArchive(archive, destinationPath).toList()
 
@@ -87,7 +89,7 @@ class ArchiveRepositoryImplTest {
     @Test
     fun `should return error when cannot open archive`() = runTest {
         val archive = createTestArchive()
-        val destinationPath = ResourcePath.from("file:///downloads")
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
 
         every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns null
 
@@ -101,12 +103,12 @@ class ArchiveRepositoryImplTest {
     @Test
     fun `should propagate extraction success`() = runTest {
         val archive = createTestArchive()
-        val destinationPath = ResourcePath.from("file:///downloads")
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
         val inputStream = ByteArrayInputStream(byteArrayOf())
 
         every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns inputStream
         coEvery {
-            zipExtractor.extract(any(), any(), any(), any(), any())
+            zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } returns ExtractionResult.Success("/downloads/test", 5)
 
         val results = repository.extractArchive(archive, destinationPath).toList()
@@ -120,12 +122,12 @@ class ArchiveRepositoryImplTest {
     @Test
     fun `should propagate extraction failure`() = runTest {
         val archive = createTestArchive()
-        val destinationPath = ResourcePath.from("file:///downloads")
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
         val inputStream = ByteArrayInputStream(byteArrayOf())
 
         every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns inputStream
         coEvery {
-            zipExtractor.extract(any(), any(), any(), any(), any())
+            zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } returns ExtractionResult.Failure("Corrupted archive", null)
 
         val results = repository.extractArchive(archive, destinationPath).toList()
@@ -145,7 +147,7 @@ class ArchiveRepositoryImplTest {
 
         every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns inputStream
         coEvery {
-            zipExtractor.extract(any(), any(), any(), any(), any())
+            zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } answers {
             val destFile = secondArg<File>()
             assertEquals(tempDir.absolutePath, destFile.absolutePath)
@@ -159,12 +161,12 @@ class ArchiveRepositoryImplTest {
     // @Test
     // fun `should emit progress events during extraction`() = runTest {
     //     val archive = createTestArchive()
-    //     val destinationPath = ResourcePath.from("file:///downloads")
+    //     val destinationPath = ResourcePath.FileSystem("file:///downloads")
     //     val inputStream = ByteArrayInputStream(byteArrayOf())
     //
     //     every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns inputStream
     //     coEvery {
-    //         zipExtractor.extract(any(), any(), any(), any(), any())
+    //         zipExtractor.extract(any(), any(), any(), any(), any(), any())
     //     } answers {
     //         val onProgress = lastArg<(ExtractionProgress) -> Unit>()
     //         // Simulate progress callbacks
@@ -185,12 +187,12 @@ class ArchiveRepositoryImplTest {
     @Test
     fun `should handle cancellation gracefully`() = runTest {
         val archive = createTestArchive()
-        val destinationPath = ResourcePath.from("file:///downloads")
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
         val inputStream = ByteArrayInputStream(byteArrayOf())
 
         every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns inputStream
         coEvery {
-            zipExtractor.extract(any(), any(), any(), any(), any())
+            zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } throws kotlinx.coroutines.CancellationException("Extraction cancelled")
 
         val results = repository.extractArchive(archive, destinationPath).toList()
@@ -200,8 +202,72 @@ class ArchiveRepositoryImplTest {
         assertTrue("First event should be Idle", results[0] is ExtractionProgress.Idle)
     }
 
+    // ========== selectedItems propagation ==========
+
+    @Test
+    fun `should pass selectedItems to extractor when provided`() = runTest {
+        val archive = createTestArchive()
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
+        val inputStream = ByteArrayInputStream(byteArrayOf())
+        val selectedItems = listOf("folder/file1.txt", "folder/file2.jpg")
+
+        every { contentResolver.openInputStream(any()) } returns inputStream
+        var capturedSelectedItems: List<String>? = null
+        coEvery {
+            zipExtractor.extract(any(), any(), any(), any(), any(), any())
+        } answers {
+            capturedSelectedItems = arg(4)
+            ExtractionResult.Success("/downloads/test", 2)
+        }
+
+        repository.extractArchive(archive, destinationPath, selectedItems).toList()
+
+        assertEquals("selectedItems must be passed to extractor", selectedItems, capturedSelectedItems)
+    }
+
+    @Test
+    fun `should pass null selectedItems to extractor when not provided`() = runTest {
+        val archive = createTestArchive()
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
+        val inputStream = ByteArrayInputStream(byteArrayOf())
+
+        every { contentResolver.openInputStream(any()) } returns inputStream
+        var capturedSelectedItems: List<String>? = listOf("placeholder") // non-null default to verify null is passed
+        coEvery {
+            zipExtractor.extract(any(), any(), any(), any(), any(), any())
+        } answers {
+            capturedSelectedItems = arg(4)
+            ExtractionResult.Success("/downloads/test", 5)
+        }
+
+        repository.extractArchive(archive, destinationPath, null).toList()
+
+        assertNull("null selectedItems must be passed through to extractor", capturedSelectedItems)
+    }
+
+    @Test
+    fun `should pass empty selectedItems list to extractor`() = runTest {
+        val archive = createTestArchive()
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
+        val inputStream = ByteArrayInputStream(byteArrayOf())
+
+        every { contentResolver.openInputStream(any()) } returns inputStream
+        var capturedSelectedItems: List<String>? = null
+        coEvery {
+            zipExtractor.extract(any(), any(), any(), any(), any(), any())
+        } answers {
+            capturedSelectedItems = arg(4)
+            ExtractionResult.Success("/downloads/test", 0)
+        }
+
+        repository.extractArchive(archive, destinationPath, emptyList()).toList()
+
+        assertNotNull("Empty list must be passed (not null)", capturedSelectedItems)
+        assertTrue("Empty list must be empty", capturedSelectedItems!!.isEmpty())
+    }
+
     private fun createTestArchive() = ArchiveFile(
-        path = ResourcePath.from("file:///test.zip"),
+        path = ResourcePath.FileSystem("file:///test.zip"),
         name = "test.zip",
         sizeBytes = 1024L,
         mimeType = "application/zip",
