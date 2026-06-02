@@ -5,6 +5,7 @@ Uses 7-Zip for standard formats and custom RPA-3.0 generator.
 Configuration from test-settings.json.
 """
 
+import argparse
 import json
 import os
 import pickle
@@ -228,7 +229,7 @@ def create_7zip_archives():
             print(f"  {e.stderr}")
 
 
-def main():
+def main(rpa_only: bool = False):
     """Create all test archives."""
     print("=" * 60)
     print("Test Archive Creator")
@@ -259,8 +260,8 @@ def main():
             print(e.stderr)
             return
 
-    # Verify 7-Zip exists
-    if not Path(SEVEN_ZIP).exists():
+    # Verify 7-Zip exists (not needed for --rpa-only)
+    if not rpa_only and not Path(SEVEN_ZIP).exists():
         print(f"\nERROR: 7-Zip not found: {SEVEN_ZIP}")
         print("Install 7-Zip from https://www.7-zip.org/")
         return
@@ -276,8 +277,9 @@ def main():
 
     # Create archives
     create_rpa_archive()
-    create_7zip_archives()
-    create_rar_archive_docker()
+    if not rpa_only:
+        create_7zip_archives()
+        create_rar_archive_docker()
 
     print("\n" + "=" * 60)
     print("Archive creation complete!")
@@ -291,4 +293,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Create test archives")
+    parser.add_argument("--rpa-only", action="store_true", help="Only create RPA archive (no 7z, no Docker)")
+    args = parser.parse_args()
+    main(rpa_only=args.rpa_only)

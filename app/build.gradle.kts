@@ -111,13 +111,13 @@ android {
             isReturnDefaultValues = true
             isIncludeAndroidResources = true
             all {
-                // Increase heap for tests
                 it.maxHeapSize = "2048m"
-                // Enable test output logging
                 it.testLogging {
                     events("passed", "skipped", "failed", "standardOut", "standardError")
                     showStandardStreams = true
                 }
+                // Archives directory for tests that need real archive files
+                it.systemProperty("archives.dir", rootProject.rootDir.absolutePath + "/archives")
             }
         }
         managedDevices {
@@ -258,3 +258,58 @@ apply(from = "../gradle/generate-test-constants.gradle.kts")
 
 // Apply test archives sending script
 apply(from = "../gradle/send-test-archives.gradle.kts")
+
+// Filter testDebugUnitTest by stage via -DtestType=<value>
+// Used by CI for parallel/sequential test stages.
+// Must be in afterEvaluate: Android plugin registers testDebugUnitTest during evaluation.
+afterEvaluate {
+tasks.named("testDebugUnitTest", Test::class.java) {
+    val testType = System.getProperty("testType", "all")
+    when (testType) {
+        // Unit - domain + service + util (exclude integration tests sharing same packages)
+        "unit-domain-service" -> filter {
+            includeTestsMatching("app.otter.domain.*")
+            includeTestsMatching("app.otter.service.*")
+            includeTestsMatching("app.otter.util.*")
+            excludeTestsMatching("*IntegrationTest*")
+            excludeTestsMatching("*RealIntegrationTest*")
+        }
+        // Unit - data layer (browser, inspector, repository, util + 4 unit extractor tests)
+        // Note: app.otter.data.extractor is shared with integration tests, use class names for unit
+        "unit-data" -> filter {
+            includeTestsMatching("app.otter.data.browser.*")
+            includeTestsMatching("app.otter.data.inspector.*")
+            includeTestsMatching("app.otter.data.repository.*")
+            includeTestsMatching("app.otter.data.util.*")
+            includeTestsMatching("*BaseArchiveExtractorTest*")
+            includeTestsMatching("*RpaArchiveCreationTest*")
+            includeTestsMatching("*RpaExtractorParseTest*")
+            includeTestsMatching("*RpaHexDumpTest*")
+        }
+        // Unit - UI / ViewModel
+        "unit-ui" -> filter {
+            includeTestsMatching("app.otter.ui.*")
+        }
+        // Integration mock - extractor tests (ZIP, RAR, TAR, 7z, RPA against real archives)
+        "integration-mock-extractor" -> filter {
+            includeTestsMatching("app.otter.data.extractor.*")
+            excludeTestsMatching("*BaseArchiveExtractorTest*")
+            excludeTestsMatching("*RpaArchiveCreationTest*")
+            excludeTestsMatching("*RpaExtractorParseTest*")
+            excludeTestsMatching("*RpaHexDumpTest*")
+            excludeTestsMatching("*RealIntegrationTest*")
+        }
+        // Integration mock - service, viewmodel, domain usecase
+        "integration-mock-other" -> filter {
+            includeTestsMatching("app.otter.integration.service.*")
+            includeTestsMatching("app.otter.integration.viewmodel.*")
+            includeTestsMatching("app.otter.domain.usecase.ExtractSelectedItemsIntegrationTest")
+        }
+        // Integration real - no mocks at all
+        "integration-real" -> filter {
+            includeTestsMatching("*RealIntegrationTest*")
+        }
+        // "all" → no filter, runs everything (default for local development)
+    }
+}
+}

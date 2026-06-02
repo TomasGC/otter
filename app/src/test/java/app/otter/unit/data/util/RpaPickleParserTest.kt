@@ -14,7 +14,8 @@ class RpaPickleParserTest {
 
     @Test
     fun `parse real RPA archive locally`() {
-        val rpaFile = File("C:/dev/repos/GitHub/otter/archives/test_archive.rpa")
+        val archivesDir = System.getProperty("archives.dir", "../archives")
+        val rpaFile = File("$archivesDir/test_archive.rpa")
         require(rpaFile.exists()) { "Test archive not found: ${rpaFile.absolutePath}" }
 
         println("=== Parsing RPA archive: ${rpaFile.name} (${rpaFile.length()} bytes) ===")

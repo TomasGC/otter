@@ -532,6 +532,15 @@ class FileBrowserViewModelTest {
                 hasMore = true
             )
         )
+        // Scroll triggers page 2 load — return items consistent with page 1 naming
+        coEvery { browseItemsUseCase(any(), offset = 100, limit = 100) } returns Result.success(
+            BrowseResult.Paginated(
+                items = (100 until 200).map { createBrowsableItem("file_$it.txt", isDirectory = false) },
+                totalEstimate = 1000,
+                nextOffset = 200,
+                hasMore = false
+            )
+        )
 
         viewModel.navigateToPath(ResourcePath.FileSystem("file:///test"))
 
