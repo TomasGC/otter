@@ -1,0 +1,26 @@
+{
+  "test_archives": {
+    "device_path": "/storage/emulated/0/otter-test-archives",
+    "host_path": "archives",
+    "files": [
+      "test_archive.zip",
+      "test_archive.rar",
+      "test_archive.rpa",
+      "test_archive.7z",
+      "test_archive.tar",
+      "test_archive.tar.gz"
+    ]
+  },
+  "logging": {
+    "enabled_in_tests": false,
+    "log_file_path": null
+  },
+  "test_execution": {
+    "instrumented_timeout_seconds": 1200,
+    "retry_on_failure": false
+  },
+  "adb": {
+    "connection_timeout_seconds": 60,
+    "default_device_selection": "first"
+  }
+}
