@@ -7,6 +7,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.otter.domain.usecase.helpers.TestConstants
 import app.otter.service.ExtractionService
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
@@ -155,7 +156,7 @@ class ExtractionActivityTest {
     @Test
     fun activityHandlesFileUri() {
         // Given - file:// URI (legacy, but should handle gracefully)
-        val fileUri = Uri.parse("file:///storage/emulated/0/Download/test.zip")
+        val fileUri = Uri.parse("file://${TestConstants.TestArchives.devicePath}/test.zip")
         val intent = Intent(ApplicationProvider.getApplicationContext(), ExtractionActivity::class.java).apply {
             data = fileUri
         }

@@ -4,10 +4,13 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
-import app.otter.util.PathValidator
+import dagger.hilt.android.testing.HiltAndroidRule
+import dagger.hilt.android.testing.HiltAndroidTest
+import javax.inject.Inject
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -16,19 +19,25 @@ import org.junit.runner.RunWith
 /**
  * Instrumented test for ZipExtractor with real device/emulator.
  * Tests ZIP extraction with Android's native ZipFile.
+ * Uses Hilt for dependency injection.
  */
+@HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
 class ZipExtractorInstrumentedTest {
 
-    @get:Rule
+    @get:Rule(order = 0)
+    val hiltRule = HiltAndroidRule(this)
+
+    @get:Rule(order = 1)
     val tempFolder = TemporaryFolder()
 
-    private val pathValidator = PathValidator()
-    private val extractor = ZipExtractor(
-        pathValidator = pathValidator,
-        tempFileManager = TempFileManager(),
-        sevenZipHelper = SevenZipExtractorHelper()
-    )
+    @Inject
+    lateinit var extractor: ZipExtractor
+
+    @Before
+    fun setup() {
+        hiltRule.inject()
+    }
 
     @Test
     fun testSupportsZipType() {
@@ -48,6 +57,7 @@ class ZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test.zip",
+            selectedItems = null,
             onProgress = {}
         )
 
@@ -81,6 +91,7 @@ class ZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test-multi.zip",
+            selectedItems = null,
             onProgress = {}
         )
 
@@ -113,6 +124,7 @@ class ZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test-progress.zip",
+            selectedItems = null,
             onProgress = { progress ->
                 if (progress is ExtractionProgress.Extracting) {
                     progressValues.add((progress.progress * 100).toInt())
@@ -138,6 +150,7 @@ class ZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test-deep.zip",
+            selectedItems = null,
             onProgress = {}
         )
 
@@ -168,6 +181,7 @@ class ZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test-corrupted.zip",
+            selectedItems = null,
             onProgress = {}
         )
 
@@ -187,6 +201,7 @@ class ZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test-malicious.zip",
+            selectedItems = null,
             onProgress = {}
         )
 
@@ -212,6 +227,7 @@ class ZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test-special.zip",
+            selectedItems = null,
             onProgress = {}
         )
 
