@@ -13,14 +13,15 @@ class ExtractArchiveUseCase @Inject constructor(
 ) {
     operator fun invoke(
         archive: ArchiveFile,
-        destinationPath: ResourcePath
+        destinationPath: ResourcePath,
+        selectedItems: List<String>? = null
     ): Flow<ExtractionProgress> = flow {
         if (archive.sizeBytes == 0L) {
             emit(ExtractionProgress.Error("Archive is empty", null))
             return@flow
         }
 
-        repository.extractArchive(archive, destinationPath)
+        repository.extractArchive(archive, destinationPath, selectedItems)
             .collect { progress ->
                 emit(progress)
             }

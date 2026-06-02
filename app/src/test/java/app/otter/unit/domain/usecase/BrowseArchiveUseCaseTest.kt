@@ -26,11 +26,12 @@ class BrowseArchiveUseCaseTest {
     @Test
     fun `invoke should delegate to repository`() = runTest {
         // Given
-        val archivePath = ResourcePath.from("file:///test.zip")
+        val archivePath = ResourcePath.FileSystem("file:///test.zip")
         val path = "folder"
+        val timestamp = System.currentTimeMillis()
         val entries = listOf(
-            ArchiveEntry("folder/file.txt", "file.txt", false, 100, 80, System.currentTimeMillis()),
-            ArchiveEntry("folder/sub", "sub", true, null, null, System.currentTimeMillis())
+            ArchiveEntry("folder/file.txt", false, 100, 80, timestamp),
+            ArchiveEntry("folder/sub", true, 0, 0, timestamp)
         )
         coEvery { repository.listEntries(archivePath, path) } returns Result.success(entries)
 
@@ -45,12 +46,13 @@ class BrowseArchiveUseCaseTest {
     @Test
     fun `invoke should sort directories before files`() = runTest {
         // Given
-        val archivePath = ResourcePath.from("file:///test.zip")
+        val archivePath = ResourcePath.FileSystem("file:///test.zip")
+        val timestamp = System.currentTimeMillis()
         val entries = listOf(
-            ArchiveEntry("file1.txt", "file1.txt", false, 100, 80, System.currentTimeMillis()),
-            ArchiveEntry("dir1", "dir1", true, null, null, System.currentTimeMillis()),
-            ArchiveEntry("file2.txt", "file2.txt", false, 200, 150, System.currentTimeMillis()),
-            ArchiveEntry("dir2", "dir2", true, null, null, System.currentTimeMillis())
+            ArchiveEntry("file1.txt", false, 100, 80, timestamp),
+            ArchiveEntry("dir1", true, 0, 0, timestamp),
+            ArchiveEntry("file2.txt", false, 200, 150, timestamp),
+            ArchiveEntry("dir2", true, 0, 0, timestamp)
         )
         coEvery { repository.listEntries(archivePath, "") } returns Result.success(entries)
 
@@ -72,12 +74,13 @@ class BrowseArchiveUseCaseTest {
     @Test
     fun `invoke should sort alphabetically within same type`() = runTest {
         // Given
-        val archivePath = ResourcePath.from("file:///test.zip")
+        val archivePath = ResourcePath.FileSystem("file:///test.zip")
+        val timestamp = System.currentTimeMillis()
         val entries = listOf(
-            ArchiveEntry("zebra.txt", "zebra.txt", false, 100, 80, System.currentTimeMillis()),
-            ArchiveEntry("apple.txt", "apple.txt", false, 100, 80, System.currentTimeMillis()),
-            ArchiveEntry("zoo", "zoo", true, null, null, System.currentTimeMillis()),
-            ArchiveEntry("archive", "archive", true, null, null, System.currentTimeMillis())
+            ArchiveEntry("zebra.txt", false, 100, 80, timestamp),
+            ArchiveEntry("apple.txt", false, 100, 80, timestamp),
+            ArchiveEntry("zoo", true, 0, 0, timestamp),
+            ArchiveEntry("archive", true, 0, 0, timestamp)
         )
         coEvery { repository.listEntries(archivePath, "") } returns Result.success(entries)
 
@@ -87,21 +90,22 @@ class BrowseArchiveUseCaseTest {
         // Then
         val sorted = result.getOrNull()!!
         // Directories: archive, zoo
-        assertEquals("archive", sorted[0].name)
-        assertEquals("zoo", sorted[1].name)
+        assertEquals("archive", sorted[0].path)
+        assertEquals("zoo", sorted[1].path)
         // Files: apple.txt, zebra.txt
-        assertEquals("apple.txt", sorted[2].name)
-        assertEquals("zebra.txt", sorted[3].name)
+        assertEquals("apple.txt", sorted[2].path)
+        assertEquals("zebra.txt", sorted[3].path)
     }
 
     @Test
     fun `invoke should be case insensitive when sorting`() = runTest {
         // Given
-        val archivePath = ResourcePath.from("file:///test.zip")
+        val archivePath = ResourcePath.FileSystem("file:///test.zip")
+        val timestamp = System.currentTimeMillis()
         val entries = listOf(
-            ArchiveEntry("Zebra.txt", "Zebra.txt", false, 100, 80, System.currentTimeMillis()),
-            ArchiveEntry("apple.txt", "apple.txt", false, 100, 80, System.currentTimeMillis()),
-            ArchiveEntry("BANANA.txt", "BANANA.txt", false, 100, 80, System.currentTimeMillis())
+            ArchiveEntry("Zebra.txt", false, 100, 80, timestamp),
+            ArchiveEntry("apple.txt", false, 100, 80, timestamp),
+            ArchiveEntry("BANANA.txt", false, 100, 80, timestamp)
         )
         coEvery { repository.listEntries(archivePath, "") } returns Result.success(entries)
 
@@ -110,15 +114,15 @@ class BrowseArchiveUseCaseTest {
 
         // Then
         val sorted = result.getOrNull()!!
-        assertEquals("apple.txt", sorted[0].name)
-        assertEquals("BANANA.txt", sorted[1].name)
-        assertEquals("Zebra.txt", sorted[2].name)
+        assertEquals("apple.txt", sorted[0].path)
+        assertEquals("BANANA.txt", sorted[1].path)
+        assertEquals("Zebra.txt", sorted[2].path)
     }
 
     @Test
     fun `invoke should return empty list when repository returns empty`() = runTest {
         // Given
-        val archivePath = ResourcePath.from("file:///test.zip")
+        val archivePath = ResourcePath.FileSystem("file:///test.zip")
         coEvery { repository.listEntries(archivePath, "") } returns Result.success(emptyList())
 
         // When
@@ -132,7 +136,7 @@ class BrowseArchiveUseCaseTest {
     @Test
     fun `invoke should propagate repository failure`() = runTest {
         // Given
-        val archivePath = ResourcePath.from("file:///test.zip")
+        val archivePath = ResourcePath.FileSystem("file:///test.zip")
         val exception = IllegalArgumentException("Archive not found")
         coEvery { repository.listEntries(archivePath, "") } returns Result.failure(exception)
 
@@ -147,7 +151,7 @@ class BrowseArchiveUseCaseTest {
     @Test
     fun `invoke should use empty string as default path`() = runTest {
         // Given
-        val archivePath = ResourcePath.from("file:///test.zip")
+        val archivePath = ResourcePath.FileSystem("file:///test.zip")
         coEvery { repository.listEntries(archivePath, "") } returns Result.success(emptyList())
 
         // When

@@ -1,21 +1,28 @@
 package app.otter.domain.model
 
 /**
- * Represents a path to a file or directory resource.
- * Platform-agnostic alternative to Android's Uri for the domain layer.
+ * Represents a path that can be browsed - either a file system path or an archive entry path.
  *
- * Uses value class for zero runtime overhead while maintaining type safety.
- *
- * @property value The string representation of the path
+ * This sealed class enables type-safe polymorphic dispatch when handling different path types
+ * in the archive browsing feature. The compiler enforces exhaustive when expressions.
  */
-@JvmInline
-value class ResourcePath(val value: String) {
-    companion object {
-        /**
-         * Creates a ResourcePath from a string.
-         */
-        fun from(string: String): ResourcePath = ResourcePath(string)
-    }
+sealed class ResourcePath {
 
-    override fun toString(): String = value
+    /**
+     * Represents a file system path (e.g., /storage/emulated/0/Download).
+     *
+     * @property path The absolute file system path
+     */
+    data class FileSystem(val path: String) : ResourcePath()
+
+    /**
+     * Represents an entry path within an archive file.
+     *
+     * @property archivePath The absolute path to the archive file
+     * @property entryPath The path within the archive (empty string = archive root)
+     */
+    data class ArchiveEntry(
+        val archivePath: String,
+        val entryPath: String = ""
+    ) : ResourcePath()
 }

@@ -16,8 +16,8 @@ android {
         applicationId = "app.otter"
         minSdk = 26
         targetSdk = 34
-        versionCode = 116
-        versionName = "0.0.116"
+        versionCode = 202
+        versionName = "0.0.202"
 
         testInstrumentationRunner = "app.otter.HiltTestRunner"
         vectorDrawables {
@@ -44,6 +44,15 @@ android {
         // Force inclusion of test archive files in androidTest assets
         getByName("androidTest") {
             assets.srcDirs("src/androidTest/assets")
+        }
+
+        // Shared test code between unit tests (test/) and instrumented tests (androidTest/)
+        getByName("test") {
+            java.srcDir("src/sharedTest/java")
+        }
+
+        getByName("androidTest") {
+            java.srcDir("src/sharedTest/java")
         }
     }
 
@@ -159,9 +168,9 @@ dependencies {
     implementation("com.jakewharton.timber:timber:5.0.1")
 
     testImplementation("junit:junit:4.13.2")
-    testImplementation("io.mockk:mockk:1.13.9")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
-    testImplementation("org.robolectric:robolectric:4.11.1")
+    testImplementation("io.mockk:mockk:1.13.12")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    testImplementation("org.robolectric:robolectric:4.16.1")
 
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
@@ -240,3 +249,12 @@ tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
         md.required.set(true)
     }
 }
+
+// Apply test parallelization configuration
+apply(from = "../gradle/test-parallelization.gradle.kts")
+
+// Apply test constants generation script
+apply(from = "../gradle/generate-test-constants.gradle.kts")
+
+// Apply test archives sending script
+apply(from = "../gradle/send-test-archives.gradle.kts")

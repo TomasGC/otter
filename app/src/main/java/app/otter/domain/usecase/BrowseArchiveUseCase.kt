@@ -22,7 +22,7 @@ class BrowseArchiveUseCase(
         return repository.listEntries(archivePath, path).map { entries ->
             entries.sortedWith(
                 compareBy<ArchiveEntry> { !it.isDirectory }
-                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.path.substringAfterLast('/') }
             )
         }
     }

@@ -1,4 +1,6 @@
+# ============================================
 # Android
+# ============================================
 *.iml
 .gradle
 /local.properties
@@ -11,14 +13,49 @@ build/
 *.apk
 *.aab
 
-# Keystore (keep debug keystore for consistent signing)
+# ============================================
+# Keystore
+# ============================================
+# Keep debug keystore for consistent signing
 # keystore/*.keystore is intentionally tracked for debug builds
-
-# Claude Code
-.claude/**/*.local.*
-.claude/*.local.*
-.claude/tmpclaude/
-.claude/settings.local.json
-.claude/sessions/
-ktlint
 keystore/release.keystore
+
+# ============================================
+# Claude Code
+# ============================================
+# Local/temporary files (not committed)
+**/*.local.*
+**/.local/
+.claude/tmpclaude/
+.claude/sessions/
+
+# ============================================
+# Test artifacts
+# ============================================
+ignored_tests/
+
+# ============================================
+# Temporary files (logs, cache, etc.)
+# ============================================
+# All temporary files go in temp/ directory
+temp/
+*archives/
+
+# ============================================
+# Python
+# ============================================
+scripts/__pycache__/
+__pycache__/
+*.pyc
+*.pyo
+
+# Test coverage reports
+scripts/.pytest_cache/
+scripts/htmlcov/
+scripts/coverage.xml
+scripts/.coverage
+
+# ============================================
+# Tools
+# ============================================
+ktlint
