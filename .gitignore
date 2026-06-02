@@ -33,6 +33,9 @@ keystore/release.keystore
 # Test artifacts
 # ============================================
 ignored_tests/
+*test-results*.txt
+*test-results*.log
+test-run-final.txt
 
 # ============================================
 # Temporary files (logs, cache, etc.)
