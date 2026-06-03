@@ -309,6 +309,7 @@ class FileBrowserViewModel @Inject constructor(
         // Slide the window: keep ±HALF_WINDOW around current position
         if (!isLoadingPage) {
             cleanupCache(absoluteIndex)
+            if (cachedItems.isNotEmpty()) emitVisibleItems()
         }
     }
 
@@ -318,7 +319,7 @@ class FileBrowserViewModel @Inject constructor(
         isLoadingPage = true
 
         viewModelScope.launch {
-            val result: Result<BrowseResult> = withContext(Dispatchers.IO) {
+            val result: Result<BrowseResult> = withContext(ioDispatcher) {
                 browseItemsUseCase(currentPath, offset = nextOffset, limit = 100)
             }
             // State mutations on Main thread — no race with cleanupCache
@@ -342,13 +343,6 @@ class FileBrowserViewModel @Inject constructor(
                         currentWindowEnd = nextOffset
                         isLoadingPage = false
                         emitVisibleItems()
-                        // Fast-scroll guard: if user is still near the new edge, load again immediately
-                        // without waiting for the next snapshotFlow event (which may not fire if
-                        // firstVisibleItemIndex didn't change while the load was in progress).
-                        val maxCached = cachedItems.keys.maxOrNull() ?: 0
-                        if (maxCached - lastKnownAbsoluteIndex < LOAD_TRIGGER && hasMore) {
-                            loadNextPage()
-                        }
                     }
                 }
             }.onFailure {
@@ -365,7 +359,7 @@ class FileBrowserViewModel @Inject constructor(
         val offset = (currentWindowStart - 100).coerceAtLeast(0)
 
         viewModelScope.launch {
-            val result: Result<BrowseResult> = withContext(Dispatchers.IO) {
+            val result: Result<BrowseResult> = withContext(ioDispatcher) {
                 browseItemsUseCase(currentPath, offset = offset, limit = 100)
             }
             // State mutations on Main thread — no race with cleanupCache
@@ -378,11 +372,6 @@ class FileBrowserViewModel @Inject constructor(
                         currentWindowStart = offset
                         isLoadingPage = false
                         emitVisibleItems()
-                        // Fast-scroll guard: if user is still near the new front edge, load again immediately.
-                        val minCached = cachedItems.keys.minOrNull() ?: 0
-                        if (lastKnownAbsoluteIndex - minCached < LOAD_TRIGGER && currentWindowStart > 0) {
-                            loadPreviousPage()
-                        }
                     }
                     else -> {
                         isLoadingPage = false
@@ -412,7 +401,8 @@ class FileBrowserViewModel @Inject constructor(
             if (maxCached + 1 < nextOffset) nextOffset = maxCached + 1
         }
 
-        emitVisibleItems()
+        // Don't emit here — only loads populate cache and emit. Cleanup manages state only.
+        // Prevents emitting empty cache between scroll and async load completion.
     }
 
     private fun emitVisibleItems() {

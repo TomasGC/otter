@@ -12,6 +12,9 @@ on:
         type: number
         default: 7
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   coverage-merge:
     name: Merge Coverage & Verify >= ${{ inputs.coverage-threshold }}%
@@ -28,19 +31,9 @@ jobs:
           java-version: '17'
 
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
-
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
 
       - name: Download all coverage data
         uses: actions/download-artifact@v4
@@ -49,6 +42,14 @@ jobs:
           path: app/build/kover/bin-reports/
           merge-multiple: true
         continue-on-error: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate test archives (RPA only)
+        run: python scripts/src/cli/create_test_archives.py --rpa-only
 
       - name: Generate merged Kover report
         run: |

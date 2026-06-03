@@ -229,8 +229,12 @@ def create_7zip_archives():
             print(f"  {e.stderr}")
 
 
-def main(rpa_only: bool = False):
+def main(rpa_only: bool = False, output_dir: Path = None):
     """Create all test archives."""
+    global OUTPUT_DIR
+    if output_dir is not None:
+        OUTPUT_DIR = output_dir
+
     print("=" * 60)
     print("Test Archive Creator")
     print("=" * 60)
@@ -295,5 +299,6 @@ def main(rpa_only: bool = False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create test archives")
     parser.add_argument("--rpa-only", action="store_true", help="Only create RPA archive (no 7z, no Docker)")
+    parser.add_argument("--output-dir", type=Path, default=None, help="Output directory for archives (default: archives/)")
     args = parser.parse_args()
-    main(rpa_only=args.rpa_only)
+    main(rpa_only=args.rpa_only, output_dir=args.output_dir)

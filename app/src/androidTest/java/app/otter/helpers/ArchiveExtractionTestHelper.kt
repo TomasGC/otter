@@ -45,7 +45,10 @@ object ArchiveExtractionTestHelper {
     }
 
     fun createOutputDir(): File {
-        return File(context.cacheDir, "test_extraction_${System.currentTimeMillis()}").apply {
+        // Use external cache (SD card partition) to avoid filling internal data partition
+        // with 264K-file extractions across multiple tests
+        val baseDir = context.externalCacheDir ?: context.cacheDir
+        return File(baseDir, "test_extraction_${System.currentTimeMillis()}").apply {
             mkdirs()
         }
     }

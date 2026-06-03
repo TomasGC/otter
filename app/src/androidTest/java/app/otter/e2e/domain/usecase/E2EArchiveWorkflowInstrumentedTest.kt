@@ -13,6 +13,7 @@ import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -56,6 +57,14 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
     @Before
     fun injectDependencies() {
         hiltRule.inject()
+    }
+
+    @After
+    fun cleanupExtractionDirs() {
+        val baseDir = androidx.test.platform.app.InstrumentationRegistry
+            .getInstrumentation().targetContext.externalCacheDir ?: return
+        baseDir.listFiles { _, name -> name.startsWith("test_extraction_") }
+            ?.forEach { it.deleteRecursively() }
     }
 
     // Helper to unwrap Result<BrowseResult> and extract items.
@@ -152,6 +161,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
         // Assert at least some files were extracted (count varies per archive type)
         val fileCount = ArchiveExtractionTestHelper.countFilesRecursively(extractedDir)
         assertTrue("Should extract at least 1 file", fileCount > 0)
+        outputDir.deleteRecursively()
 
         logSuccess()
     }
@@ -294,6 +304,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
         // Assert
         assertTrue("Should extract at least 1 file",
             ArchiveExtractionTestHelper.countFilesRecursively(extractedDir) > 0)
+        extractedDir.deleteRecursively()
 
         logSuccess()
     }
@@ -344,6 +355,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
         // Assert
         assertTrue("Should extract at least 1 file",
             ArchiveExtractionTestHelper.countFilesRecursively(extractedDir) > 0)
+        extractedDir.deleteRecursively()
 
         logSuccess()
     }
@@ -489,6 +501,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
 
         assertTrue("Should extract at least 1 file",
             ArchiveExtractionTestHelper.countFilesRecursively(extractedDir) > 0)
+        extractedDir.deleteRecursively()
 
         logSuccess()
     }
@@ -667,6 +680,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
 
         // Wait for extraction to finish
         extractionJob.join()
+        outputDir.deleteRecursively()
 
         logSuccess()
     }
@@ -674,12 +688,16 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
     private suspend fun multipleSimultaneousExtractions() {
         logStep("Multiple simultaneous extractions")
 
+        // Use a small programmatic archive to avoid disk pressure during concurrent extractions
+        val smallArchive = tempFolder.newFile("concurrent_test${archiveExtension}")
+        createLargeArchive(smallArchive, 100)
+
         // Start 3 extractions simultaneously
         val jobs = List(3) { index ->
             kotlinx.coroutines.GlobalScope.launch {
                 val outputDir = ArchiveExtractionTestHelper.createOutputDir()
                 val result = extractor.extract(
-                    inputStream = File(testArchivePath).inputStream(),
+                    inputStream = smallArchive.inputStream(),
                     destinationPath = outputDir,
                     archiveType = archiveType,
                     sourceFileName = "test_$index${archiveExtension}",
@@ -687,6 +705,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
                     onProgress = {}
                 )
                 assertTrue("Extraction $index should succeed", result is ExtractionResult.Success)
+                outputDir.deleteRecursively()
             }
         }
 

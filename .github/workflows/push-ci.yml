@@ -112,7 +112,7 @@ jobs:
       retention-days: 3
 
   unit-domain-service-tests:
-    name: Unit Tests / Domain + Service
+    name: Domain + Service
     uses: ./.github/workflows/reusable-unit-tests.yml
     with:
       test-type: unit-domain-service
@@ -120,7 +120,7 @@ jobs:
       retention-days: 3
 
   unit-data-tests:
-    name: Unit Tests / Data Layer
+    name: Data Layer
     uses: ./.github/workflows/reusable-unit-tests.yml
     with:
       test-type: unit-data
@@ -128,7 +128,7 @@ jobs:
       retention-days: 3
 
   unit-ui-tests:
-    name: Unit Tests / UI + ViewModel
+    name: UI + ViewModel
     uses: ./.github/workflows/reusable-unit-tests.yml
     with:
       test-type: unit-ui
@@ -136,7 +136,7 @@ jobs:
       retention-days: 3
 
   integration-mock-extractor-tests:
-    name: Integration Mock / Extractors
+    name: Extractors
     needs: [unit-domain-service-tests, unit-data-tests, unit-ui-tests]
     uses: ./.github/workflows/reusable-unit-tests.yml
     with:
@@ -145,7 +145,7 @@ jobs:
       retention-days: 3
 
   integration-mock-other-tests:
-    name: Integration Mock / Service + ViewModel
+    name: Service + ViewModel
     needs: [unit-domain-service-tests, unit-data-tests, unit-ui-tests]
     uses: ./.github/workflows/reusable-unit-tests.yml
     with:

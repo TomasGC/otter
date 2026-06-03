@@ -5,13 +5,17 @@ tasks.register("grantTestStoragePermissions") {
     doLast {
         println("🔑 Granting storage permissions to test APK...")
 
+        val adb = System.getenv("ANDROID_HOME")
+            ?.let { java.io.File(it, "platform-tools/adb").absolutePath }
+            ?: "adb"
+
         val permissions = listOf(
             "android.permission.READ_EXTERNAL_STORAGE",
             "android.permission.WRITE_EXTERNAL_STORAGE"
         )
 
         permissions.forEach { permission ->
-            val process = ProcessBuilder("adb", "shell", "pm", "grant", "app.otter.test", permission)
+            val process = ProcessBuilder(adb, "shell", "pm", "grant", "app.otter.test", permission)
                 .redirectErrorStream(true)
                 .start()
 
@@ -35,6 +39,12 @@ tasks.register("sendTestArchivesToDevice") {
     dependsOn("grantTestStoragePermissions")
 
     doLast {
+        // In CI, archives are pushed by the workflow before this task runs
+        if (System.getenv("CI") != null) {
+            println("📦 CI detected — archives already pushed by workflow, skipping")
+            return@doLast
+        }
+
         println("📦 Sending test archives to device...")
 
         val pythonScript = File(project.rootDir, "scripts/src/cli/send_to_phone.py")

@@ -68,7 +68,7 @@ class ExtractionActivityTest {
     @Test
     fun activityHandlesValidUri() {
         // Given - Intent with valid archive URI
-        val testUri = Uri.parse("content://com.android.providers.downloads.documents/document/test.zip")
+        val testUri = Uri.parse("content://test/archive.zip")
         val intent = Intent(ApplicationProvider.getApplicationContext(), ExtractionActivity::class.java).apply {
             data = testUri
         }
@@ -86,7 +86,7 @@ class ExtractionActivityTest {
     @Test
     fun activityStartsWithContentUri() {
         // Given - Content URI intent
-        val contentUri = Uri.parse("content://downloads/all_downloads/1")
+        val contentUri = Uri.parse("content://test/archive.zip")
         val intent = Intent(ApplicationProvider.getApplicationContext(), ExtractionActivity::class.java).apply {
             data = contentUri
             action = Intent.ACTION_VIEW
@@ -104,7 +104,7 @@ class ExtractionActivityTest {
     @Test
     fun activityHandlesViewAction() {
         // Given - ACTION_VIEW intent (standard "Open with" flow)
-        val testUri = Uri.parse("content://com.android.providers.downloads.documents/document/archive.zip")
+        val testUri = Uri.parse("content://test/archive.zip")
         val intent = Intent(ApplicationProvider.getApplicationContext(), ExtractionActivity::class.java).apply {
             action = Intent.ACTION_VIEW
             data = testUri

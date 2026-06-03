@@ -16,9 +16,9 @@ class RpaExtractorTest {
 
     @Before
     fun setup() {
-        outputDir = File.createTempFile("rpa_extract", "").apply { 
+        outputDir = File.createTempFile("rpa_extract", "").apply {
             delete()
-            mkdir() 
+            mkdir()
         }
     }
 
@@ -29,8 +29,10 @@ class RpaExtractorTest {
 
     @Test
     fun `extract files from RPA archive`() = runBlocking {
-        val rpaFile = File("C:/dev/repos/GitHub/otter/archives/test_archive.rpa")
-        require(rpaFile.exists()) { "Test archive not found" }
+        val archivesDir = System.getProperty("archives.dir")
+            ?: error("archives.dir system property not set (should be set by Gradle)")
+        val rpaFile = File(archivesDir, "test_archive.rpa")
+        require(rpaFile.exists()) { "Test archive not found at: ${rpaFile.absolutePath}" }
 
         println("=== Testing RPA extraction ===")
 
@@ -42,7 +44,7 @@ class RpaExtractorTest {
         )
 
         var extractedCount = 0
-        
+
         val result = rpaFile.inputStream().use { input ->
             extractor.extract(
                 inputStream = input,
