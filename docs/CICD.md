@@ -1,7 +1,7 @@
 # CI/CD Pipeline Documentation - Otter
 
 **Purpose**: GitHub Actions CI/CD pipeline architecture, workflows, and maintenance guide
-**Last Updated**: 2026-05-18
+**Last Updated**: 2026-06-09
 
 ---
 
@@ -12,7 +12,7 @@ Otter uses **GitHub Actions** with optimized reusable workflows for:
 - ✅ Fail-fast strategy (early failure detection)
 - ✅ Gradle Managed Devices (official Google solution for instrumented tests)
 - ✅ Kover code coverage (Kotlin-optimized, replaced Jacoco)
-- ✅ Sequential CI validation (Feature-CI → PR-CI)
+- ✅ Event-driven validation (Push-CI completes → PR-CI triggers via `workflow_run`)
 
 ---
 
@@ -33,7 +33,7 @@ graph TB
     
     subgraph "Caller Workflows"
         PushCI[push-ci.yml<br/>Feature/Bugfix Branches]
-        PRCI[pr-ci.yml<br/>Pull Requests]
+        PRCI[pr-ci.yml<br/>After Push-CI via workflow_run]
         CD[cd.yml<br/>Releases]
     end
     
@@ -63,14 +63,14 @@ graph TB
 
 Modular workflows that can be called by multiple pipelines:
 
-| Workflow | Purpose | Duration | Artifacts |
-|----------|---------|----------|-----------|
-| `reusable-unit-tests.yml` | JUnit + MockK unit tests | ~2-3 min | Test results + Kover coverage data (.ic) |
-| `reusable-build-apk.yml` | Gradle assembly (debug/release) | ~1-2 min | APK file |
-| `reusable-instrumented-tests.yml` | Gradle Managed Devices (Pixel 4 API 30) | ~8-10 min | Test results |
-| `reusable-lint-checks.yml` | ktlint, detekt, Android Lint | ~2-3 min | Lint reports |
-| `reusable-coverage-merge.yml` | Merge Kover coverage reports | ~1 min | XML + HTML reports |
-| `reusable-security-checks.yml` | OWASP, TruffleHog, APK size | ~3-4 min | Security reports |
+| Workflow | Purpose | Input: `gradle-task` | Artifacts |
+|----------|---------|---------------------|-----------|
+| `reusable-unit-tests.yml` | Run any Gradle test task (parameterized) | `testUnit` / `testIntegrationMock` / `testIntegrationReal` | `{artifact-name}-test-results` + `{artifact-name}-coverage-data` |
+| `reusable-build-apk.yml` | Gradle assembly (debug/release) | — | APK file |
+| `reusable-instrumented-tests.yml` | Gradle Managed Devices (Pixel 4 API 30) | — | Test results + coverage |
+| `reusable-lint-checks.yml` | ktlint, detekt, Android Lint | — | Lint reports |
+| `reusable-coverage-merge.yml` | Merge Kover reports from all JVM stages | — | XML + HTML reports |
+| `reusable-security-checks.yml` | OWASP, TruffleHog, APK size | — | Security reports |
 
 **Benefits**:
 - ✅ DRY principle (no duplication between workflows)
@@ -102,15 +102,27 @@ graph TB
     ValidateBranch --> Parallel
     ValidateCommit --> Parallel
     
-    subgraph Parallel["Parallel Execution (~3 min)"]
+    subgraph Parallel["Parallel (~3 min)"]
         Lint[Lint Checks<br/>ktlint + detekt + Android Lint]
-        UnitTests[Unit Tests<br/>241 tests + Kover coverage]
+        subgraph UnitParallel["Unit Tests (3 parallel jobs)"]
+            UnitDS[Domain + Service<br/>testType=unit-domain-service]
+            UnitData[Data Layer<br/>testType=unit-data]
+            UnitUI[UI + ViewModel<br/>testType=unit-ui]
+        end
     end
     
-    Parallel --> Build[Build APK Debug<br/>~1-2 min]
-    Build --> UITests[UI Tests<br/>GMD Pixel 4 API 30<br/>84 tests, ~8-10 min]
-    UITests --> CoverageReport[Generate Coverage Report<br/>Kover XML + HTML<br/>Threshold: ≥80%]
-    CoverageReport --> End([Success ✓])
+    subgraph IntegMockParallel["Integration Mock (2 parallel jobs)"]
+        IntegMockExt[Extractors<br/>testType=integration-mock-extractor]
+        IntegMockOther[Service + ViewModel<br/>testType=integration-mock-other]
+    end
+    
+    Parallel --> IntegMockParallel
+    IntegMockParallel --> IntegReal[Integration Real Tests<br/>2 tests<br/>testType=integration-real]
+    IntegReal --> Build[Build APK Debug<br/>~1-2 min]
+    IntegReal --> CoverageReport[Coverage Report<br/>Kover merged XML + HTML<br/>Threshold: ≥80%]
+    Build --> UITests[UI Tests<br/>GMD Pixel 4 API 30<br/>68 tests, ~8-10 min]
+    UITests --> End([Success ✓])
+    CoverageReport --> End
     
     style Start fill:#e1f5ff
     style ValidateBranch fill:#fff4e1
@@ -124,13 +136,20 @@ graph TB
 ```
 
 **Validation Rules**:
-- **Branch name**: `feature/123-description` or `bugfix/123-description`
+- **Branch name**: `feature/123-description` or `bugfix/123-description` (letters, digits, hyphens, underscores)
 - **Commit message**: `#123: type: description` (types: feat, fix, refactor, test, docs, chore, style, perf)
+- **Exception**: `docs:` without issue number allowed when commit modifies `kanban.md`
 
-**Coverage Threshold**: ≥80% (fails if below)
+**Test Stages** (sequential, fail-fast):
+1. Unit tests (3 parallel jobs, 439 total) — `testType=unit-domain-service|unit-data|unit-ui`
+2. Integration mock (2 parallel jobs, 94 total) — `testType=integration-mock-extractor|integration-mock-other`
+3. Integration real (2 tests) — `testType=integration-real`
+4. Instrumented (68) — `pixel4api30DebugAndroidTest` (after build)
+
+**Coverage Threshold**: ≥80% — merges Kover artifacts from all 3 JVM test stages
 
 **Artifacts**:
-- Unit test results (retention: 3 days)
+- unit/integration-mock/integration-real test results (retention: 3 days)
 - Coverage report (retention: 7 days)
 - APK debug (retention: 3 days)
 - UI test results (retention: 3 days)
@@ -139,44 +158,56 @@ graph TB
 
 #### 2. PR-CI (`pr-ci.yml`) - Pull Request Validation
 
-**Triggers**: Pull request to `main` branch
+**Triggers**: `workflow_run` — fires when Push-CI workflow completes (not `pull_request`)
+
+**Why event-driven** (replaces `pull_request` trigger + polling):
+- PR-CI starts only after Push-CI has **finished** — no race condition, no polling
+- `conclusion != 'success'` → entire workflow skipped immediately
+- No open PR for the branch → skipped (prevents spurious runs on direct pushes)
 
 **Pipeline Flow**:
 
 ```mermaid
 graph TB
-    Start([Pull Request Created])
+    Start([Push-CI Completed])
     
-    Start --> Wait[Wait for Push-CI<br/>Poll every 30s<br/>Max 30 min]
-    Wait --> Check{Push-CI<br/>Status?}
+    Start --> ConclusionCheck{Push-CI<br/>Conclusion?}
+    ConclusionCheck -->|failure/cancelled| Skip([Skipped ⏭])
+    ConclusionCheck -->|success| CheckPR[Check Open PR<br/>gh pr list --head branch --base main]
     
-    Check -->|Failed| Fail([Block Merge ❌])
-    Check -->|Success| Verify[Verify Push-CI Passed]
-    
-    Verify --> Parallel
+    CheckPR --> PRExists{Open PR<br/>exists?}
+    PRExists -->|no| SkipNoPR([Skipped ⏭])
+    PRExists -->|yes| Parallel
     
     subgraph Parallel["Parallel Validation"]
         PRTitle[PR Title Validation<br/>#123: type: description]
+        ContextCheck[Context Files Check<br/>KANBAN.md mandatory]
         SecurityChecks[Security Checks<br/>OWASP + TruffleHog]
     end
     
     Parallel --> End([Ready to Merge ✓])
     
     style Start fill:#e1f5ff
-    style Wait fill:#fff4e1
-    style Check fill:#ffe1f5
-    style Verify fill:#f0ffe1
-    style PRTitle fill:#ffebcc
-    style SecurityChecks fill:#ffe1e1
+    style ConclusionCheck fill:#fff4e1
+    style CheckPR fill:#fff4e1
+    style PRExists fill:#ffe1f5
+    style PRTitle fill:#f0ffe1
+    style ContextCheck fill:#f0ffe1
+    style SecurityChecks fill:#ffebcc
     style End fill:#ccffcc
-    style Fail fill:#ffcccc
+    style Skip fill:#f0f0f0
+    style SkipNoPR fill:#f0f0f0
 ```
 
-**Why Sequential**: Eliminates race condition where PR-CI and Push-CI run simultaneously, causing false failures.
+**Security hardening** (Issue #25):
+- **Injection fix**: PR title passed via `env:` block — not interpolated directly into shell string
+- **Pwn-request mitigation**: `context-check` has `contents: read` only (no write); `context-comment` has `pull-requests: write` but no checkout — privileges separated by design
 
 **Validation Rules**:
+- **Push-CI conclusion**: Must be `success` (gate 1 — structural, not checked at runtime)
+- **Open PR**: Must exist targeting `main` (gate 2 — `check-pr-exists` job)
 - **PR title**: `#123: type: description`
-- **Push-CI status**: Must be "success" (blocks merge otherwise)
+- **KANBAN.md**: Must be updated if `app/src/` changed (mandatory)
 
 ---
 

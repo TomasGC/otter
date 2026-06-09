@@ -1,14 +1,16 @@
 # Otter 🦦
 
-Android archive extractor with progress tracking - MVP supports ZIP extraction
+Android archive extractor with archive browsing and real-time progress tracking
 
 ## Features
 
-- 📦 Extract ZIP archives (RPA, RAR, TAR.GZ support coming post-MVP)
-- 📊 Real-time progress tracking
+- 📦 Extract ZIP, RAR, 7z, TAR, TAR.GZ, GZIP, RPA archives
+- 🗂️ Browse archive contents before extracting (ZIP only)
+- ✂️ Selective extraction — pick specific files/folders
+- 📊 Real-time progress with file list (Samsung My Files style)
 - 🎨 Material Design 3 UI
-- 🔒 Path traversal protection
-- 🚀 "Open with" integration
+- 🔒 Path traversal and ZIP bomb protection
+- 🚀 "Open with" integration (Samsung My Files, Files app)
 
 ## Architecture
 
@@ -20,29 +22,67 @@ Android archive extractor with progress tracking - MVP supports ZIP extraction
 
 ## Requirements
 
-- Docker & Docker Compose
-- PowerShell 7+ (for build scripts)
+- Python 3.8+
+- Android SDK or connected Android device
 
-## Build Commands
+## Build Commands (Kotlin/Android)
 
-All builds run inside Docker (no local Android SDK needed):
+```bash
+# Build debug APK (auto-increments version)
+python scripts/build.py
 
-```powershell
-# Build debug APK
-pwsh docker-build.ps1 assembleDebug
+# Build without installing
+python scripts/build.py --no-install
 
 # Run unit tests
-pwsh docker-build.ps1 testDebugUnitTest
+python scripts/test.py --unit
 
-# Run lint checks
-pwsh docker-build.ps1 lintDebug
+# Run instrumented tests (requires device)
+python scripts/test.py --instrumented
 
-# Install on connected device
-pwsh docker-build.ps1 installDebug
+# Run all tests
+python scripts/test.py
 
-# List all tasks
-pwsh docker-build.ps1 tasks
+# Run tests with coverage
+python scripts/test.py --coverage
 ```
+
+## Test Python Scripts
+
+The build/test scripts themselves have unit tests for reliability:
+
+```bash
+# Install test dependencies
+pip install pytest pytest-cov pytest-mock
+
+# Run Python script tests
+cd scripts
+pytest
+
+# Run with coverage
+pytest --cov=src --cov-report=term-missing
+
+# Run only unit tests
+pytest -m unit
+
+# Run specific test file
+pytest tests/unit/common/test_console.py
+```
+
+**Test structure:**
+```
+scripts/
+├── src/                    # Source code
+│   ├── common/            # Shared utilities
+│   ├── android/           # Android build utilities
+│   └── cli/               # CLI scripts
+└── tests/                 # Test suite
+    ├── unit/              # Unit tests
+    ├── integration/       # Integration tests
+    └── e2e/               # End-to-end tests
+```
+
+**Coverage target:** ≥80%
 
 ## Project Structure
 
@@ -58,21 +98,35 @@ app/src/main/java/app/otter/
 
 ### First-time setup
 
-```powershell
-# Build Docker image (one-time setup)
-docker-compose build
+```bash
+# Ensure Python dependencies (if any)
+pip install -r requirements.txt  # If requirements.txt exists
+
+# Connect Android device or start emulator
+adb devices
 ```
 
 ### Run tests
 
-```powershell
-pwsh docker-build.ps1 testDebugUnitTest
+```bash
+# Unit tests only
+python scripts/test.py --unit
+
+# Instrumented tests (requires device)
+python scripts/test.py --instrumented
+
+# All tests with coverage
+python scripts/test.py --coverage
 ```
 
 ### Build APK
 
-```powershell
-pwsh docker-build.ps1 assembleDebug
+```bash
+# Build and auto-install on connected device
+python scripts/build.py
+
+# Build without installing
+python scripts/build.py --no-install
 ```
 
 Output: `app/build/outputs/apk/debug/app-debug.apk`

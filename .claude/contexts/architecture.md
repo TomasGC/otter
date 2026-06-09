@@ -1,7 +1,7 @@
 # Project Architecture - Otter (Android Archive Extractor)
 
 **Purpose**: System architecture and design decisions for Otter (ZIP + RAR + 7z + TAR + RPA extraction with background service)
-**Last Updated**: 2026-05-12
+**Last Updated**: 2026-06-02
 
 ---
 
@@ -19,14 +19,15 @@
 | **DI** | Hilt (Dagger) | Dependency injection |
 | **Async** | Kotlin Coroutines | Asynchronous programming |
 | **Reactive** | Flow | Reactive data streams |
-| **Build** | Gradle (KTS) | Kotlin DSL build scripts |
-| **Testing** | JUnit + MockK | Unit testing framework |
-| **ZIP Extraction** | java.util.zip | Native ZIP support |
+| **Build** | Gradle (KTS) + Python scripts | Kotlin DSL + cross-platform ADB automation |
+| **Testing** | JUnit + MockK + Coroutines Test | 603 tests (439 unit + 94 integ-mock + 2 integ-real + 68 instrumented) |
+| **ZIP Extraction** | java.util.zip + IZipFileReader | Native ZIP (testable via interface) |
 | **RAR Extraction** | 7-Zip-JBinding | RAR4/RAR5 support (.so libs) |
 | **7z Extraction** | 7-Zip-JBinding | 7-Zip format support (.so libs) |
 | **TAR/GZIP Extraction** | Apache Commons Compress | TAR, TAR.GZ, TGZ, GZIP support |
-| **RPA Extraction** | Custom implementation | Ren'Py Archive (binary protocol 2) |
-| **Background Work** | Foreground Service | Progress notifications |
+| **RPA Extraction** | Custom (RpaPickleParser) | Ren'Py Archive (binary protocol 2) |
+| **Archive Inspection** | ZipInspector, RpaInspector | Lazy streaming entry enumeration |
+| **Background Work** | Foreground Service + ExtractionQueue | Progress notifications, FIFO queue |
 
 
 ---
@@ -45,18 +46,31 @@ graph TB
     end
     
     subgraph "Domain Layer"
-        BrowseUC[BrowseFilesUseCase]
+        BrowseUC[BrowseItemsUseCase<br/>paginated]
         ExtractUC[ExtractArchiveUseCase]
         RepoInterface[ArchiveRepository<br/>interface]
-        Models[Domain Models<br/>ArchiveFile, ArchiveType<br/>ExtractionResult]
+        BrowseRepoInterface[ItemBrowserRepository<br/>interface]
+        Models[Domain Models<br/>BrowsableItem, ResourcePath<br/>ArchiveEntry, BrowseResult<br/>ExtractionResult]
     end
     
     subgraph "Data Layer"
         RepoImpl[ArchiveRepositoryImpl]
+        BrowseRepoImpl[ItemBrowserRepositoryImpl<br/>polymorphic dispatch]
         BaseExtractor[BaseArchiveExtractor<br/>Template Method Pattern]
         
+        subgraph "Inspectors"
+            InspectorFactory[ArchiveInspectorFactory]
+            ZipInsp[ZipInspector<br/>lazy streaming]
+            RpaInsp[RpaInspector<br/>RpaPickleParser]
+        end
+        
+        subgraph "Browsers"
+            FSBrowser[FileSystemBrowser]
+            ArchBrowser[ArchiveBrowser<br/>paginated]
+        end
+        
         subgraph "Extractors (Strategy Pattern)"
-            ZipExt[ZipExtractor<br/>java.util.zip]
+            ZipExt[ZipExtractor<br/>IZipFileReader]
             RarExt[RarExtractor<br/>7-Zip-JBinding]
             SevenZipExt[SevenZipExtractor<br/>7-Zip-JBinding]
             TarExt[TarExtractor<br/>Commons Compress]
@@ -67,17 +81,22 @@ graph TB
         LibMgr[ArchiveLibraryManager<br/>Singleton]
         PathVal[PathValidator<br/>Security]
         TempMgr[TempFileManager]
-        Logger[ExtractionLogger]
     end
     
     Activity --> Screen
     Screen --> ViewModel
-    Service -.broadcasts progress.-> ViewModel
+    Service -.ExtractionEventBus.-> Screen
     ViewModel --> BrowseUC
     ViewModel --> ExtractUC
     Service --> ExtractUC
-    BrowseUC --> RepoInterface
+    BrowseUC --> BrowseRepoInterface
     ExtractUC --> RepoInterface
+    BrowseRepoInterface -.implements.-> BrowseRepoImpl
+    BrowseRepoImpl --> FSBrowser
+    BrowseRepoImpl --> ArchBrowser
+    ArchBrowser --> InspectorFactory
+    InspectorFactory --> ZipInsp
+    InspectorFactory --> RpaInsp
     RepoInterface -.implements.-> RepoImpl
     RepoImpl --> BaseExtractor
     BaseExtractor --> ZipExt
@@ -279,22 +298,37 @@ graph TD
     end
     
     subgraph "Domain Layer - Pure Kotlin"
-        ExtractUC[ExtractArchiveUseCase]
+        BrowseUC2[BrowseItemsUseCase<br/>paginated]
+        ExtractUC2[ExtractArchiveUseCase]
+        ExtSelUC[ExtractSelectedItemsUseCase]
         RepoIface[ArchiveRepository<br/>interface]
-        Models[Domain Models<br/>ArchiveFile<br/>ExtractionResult<br/>ExtractionProgress]
+        BrowseIface[ItemBrowserRepository<br/>interface]
+        Models[Domain Models<br/>BrowsableItem, ResourcePath<br/>ArchiveEntry, BrowseResult<br/>ExtractionResult]
     end
     
     subgraph "Data Layer - Android"
-        RepoImpl[ArchiveRepositoryImpl<br/>callbackFlow]
+        BrowseRepoImpl2[ItemBrowserRepositoryImpl]
+        RepoImpl2[ArchiveRepositoryImpl]
         Base[BaseArchiveExtractor<br/>Template Method Pattern]
         
+        subgraph "Inspectors"
+            Factory2[ArchiveInspectorFactory]
+            ZipI[ZipInspector]
+            RpaI[RpaInspector]
+        end
+        
+        subgraph "Browsers"
+            FSB[FileSystemBrowser]
+            AB[ArchiveBrowser]
+        end
+        
         subgraph "Extractors - Strategy Pattern"
-            Zip[ZipExtractor<br/>java.util.zip]
+            Zip[ZipExtractor<br/>IZipFileReader]
             Rar[RarExtractor<br/>7-Zip-JBinding]
             SevenZ[SevenZipExtractor<br/>7-Zip-JBinding]
             Tar[TarExtractor<br/>Commons Compress]
             Gzip[GzipExtractor<br/>Commons Compress]
-            Rpa[RpaExtractor<br/>Custom Binary Protocol 2]
+            Rpa[RpaExtractor<br/>RpaPickleParser]
         end
         
         subgraph "Supporting Components"
@@ -302,7 +336,7 @@ graph TD
             LibMgr[ArchiveLibraryManager<br/>@Singleton - Native Lifecycle]
             PathVal[PathValidator<br/>Security Validation]
             TempMgr[TempFileManager<br/>Resource Management]
-            Logger[ExtractionLogger<br/>Logging Abstraction]
+            Queue[ExtractionQueue<br/>FIFO + selectedItems]
         end
     end
     
@@ -311,10 +345,11 @@ graph TD
     end
     
     Activity --> Service
-    Service --> ExtractUC
-    ExtractUC --> RepoIface
-    RepoIface -.implements.-> RepoImpl
-    RepoImpl --> Base
+    Service --> Queue
+    Queue --> ExtractUC2
+    ExtractUC2 --> RepoIface
+    RepoIface -.implements.-> RepoImpl2
+    RepoImpl2 --> Base
     Base --> Zip
     Base --> Rar
     Base --> SevenZ
@@ -326,9 +361,15 @@ graph TD
     CallbackExt --> LibMgr
     Base --> PathVal
     Base --> TempMgr
-    Base --> Logger
-    Hilt -.provides.-> RepoImpl
-    Hilt -.provides.-> Base
+    BrowseUC2 --> BrowseIface
+    BrowseIface -.implements.-> BrowseRepoImpl2
+    BrowseRepoImpl2 --> FSB
+    BrowseRepoImpl2 --> AB
+    AB --> Factory2
+    Factory2 --> ZipI
+    Factory2 --> RpaI
+    Hilt -.provides.-> RepoImpl2
+    Hilt -.provides.-> BrowseRepoImpl2
     
     style Activity fill:#e1f5ff
     style Service fill:#ffe1f5
@@ -617,6 +658,125 @@ sequenceDiagram
 
 ---
 
+## Archive Browsing (#25)
+
+### Domain Model: Sealed Classes
+
+```kotlin
+// Type-safe path dispatch across filesystem and archive entries
+sealed class ResourcePath {
+    data class FileSystem(val path: String) : ResourcePath()
+    data class ArchiveEntry(val archivePath: String, val entryPath: String) : ResourcePath()
+    data class ContentUri(val uri: String) : ResourcePath()  // Samsung My Files URIs
+}
+
+// Polymorphic items for unified filesystem + archive browsing
+sealed class BrowsableItem {
+    data class FileSystemFile(val path: String, val name: String, val sizeBytes: Long, ...) : BrowsableItem()
+    data class FileSystemDirectory(val path: String, val name: String) : BrowsableItem()
+    data class ArchiveFile(val resourcePath: ResourcePath.ArchiveEntry, val name: String, ...) : BrowsableItem()
+    data class ArchiveDirectory(val resourcePath: ResourcePath.ArchiveEntry, val name: String) : BrowsableItem()
+}
+```
+
+### Archive Browsing Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant VM as FileBrowserViewModel
+    participant UC as BrowseItemsUseCase
+    participant Repo as ItemBrowserRepositoryImpl
+    participant Browser as FileSystemBrowser / ArchiveBrowser
+    participant Factory as ArchiveInspectorFactory
+    participant Inspector as ZipInspector / RpaInspector
+
+    User->>VM: browseDirectory(ResourcePath)
+    VM->>UC: browse(path, page, pageSize)
+    UC->>Repo: getItems(path, page, pageSize)
+    
+    alt ResourcePath.FileSystem
+        Repo->>Browser: listDirectory(path, page)
+        Browser-->>Repo: BrowseResult<BrowsableItem>
+    else ResourcePath.ArchiveEntry
+        Repo->>Browser: getEntries(archivePath, entryPath, page)
+        Browser->>Factory: getInspector(archivePath)
+        Factory->>Inspector: create (lazy, cached)
+        Inspector-->>Browser: List<ArchiveEntry> (streaming)
+        Browser-->>Repo: BrowseResult<BrowsableItem>
+    end
+    
+    Repo-->>UC: BrowseResult
+    UC-->>VM: BrowseResult
+    VM->>VM: updateCache(page, items)
+    VM-->>User: StateFlow<UiState.Success>
+```
+
+### Sliding Window Cache
+
+Memory-efficient browsing for archives with 100k+ entries:
+
+```
+Constants (FileBrowserViewModel):
+  PAGE_SIZE    = 200   entries loaded per page request
+  HALF_WINDOW  = 100   pages retained on each side of viewport
+  LOAD_TRIGGER = 60    pages from window edge → triggers background load
+
+State:
+  cachedPages: Map<Int, List<BrowsableItem>>  sparse page map
+  minCachedPage / maxCachedPage               current window bounds
+  totalItems: Int                             total entry count
+
+Scroll detection (onScrollPositionChanged):
+  absoluteIndex > maxCachedIndex - LOAD_TRIGGER  → loadNextPage()
+  absoluteIndex < minCachedIndex + LOAD_TRIGGER  → loadPreviousPage()
+  cleanup: evict pages outside [current - HALF_WINDOW, current + HALF_WINDOW]
+
+Fast-scroll guard:
+  lastKnownAbsoluteIndex prevents redundant consecutive loads
+  hasMore=false short-circuits load at archive boundaries
+```
+
+### Samsung content:// URI Handling
+
+Samsung My Files provides `content://` URIs that `ContentResolver.openFile()` cannot resolve to a file path:
+
+```kotlin
+// ResourcePathConverter.fromUri()
+fun fromUri(uri: Uri, contentResolver: ContentResolver): ResourcePath {
+    // 1. Try standard path resolution
+    val path = contentResolver.openFileDescriptor(uri, "r")?.use { ... }
+    if (path != null) return ResourcePath.FileSystem(path)
+    
+    // 2. Fallback: preserve content:// URI
+    // ArchiveBrowser uses openInputStream(uri) directly
+    return ResourcePath.ContentUri(uri.toString())
+}
+```
+
+### Selective Extraction
+
+All extractors support `selectedItems: List<String>?`:
+- `null` → extract all entries
+- non-null → extract only paths matching the list
+
+Propagation chain:
+```
+FileBrowserViewModel.selectedItems
+  → ExtractionQueue.ExtractionTask(selectedItems)
+    → ExtractionService.newIntent("extra_selected_items" extra)
+      → ExtractArchiveUseCase(selectedItems)
+        → ArchiveRepositoryImpl.extract(selectedItems)
+          → ZipExtractor / RpaExtractor / ... .extract(selectedItems)
+            → BaseArchiveExtractor.isEntrySelected(entryName, selectedPaths)
+```
+
+`isEntrySelected()` handles both exact file matches and directory prefix matches (`path.startsWith(dir + "/")`), centralising selection logic across all extractor subclasses.
+
+See `contexts/tests.md` for full test structure and counts.
+
+---
+
 ## Security Model
 
 ### Path Traversal Protection
@@ -789,19 +949,19 @@ classDiagram
         +extractInternal()
     }
     
-    class ApacheTarExtractor {
+    class TarExtractor {
         +extractInternal()
     }
     
-    class ApacheGzipExtractor {
+    class GzipExtractor {
         +extractInternal()
     }
     
     BaseArchiveExtractor <|-- ZipExtractor
     BaseArchiveExtractor <|-- RarExtractor
     BaseArchiveExtractor <|-- SevenZipExtractor
-    BaseArchiveExtractor <|-- ApacheTarExtractor
-    BaseArchiveExtractor <|-- ApacheGzipExtractor
+    BaseArchiveExtractor <|-- TarExtractor
+    BaseArchiveExtractor <|-- GzipExtractor
     
     note for BaseArchiveExtractor "Template Method: extract() defines flow<br/>Hook Method: extractInternal() varies<br/>Guarantee: 100% progress callback"
 ```
@@ -842,11 +1002,11 @@ classDiagram
         -progressCalculator
     }
     
-    class ApacheTarExtractor {
+    class TarExtractor {
         -progressCalculator
     }
     
-    class ApacheGzipExtractor {
+    class GzipExtractor {
         -progressCalculator
     }
     
@@ -856,8 +1016,8 @@ classDiagram
     
     ZipExtractor --> StandardProgressCalculator : uses
     RarExtractor --> StandardProgressCalculator : uses
-    ApacheTarExtractor --> IndeterminateProgressCalculator : uses
-    ApacheGzipExtractor --> SingleFileProgressCalculator : uses
+    TarExtractor --> IndeterminateProgressCalculator : uses
+    GzipExtractor --> SingleFileProgressCalculator : uses
     
     note for StandardProgressCalculator "Used when total count known<br/>(ZIP, RAR, 7z)"
     note for IndeterminateProgressCalculator "Used for streaming formats<br/>(TAR)"
@@ -896,7 +1056,7 @@ classDiagram
         -tempFileManager: ITempFileManager
     }
     
-    class ApacheTarExtractor {
+    class TarExtractor {
         -tempFileManager: ITempFileManager
     }
     
@@ -905,7 +1065,7 @@ classDiagram
     ZipExtractor --> ITempFileManager : depends on
     RarExtractor --> ITempFileManager : depends on
     SevenZipExtractor --> ITempFileManager : depends on
-    ApacheTarExtractor --> ITempFileManager : depends on
+    TarExtractor --> ITempFileManager : depends on
     
     note for ITempFileManager "High-level modules depend on<br/>abstraction, not concrete class"
 ```
@@ -1119,13 +1279,13 @@ graph TB
 
 ## CI/CD Pipeline
 
-**For detailed CI/CD pipeline documentation, see [docs/CICD.md](docs/CICD.md)**
+**For detailed CI/CD pipeline documentation, see [docs/CICD.md](../docs/CICD.md)**
 
 The project uses GitHub Actions with optimized reusable workflows:
 - ✅ Parallel execution (lint + tests)
 - ✅ Kover code coverage (Kotlin-optimized, replaced Jacoco in Issue #33)
 - ✅ Gradle Managed Devices for instrumented tests
-- ✅ Sequential validation (Push-CI → PR-CI)
+- ✅ Event-driven validation (Push-CI completes → PR-CI triggers via workflow_run)
 
 **Key Workflows**:
 - `push-ci.yml` - Feature/bugfix branch validation (~14 min)
@@ -1133,7 +1293,11 @@ The project uses GitHub Actions with optimized reusable workflows:
 - `cd.yml` - Release pipeline (~5 min)
 
 **Coverage**: ≥80% threshold enforced
-**Test Count**: 241 unit tests + 84 instrumented tests
+**Test Count**: 603 tests
+- Unit (JVM): 439
+- Integration mock (JVM): 94
+- Integration real (JVM): 2
+- Instrumented (device): 68
 **Success Rate**: 95-100% (improved with Gradle Managed Devices)
 
 ---
