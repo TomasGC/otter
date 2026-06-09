@@ -62,7 +62,8 @@ class ExtractionService : Service() {
 
         val archiveUriRaw = intent?.data
         val fileName = intent?.getStringExtra(EXTRA_FILE_NAME) ?: "archive"
-        Timber.tag(TAG).d("Service started for file: $fileName, uri: $archiveUriRaw")
+        val selectedItems = intent?.getStringArrayListExtra(EXTRA_SELECTED_ITEMS)
+        Timber.tag(TAG).d("Service started for file: $fileName, uri: $archiveUriRaw, selected: ${selectedItems?.size ?: "all"}")
 
         if (archiveUriRaw == null) {
             Timber.tag(TAG).e("No archive URI provided")
@@ -70,9 +71,9 @@ class ExtractionService : Service() {
             return START_NOT_STICKY
         }
 
-        val archiveUri = ResourcePathConverter.fromUri(archiveUriRaw)
+        val archiveUri = ResourcePathConverter.fromUri(archiveUriRaw, this)
         startForegroundWithNotification(fileName)
-        launchExtractionWorkflow(archiveUri, fileName)
+        launchExtractionWorkflow(archiveUri, fileName, selectedItems)
 
         return START_NOT_STICKY
     }
@@ -102,12 +103,15 @@ class ExtractionService : Service() {
         Timber.tag(TAG).d("Foreground service started, notification ID: $NOTIFICATION_ID")
     }
 
-    private fun launchExtractionWorkflow(archiveUri: ResourcePath, fileName: String) {
-        // Clear buffer for new extraction
+    private fun launchExtractionWorkflow(
+        archiveUri: ResourcePath,
+        fileName: String,
+        selectedItems: List<String>? = null
+    ) {
         recentFilesBuffer.clear()
 
         serviceScope.launch {
-            extractArchive(archiveUri, fileName)
+            extractArchive(archiveUri, fileName, selectedItems)
             processQueuedExtractions()
         }
     }
@@ -127,7 +131,7 @@ class ExtractionService : Service() {
                 break
             } else {
                 Timber.tag(TAG).d("Processing next archive: ${task.fileName}")
-                extractArchive(task.archiveUri, task.fileName)
+                extractArchive(task.archiveUri, task.fileName, task.selectedItems)
             }
         }
     }
@@ -139,7 +143,11 @@ class ExtractionService : Service() {
         super.onDestroy()
     }
 
-    private suspend fun extractArchive(archiveUri: ResourcePath, fileName: String) {
+    private suspend fun extractArchive(
+        archiveUri: ResourcePath,
+        fileName: String,
+        selectedItems: List<String>? = null
+    ) {
         var extractedFilesCount = 0
         var lastError: String? = null
         var fileLoggingTree: app.otter.util.FileLoggingTree? = null
@@ -165,7 +173,7 @@ class ExtractionService : Service() {
 
             Timber.tag(TAG).d("Starting extraction to: ${destinationFolder.absolutePath}")
 
-            extractArchiveUseCase(archiveFile, destinationPath).collect { progress ->
+            extractArchiveUseCase(archiveFile, destinationPath, selectedItems).collect { progress ->
                 when (progress) {
                     is ExtractionProgress.Extracting -> {
                         extractedFilesCount = progress.extractedCount
@@ -368,14 +376,24 @@ class ExtractionService : Service() {
         private const val EXTRA_EXTRACTED_COUNT = "extra_extracted_count"
         private const val EXTRA_TOTAL_COUNT = "extra_total_count"
         private const val EXTRA_PROGRESS = "extra_progress"
+        private const val EXTRA_SELECTED_ITEMS = "extra_selected_items"
         private const val ACTION_STOP_EXTRACTION = "app.otter.service.STOP_EXTRACTION"
         const val ACTION_EXTRACTION_PROGRESS = "app.otter.service.EXTRACTION_PROGRESS"
         const val ACTION_EXTRACTION_COMPLETE = "app.otter.service.EXTRACTION_COMPLETE"
 
-        fun newIntent(context: Context, archiveUri: ResourcePath, fileName: String): Intent {
+        fun newIntent(
+            context: Context,
+            archiveUri: ResourcePath,
+            fileName: String,
+            selectedItems: List<String>? = null
+        ): Intent {
             return Intent(context, ExtractionService::class.java).apply {
                 data = ResourcePathConverter.toUri(archiveUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) // For Samsung content:// URIs
                 putExtra(EXTRA_FILE_NAME, fileName)
+                if (selectedItems != null) {
+                    putStringArrayListExtra(EXTRA_SELECTED_ITEMS, ArrayList(selectedItems))
+                }
             }
         }
 

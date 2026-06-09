@@ -8,6 +8,9 @@ on:
         type: number
         default: 7
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   dependency-check:
     name: Dependency Vulnerability Scan
@@ -26,7 +29,7 @@ jobs:
           java-version: '17'
 
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
 

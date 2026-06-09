@@ -29,11 +29,12 @@ abstract class BaseArchiveExtractor(
         destinationPath: File,
         archiveType: ArchiveType,
         sourceFileName: String,
+        selectedItems: List<String>?,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult = withContext(Dispatchers.IO) {
         try {
             // Delegate extraction to subclass
-            val result = extractInternal(inputStream, destinationPath, archiveType, sourceFileName, onProgress)
+            val result = extractInternal(inputStream, destinationPath, archiveType, sourceFileName, selectedItems, onProgress)
 
             // ✅ Automatic final progress callback at 100% for all extractors
             if (result is ExtractionResult.Success) {
@@ -69,6 +70,7 @@ abstract class BaseArchiveExtractor(
         destinationPath: File,
         archiveType: ArchiveType,
         sourceFileName: String,
+        selectedItems: List<String>?,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult
 
@@ -139,6 +141,16 @@ abstract class BaseArchiveExtractor(
                 )
             )
         }
+    }
+
+    /**
+     * Checks if an archive entry should be extracted under selective extraction.
+     * Null selectedPaths = extract all. Exact match or directory prefix match = include.
+     */
+    protected fun isEntrySelected(entryName: String, selectedPaths: Set<String>?): Boolean {
+        if (selectedPaths == null) return true
+        if (selectedPaths.contains(entryName)) return true
+        return selectedPaths.any { path -> path.endsWith("/") && entryName.startsWith(path) }
     }
 
     companion object {

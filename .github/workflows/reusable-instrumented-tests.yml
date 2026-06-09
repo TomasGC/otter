@@ -8,11 +8,14 @@ on:
         type: number
         default: 7
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   instrumented-tests:
     name: Instrumented Tests (Gradle Managed Devices)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 75
 
     steps:
       - name: Checkout code
@@ -25,19 +28,36 @@ jobs:
           java-version: '17'
 
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
 
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          python-version: '3.11'
+
+      - name: Generate test archives
+        run: |
+          mkdir -p archives/push
+          python scripts/src/cli/create_test_archives.py --rpa-only --output-dir archives/push
+          python - << 'EOF'
+          import zipfile
+          from pathlib import Path
+
+          template = Path("archives/template")
+          out = Path("archives/push/test_archive.zip")
+
+          if out.exists():
+              print(f"ZIP already exists ({out.stat().st_size // 1024 // 1024} MB), skipping")
+          else:
+              out.parent.mkdir(exist_ok=True)
+              with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED, compresslevel=1) as zf:
+                  for f in sorted(template.rglob("*")):
+                      if f.is_file():
+                          zf.write(f, f.relative_to(template))
+              print(f"ZIP created: {out.stat().st_size // 1024 // 1024} MB")
+          EOF
 
       - name: Enable KVM
         run: |
@@ -45,8 +65,72 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run instrumented tests with Gradle Managed Devices
-        run: ./gradlew pixel4api30DebugAndroidTest
+      - name: Install system image
+        run: ./gradlew pixel4api30Setup
+
+      - name: Create AVD
+        env:
+          ANDROID_AVD_HOME: /home/runner/.android/avd
+        run: |
+          mkdir -p /home/runner/.android/avd
+          echo "no" | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd \
+            -n "otter_test_avd" \
+            -k "system-images;android-30;default;x86_64" \
+            --device "pixel_4" \
+            --force
+          # Increase data partition to 8GB (default is too small for 264K file extraction)
+          # Must delete existing userdata images — emulator ignores -partition-size if they exist
+          # Use sed to replace (not append) — avdmanager already sets disk.dataPartition.size;
+          # >> appending creates duplicate keys and emulator uses first (smaller) value
+          AVD_DIR="/home/runner/.android/avd/otter_test_avd.avd"
+          sed -i '/^disk.dataPartition.size/d' "$AVD_DIR/config.ini"
+          echo "disk.dataPartition.size=8G" >> "$AVD_DIR/config.ini"
+          rm -f "$AVD_DIR/userdata-qemu.img" "$AVD_DIR/userdata.img"
+          echo "AVD created: $($ANDROID_HOME/cmdline-tools/latest/bin/avdmanager list avd -c)"
+
+      - name: Start emulator and push test archives
+        timeout-minutes: 20
+        env:
+          ANDROID_AVD_HOME: /home/runner/.android/avd
+        run: |
+          export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+
+          AVD_NAME="otter_test_avd"
+          echo "Starting AVD: $AVD_NAME"
+
+          # Start emulator in background
+          $ANDROID_HOME/emulator/emulator \
+            -avd "$AVD_NAME" \
+            -no-snapshot-load \
+            -no-audio \
+            -no-boot-anim \
+            -gpu swiftshader_indirect \
+            -no-window \
+            -partition-size 8192 \
+            -sdcard 2048M &
+
+          # Wait for device to boot (up to 10 minutes)
+          echo "Waiting for emulator boot..."
+          timeout 600 adb wait-for-device
+          adb shell 'until [[ "$(getprop sys.boot_completed)" == "1" ]]; do sleep 2; done'
+          sleep 5
+          echo "Emulator ready"
+
+          # Disable animations (required for stable Compose UI tests on slow emulators)
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+
+          # Push archive files individually to avoid adb directory naming behavior
+          adb shell mkdir -p /storage/emulated/0/otter-test-archives
+          for f in archives/push/test_archive.*; do
+            echo "Pushing $f..."
+            adb push "$f" /storage/emulated/0/otter-test-archives/
+          done
+          echo "Archives on device: $(adb shell ls /storage/emulated/0/otter-test-archives/)"
+
+      - name: Run instrumented tests
+        run: ./gradlew connectedDebugAndroidTest
 
       - name: Upload instrumented test results
         if: always()

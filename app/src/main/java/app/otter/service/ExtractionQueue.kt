@@ -20,7 +20,8 @@ class ExtractionQueue @Inject constructor() {
 
     data class ExtractionTask(
         val archiveUri: ResourcePath,
-        val fileName: String
+        val fileName: String,
+        val selectedItems: List<String>? = null // null = extract all; list = extract specific entries
     )
 
     companion object {
@@ -56,7 +57,8 @@ class ExtractionQueue @Inject constructor() {
         val intent = ExtractionService.newIntent(
             context = context,
             archiveUri = task.archiveUri,
-            fileName = task.fileName
+            fileName = task.fileName,
+            selectedItems = task.selectedItems
         )
         context.startService(intent)
 

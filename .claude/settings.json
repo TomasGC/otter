@@ -7,10 +7,18 @@
       "Bash:git status",
       "Bash:git diff",
       "Bash:git log",
-      "Edit:.claude/**",
-      "Write:.claude/**",
-      "{{BUILD_PERMISSION}}",
-      "{{TEST_PERMISSION}}"
+      "Edit:.claude/contexts/kanban.md",
+      "Edit:.claude/contexts/architecture.md",
+      "Edit:.claude/contexts/commands.md",
+      "Edit:.claude/contexts/conventions.md",
+      "Edit:.claude/contexts/tests.md",
+      "Edit:docs/CICD.md",
+      "Write:.claude/contexts/kanban.md",
+      "Write:.claude/contexts/architecture.md",
+      "Write:.claude/contexts/commands.md",
+      "Write:.claude/contexts/conventions.md",
+      "Write:.claude/contexts/tests.md",
+      "Write:docs/CICD.md"
     ],
     "ask": [
       "Edit",

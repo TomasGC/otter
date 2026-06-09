@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
 interface ArchiveRepository {
     fun extractArchive(
         archive: ArchiveFile,
-        destinationPath: ResourcePath
+        destinationPath: ResourcePath,
+        selectedItems: List<String>? = null
     ): Flow<ExtractionProgress>
 }

@@ -17,13 +17,54 @@ object ResourcePathConverter {
 
     /**
      * Converts Android Uri to domain ResourcePath.
+     * Returns a FileSystem path by default - archives are detected separately.
+     *
+     * @param uri The Uri to convert
+     * @param context Optional Android context for resolving content:// URIs (required for Samsung My Files and other providers)
      */
-    fun fromUri(uri: Uri): ResourcePath = ResourcePath(uri.toString())
+    fun fromUri(uri: Uri, context: Context? = null): ResourcePath {
+        // Extract actual file path from URI
+        // - content:// URIs: Try to get real path, fallback to keeping URI string (for ContentResolver use)
+        // - file:// URIs: Extract path segment (e.g., file:///storage/... → /storage/...)
+        // - Other URIs: Use as-is
+        val filePath = when (uri.scheme) {
+            "content" -> {
+                val resolved = if (context != null) {
+                    getRealPathFromContentUri(context, uri)
+                } else {
+                    null
+                }
+                // If resolved to real path, use it. Otherwise keep the content:// URI string
+                // so ArchiveFileFactory can use ContentResolver to open it.
+                resolved ?: uri.toString()
+            }
+            "file" -> uri.path ?: uri.toString()  // Extract path from file:// URI
+            else -> uri.toString()
+        }
+        return ResourcePath.FileSystem(filePath)
+    }
 
     /**
      * Converts domain ResourcePath to Android Uri.
+     * Handles both FileSystem and ArchiveEntry paths.
      */
-    fun toUri(path: ResourcePath): Uri = Uri.parse(path.value)
+    fun toUri(path: ResourcePath): Uri = when (path) {
+        is ResourcePath.FileSystem -> {
+            // Handle paths that are already URIs (e.g., content:// preserved from intent)
+            if (path.path.startsWith("content://") || path.path.startsWith("file://")) {
+                Uri.parse(path.path)
+            } else {
+                Uri.fromFile(java.io.File(path.path))
+            }
+        }
+        is ResourcePath.ArchiveEntry -> {
+            if (path.archivePath.startsWith("content://") || path.archivePath.startsWith("file://")) {
+                Uri.parse(path.archivePath)
+            } else {
+                Uri.fromFile(java.io.File(path.archivePath))
+            }
+        }
+    }
 
     /**
      * Extracts the file system path from a Uri, handling Windows malformed URIs.
@@ -99,7 +140,31 @@ object ResourcePathConverter {
                 }
             }
 
-            // Method 2: For DocumentFile URIs (Documents Provider)
+            // Method 2: Samsung My Files FileProvider (check authority first, not DocumentUri)
+            if (uri.authority == "com.sec.android.app.myfiles.FileProvider") {
+                try {
+                    // Samsung URI format: content://com.sec.android.app.myfiles.FileProvider/device_storage/0/Download/file.zip
+                    // Extract path directly from URI (not using getDocumentId which throws exception)
+                    val uriPath = uri.path ?: uri.encodedPath ?: ""
+                    Timber.d("Samsung My Files URI path: $uriPath")
+
+                    // Remove leading slash: /device_storage/0/Download/file.zip -> device_storage/0/Download/file.zip
+                    val cleanPath = uriPath.removePrefix("/")
+                    val pathComponents = cleanPath.split("/")
+
+                    if (pathComponents.size >= 3 && pathComponents[0] == "device_storage") {
+                        // Transform: device_storage/0/Download/file.zip -> /storage/emulated/0/Download/file.zip
+                        val relativePath = pathComponents.drop(2).joinToString("/")
+                        val realPath = "${android.os.Environment.getExternalStorageDirectory()}/$relativePath"
+                        Timber.d("Samsung My Files transformed: $cleanPath -> $realPath")
+                        return realPath
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to parse Samsung My Files URI")
+                }
+            }
+
+            // Method 3: For DocumentFile URIs (Documents Provider)
             if (DocumentsContract.isDocumentUri(context, uri)) {
                 val docId = DocumentsContract.getDocumentId(uri)
 

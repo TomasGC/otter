@@ -1,7 +1,17 @@
 # Project Instructions - Otter
 
 **Purpose**: Android Archive Extractor (ZIP + RAR + 7z + TAR + RPA) project instructions
-**Last Updated**: 2026-05-12
+**Last Updated**: 2026-06-09
+
+---
+
+## Project Context
+
+@contexts/kanban.md
+@contexts/architecture.md
+@contexts/commands.md
+@contexts/conventions.md
+@contexts/tests.md
 
 ---
 
@@ -12,14 +22,17 @@
 **ALL TESTS MUST PASS** - No exceptions
 
 After any code change:
-1. Build: `pwsh.exe -File C:/dev/repos/GitHub/otter/build.ps1`
-2. Test: `pwsh.exe -File C:/dev/repos/GitHub/otter/docker-build.ps1 testDebugUnitTest`
+1. Build: `python scripts/build.py --no-install`
+2. Test: `python scripts/test.py`
 3. **If any test fails → BLOCK COMMIT**
 
 Alternative commands:
 ```bash
-pwsh.exe -File C:/dev/repos/GitHub/otter/docker-build.ps1 assembleDebug    # Build only
-pwsh.exe -File C:/dev/repos/GitHub/otter/docker-build.ps1 testDebugUnitTest    # Test only
+python scripts/build.py              # Build + auto-install on device
+python scripts/build.py --no-install # Build only (no device needed)
+python scripts/test.py --unit        # Unit tests only
+python scripts/test.py --instrumented # Instrumented tests (requires device)
+python scripts/test.py --coverage    # Unit tests with coverage report
 ```
 
 **Coverage requirement**: ≥ 80%
@@ -82,7 +95,28 @@ pwsh.exe -File C:/dev/repos/GitHub/otter/docker-build.ps1 testDebugUnitTest    #
 
 ### Build & Test Workflow
 
-**Commands**:
+**Python Scripts** (recommended):
+```bash
+# Build + auto-install (auto-connects device if needed)
+python scripts/build.py
+
+# Build only (no install)
+python scripts/build.py --no-install
+
+# Run unit tests
+python scripts/test.py --unit
+
+# Run instrumented tests (requires device, auto-connects if needed)
+python scripts/test.py --instrumented
+
+# Run all tests
+python scripts/test.py
+
+# Run tests with coverage report
+python scripts/test.py --coverage
+```
+
+**Direct Gradle Commands** (alternative):
 ```bash
 # Build debug variant
 ./gradlew assembleDebug
@@ -291,11 +325,11 @@ app/
 - `.claude/ARCHITECTURE.md` - Architecture diagrams, design patterns, tech decisions
 
 **Reference Documentation** (`.claude/docs/` directory):
-- `.claude/docs/CICD.md` - CI/CD pipeline documentation (GitHub Actions, workflows, coverage)
+- `docs/CICD.md` - CI/CD pipeline documentation (GitHub Actions, workflows, coverage)
 
 **Public Documentation** (committed to git):
 - `README.md` - Project overview, features, quick start
-- `.github/README.md` - CI/CD pipeline documentation
+- `docs/CICD.md` - CI/CD pipeline documentation
 
 **Auto-Loaded Rules** (`.claude/rules/` directory):
 - Pattern-based standards loaded automatically by Claude Code

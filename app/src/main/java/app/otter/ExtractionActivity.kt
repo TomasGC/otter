@@ -60,8 +60,9 @@ class ExtractionActivity : ComponentActivity() {
             return
         }
 
-        val archivePath = ResourcePathConverter.fromUri(archiveUri)
-        val fileName = getFileName(archivePath) ?: "archive"
+        val archivePath = ResourcePathConverter.fromUri(archiveUri, this)
+        // Get filename from the ORIGINAL intent URI (before any path resolution)
+        val fileName = getFileNameFromUri(archiveUri) ?: getFileName(archivePath) ?: "archive"
 
         // Display extraction UI
         setContent {
@@ -120,7 +121,22 @@ class ExtractionActivity : ComponentActivity() {
     }
 
     private fun startExtractionService(archivePath: ResourcePath, fileName: String) {
-        val serviceIntent = ExtractionService.newIntent(this, archivePath, fileName)
+        val archiveUri = ResourcePathConverter.toUri(archivePath)
+
+        // For content:// URIs, resolve to real file path first (so service can access without permissions)
+        val resolvedPath = if (archiveUri.scheme == "content") {
+            val realPath = app.otter.data.util.ResourcePathConverter.getRealPathFromContentUri(this, archiveUri)
+            if (realPath != null) {
+                app.otter.domain.model.ResourcePath.FileSystem(realPath)
+            } else {
+                // Can't resolve to file path — copy to cache dir so service can read it
+                copyContentUriToCacheFile(archiveUri, fileName) ?: archivePath
+            }
+        } else {
+            archivePath
+        }
+
+        val serviceIntent = ExtractionService.newIntent(this, resolvedPath, fileName)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
         } else {
@@ -129,19 +145,50 @@ class ExtractionActivity : ComponentActivity() {
         Toast.makeText(this, "Extracting $fileName...", Toast.LENGTH_SHORT).show()
     }
 
-    private fun getFileName(path: ResourcePath): String? {
-        val uri = ResourcePathConverter.toUri(path)
+    private fun copyContentUriToCacheFile(uri: android.net.Uri, fileName: String): ResourcePath? {
         return try {
-            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                cursor.moveToFirst()
-                cursor.getString(nameIndex)
+            val cacheFile = java.io.File(cacheDir, "extraction_$fileName")
+            contentResolver.openInputStream(uri)?.use { input ->
+                cacheFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
             }
-        } catch (e: SecurityException) {
-            // Permission denied (e.g., in tests or missing ACTION_OPEN_DOCUMENT)
-            // Return null to use default filename
+            if (cacheFile.exists() && cacheFile.length() > 0) {
+                app.otter.domain.model.ResourcePath.FileSystem(cacheFile.absolutePath)
+            } else null
+        } catch (e: Exception) {
+            android.util.Log.e("ExtractionActivity", "Failed to copy content URI to cache: ${e.message}")
             null
         }
+    }
+
+    private fun getFileNameFromUri(uri: android.net.Uri): String? {
+        return try {
+            when (uri.scheme) {
+                "content" -> {
+                    contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (nameIndex >= 0 && cursor.moveToFirst()) cursor.getString(nameIndex) else null
+                    }
+                }
+                "file" -> uri.lastPathSegment
+                else -> null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun getFileName(path: ResourcePath): String? {
+        // Try to extract filename from the resolved FileSystem path
+        if (path is ResourcePath.FileSystem) {
+            val pathStr = path.path
+            if (!pathStr.startsWith("content://")) {
+                return java.io.File(pathStr).name.takeIf { it.isNotBlank() }
+            }
+        }
+        val uri = ResourcePathConverter.toUri(path)
+        return getFileNameFromUri(uri)
     }
 }
 

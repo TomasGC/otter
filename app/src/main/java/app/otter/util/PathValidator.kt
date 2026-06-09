@@ -56,6 +56,9 @@ class PathValidator @Inject constructor() {
      * @throws SecurityException if path traversal is detected
      */
     fun createSafeOutputFile(destinationPath: File, entryName: String): File {
+        if (!isSafePath(entryName)) {
+            throw SecurityException("Entry outside destination: $entryName")
+        }
         val outputFile = File(destinationPath, entryName)
         validatePath(outputFile, destinationPath, entryName)
         outputFile.parentFile?.mkdirs()

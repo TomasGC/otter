@@ -3,10 +3,21 @@ name: Unit Tests (Reusable)
 on:
   workflow_call:
     inputs:
+      test-type:
+        description: "Test filter type: unit-domain-service | unit-data | unit-ui | integration-mock-extractor | integration-mock-other | integration-real | all"
+        type: string
+        default: "all"
+      artifact-name:
+        description: "Name prefix for uploaded artifacts"
+        type: string
+        default: "unit"
       retention-days:
         description: "Test results retention days"
         type: number
         default: 7
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   unit-tests:
@@ -24,28 +35,26 @@ jobs:
           java-version: '17'
 
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
 
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          python-version: '3.11'
 
-      - name: Run unit tests
-        run: ./gradlew testDebugUnitTest
+      - name: Generate test archives (RPA only - pure Python, no Docker/7z required)
+        run: python scripts/src/cli/create_test_archives.py --rpa-only
 
-      - name: Upload unit test results
+      - name: Run tests
+        run: ./gradlew testDebugUnitTest -DtestType=${{ inputs.test-type }}
+
+      - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: unit-test-results
+          name: ${{ inputs.artifact-name }}-test-results
           path: app/build/test-results/testDebugUnitTest/
           retention-days: ${{ inputs.retention-days }}
 
@@ -53,6 +62,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: unit-test-coverage-data
+          name: ${{ inputs.artifact-name }}-coverage-data
           path: app/build/kover/bin-reports/testDebugUnitTest.ic
           retention-days: ${{ inputs.retention-days }}

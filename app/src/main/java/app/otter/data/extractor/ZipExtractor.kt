@@ -16,7 +16,8 @@ import javax.inject.Inject
 class ZipExtractor @Inject constructor(
     private val pathValidator: PathValidator,
     tempFileManager: ITempFileManager,
-    sevenZipHelper: SevenZipExtractorHelper
+    sevenZipHelper: SevenZipExtractorHelper,
+    private val zipFileReaderFactory: IZipFileReaderFactory = RealZipFileReaderFactory()
 ) : BaseArchiveExtractor(tempFileManager, sevenZipHelper) {
 
     override fun supports(type: ArchiveType): Boolean = type == ArchiveType.ZIP
@@ -28,6 +29,7 @@ class ZipExtractor @Inject constructor(
         destinationPath: File,
         archiveType: ArchiveType,
         sourceFileName: String,
+        selectedItems: List<String>?,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult = withContext(Dispatchers.IO) {
         var extractedCount = 0
@@ -37,9 +39,9 @@ class ZipExtractor @Inject constructor(
             // Use base class helper to create temp file with validation
             tempFile = tempFileManager.createTempFile(inputStream, archiveType, getTag())
 
-            // Count total entries using ZipFile (allows random access)
-            val totalCount = ZipFile(tempFile).use { zipFile ->
-                zipFile.entries().asSequence().count { !it.isDirectory }
+            // Count total entries using ZipFileReader abstraction
+            val totalCount = zipFileReaderFactory.create(tempFile).use { reader ->
+                reader.countFiles()
             }
             Timber.tag(getTag()).d("Total files in archive: $totalCount")
 
@@ -49,34 +51,41 @@ class ZipExtractor @Inject constructor(
             // Progress throttler from base class
             val throttler = ProgressThrottler()
 
-            // Extract from temp file
-            ZipFile(tempFile).use { zipFile ->
-                val entries = zipFile.entries()
+            // Convert selectedItems to Set for O(1) lookup if provided
+            val selectedPaths = selectedItems?.toSet()
 
-                while (entries.hasMoreElements() && isActive) {
-                    val entry = entries.nextElement()
-                    if (!entry.isDirectory) {
-                        // Path traversal protection + directory creation
-                        val outputFile = pathValidator.createSafeOutputFile(destinationPath, entry.name)
+            // Extract from temp file using ZipFileReader abstraction
+            zipFileReaderFactory.create(tempFile).use { reader ->
+                val entries = reader.getEntries()
 
-                        // Extract using ZipFile.getInputStream (more reliable than stream)
-                        zipFile.getInputStream(entry).use { input ->
-                            outputFile.outputStream().buffered(BUFFER_SIZE_BYTES).use { output ->
-                                var bytesRead: Int
-                                while (input.read(buffer).also { bytesRead = it } != -1 && isActive) {
-                                    output.write(buffer, 0, bytesRead)
-                                }
+                for (entry in entries) {
+                    if (!isActive) break
+
+                    // Skip if selective extraction and entry not selected
+                    if (!isEntrySelected(entry.name, selectedPaths)) {
+                        continue
+                    }
+
+                    // Path traversal protection + directory creation
+                    val outputFile = pathValidator.createSafeOutputFile(destinationPath, entry.name)
+
+                    // Extract using reader
+                    reader.getInputStream(entry).use { input ->
+                        outputFile.outputStream().buffered(BUFFER_SIZE_BYTES).use { output ->
+                            var bytesRead: Int
+                            while (input.read(buffer).also { bytesRead = it } != -1 && isActive) {
+                                output.write(buffer, 0, bytesRead)
                             }
                         }
-
-                        // Check if cancelled during file extraction
-                        if (!isActive) break
-
-                        extractedCount++
-
-                        // Use base class helper for throttled progress notifications
-                        notifyProgress(extractedCount, totalCount, entry.name, throttler, onProgress)
                     }
+
+                    // Check if cancelled during file extraction
+                    if (!isActive) break
+
+                    extractedCount++
+
+                    // Use base class helper for throttled progress notifications
+                    notifyProgress(extractedCount, totalCount, entry.name, throttler, onProgress)
                 }
             }
 
