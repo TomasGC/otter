@@ -16,8 +16,8 @@ android {
         applicationId = "app.otter"
         minSdk = 26
         targetSdk = 34
-        versionCode = 202
-        versionName = "0.0.202"
+        versionCode = 208
+        versionName = "0.0.208"
 
         testInstrumentationRunner = "app.otter.HiltTestRunner"
         vectorDrawables {

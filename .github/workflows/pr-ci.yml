@@ -1,64 +1,62 @@
 name: PR-CI
 
 on:
-  pull_request:
-    branches: [ main ]
-    types: [ opened, synchronize, reopened ]
+  workflow_run:
+    workflows: ["Push-CI"]
+    types: [completed]
 
 concurrency:
-  group: pr-ci-${{ github.event.pull_request.number }}
+  group: pr-ci-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  verify-push-ci:
-    name: Verify Push-CI Passed
+  check-pr-exists:
+    name: Check Open PR
     runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
     outputs:
-      push_ci_passed: ${{ steps.check.outputs.passed }}
+      has_pr: ${{ steps.find-pr.outputs.has_pr }}
+      pr_number: ${{ steps.find-pr.outputs.pr_number }}
+      pr_title: ${{ steps.find-pr.outputs.pr_title }}
     steps:
-      - name: Check Push-CI status
-        id: check
+      - name: Find open PR for branch
+        id: find-pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH="${{ github.head_ref }}"
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
           REPO="${{ github.repository }}"
-          echo "Checking Push-CI status for branch: $BRANCH"
+          echo "Looking for open PR targeting main from branch: $BRANCH"
 
-          # Get latest push-ci.yml run for this branch
-          RUN=$(gh run list --repo "$REPO" --workflow=push-ci.yml --branch "$BRANCH" --limit 1 --json status,conclusion --jq '.[0]')
+          PR=$(gh pr list --repo "$REPO" --head "$BRANCH" --base main --state open --json number,title --jq '.[0]')
 
-          if [ -z "$RUN" ] || [ "$RUN" = "null" ]; then
-            echo "No Push-CI run found for branch $BRANCH - skipping downstream jobs"
-            echo "passed=false" >> $GITHUB_OUTPUT
+          if [ -z "$PR" ] || [ "$PR" = "null" ]; then
+            echo "No open PR found for branch $BRANCH - skipping PR-CI"
+            echo "has_pr=false" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          STATUS=$(echo "$RUN" | jq -r '.status')
-          CONCLUSION=$(echo "$RUN" | jq -r '.conclusion')
+          PR_NUMBER=$(echo "$PR" | jq -r '.number')
+          PR_TITLE=$(echo "$PR" | jq -r '.title')
 
-          echo "Push-CI status: $STATUS (conclusion: $CONCLUSION)"
-
-          if [ "$STATUS" = "completed" ] && [ "$CONCLUSION" = "success" ]; then
-            echo "Push-CI passed - proceeding with PR-CI"
-            echo "passed=true" >> $GITHUB_OUTPUT
-          else
-            echo "Push-CI not completed or failed - skipping downstream jobs"
-            echo "passed=false" >> $GITHUB_OUTPUT
-          fi
+          echo "Found PR #$PR_NUMBER: $PR_TITLE"
+          echo "has_pr=true" >> $GITHUB_OUTPUT
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "pr_title=$PR_TITLE" >> $GITHUB_OUTPUT
 
   pr-validation:
     name: Validate PR Format
     runs-on: ubuntu-latest
-    needs: verify-push-ci
-    if: needs.verify-push-ci.outputs.push_ci_passed == 'true'
+    needs: check-pr-exists
+    if: needs.check-pr-exists.outputs.has_pr == 'true'
     steps:
       - name: Check PR title format
+        env:
+          PR_TITLE: ${{ needs.check-pr-exists.outputs.pr_title }}
         run: |
-          PR_TITLE="${{ github.event.pull_request.title }}"
           if ! echo "$PR_TITLE" | grep -qE '^#[0-9]+: (feat|fix|refactor|test|docs|chore|style|perf):'; then
             echo "ERROR: PR title must follow format: #123: type: description"
             echo "Examples:"
@@ -72,15 +70,19 @@ jobs:
   context-check:
     name: Verify Context Files Updated
     runs-on: ubuntu-latest
-    needs: verify-push-ci
-    if: needs.verify-push-ci.outputs.push_ci_passed == 'true'
+    needs: check-pr-exists
+    if: needs.check-pr-exists.outputs.has_pr == 'true'
     permissions:
       contents: read
-      pull-requests: write
+    outputs:
+      needs_update: ${{ steps.context-check.outputs.needs_update }}
+      missing: ${{ steps.context-check.outputs.missing }}
+      warnings: ${{ steps.context-check.outputs.warnings }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Check if contexts are updated
         id: context-check
@@ -129,13 +131,25 @@ jobs:
             echo "SUCCESS: Context files updated"
           fi
 
+  context-comment:
+    name: Comment on PR (Context Missing)
+    runs-on: ubuntu-latest
+    needs: [check-pr-exists, context-check]
+    if: always() && needs.check-pr-exists.outputs.has_pr == 'true' && needs.context-check.result == 'failure' && needs.context-check.outputs.needs_update == 'true'
+    permissions:
+      pull-requests: write
+    steps:
       - name: Comment on PR if contexts need update
-        if: failure() && steps.context-check.outputs.needs_update == 'true'
         uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.check-pr-exists.outputs.pr_number }}
+          MISSING: ${{ needs.context-check.outputs.missing }}
+          WARNINGS: ${{ needs.context-check.outputs.warnings }}
         with:
           script: |
-            const missing = '${{ steps.context-check.outputs.missing }}';
-            const warnings = '${{ steps.context-check.outputs.warnings }}';
+            const missing = process.env.MISSING || '';
+            const warnings = process.env.WARNINGS || '';
+            const prNumber = parseInt(process.env.PR_NUMBER, 10);
 
             let body = `## Context Files Not Updated\n\n`;
             body += `This PR modifies code but required context files are missing.\n\n`;
@@ -161,7 +175,7 @@ jobs:
             body += `*Tip: Update the files and amend your commit.*`;
 
             github.rest.issues.createComment({
-              issue_number: context.issue.number,
+              issue_number: prNumber,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: body
@@ -169,8 +183,8 @@ jobs:
 
   security-checks:
     name: Security Validation
-    needs: verify-push-ci
-    if: needs.verify-push-ci.outputs.push_ci_passed == 'true'
+    needs: check-pr-exists
+    if: needs.check-pr-exists.outputs.has_pr == 'true'
     uses: ./.github/workflows/reusable-security-checks.yml
     permissions:
       contents: read

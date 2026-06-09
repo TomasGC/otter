@@ -19,12 +19,8 @@ import app.otter.ui.theme.OtterTheme
 import app.otter.ui.viewmodel.FileBrowserViewModel
 import io.mockk.coEvery
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
-import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -42,8 +38,6 @@ class FileBrowserScreenTest {
 
     @Before
     fun setup() {
-        Dispatchers.setMain(testDispatcher)
-
         val mockUseCase = mockk<BrowseItemsUseCase>()
         coEvery { mockUseCase.invoke(any(), any(), any()) } returns Result.success(
             BrowseResult.Complete(
@@ -81,11 +75,6 @@ class FileBrowserScreenTest {
         )
     }
 
-    @After
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     @Test
     fun initialScreen_displaysFileList() {
         composeTestRule.setContent {
@@ -101,7 +90,7 @@ class FileBrowserScreenTest {
     }
 
     @Test
-    fun clickOnArchive_showsConfirmationDialog() {
+    fun clickOnArchive_navigatesIntoArchive() {
         composeTestRule.setContent {
             OtterTheme {
                 FileBrowserScreen(viewModel = viewModel)
@@ -112,9 +101,8 @@ class FileBrowserScreenTest {
         composeTestRule.onNodeWithText("test.zip").performClick()
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("Extract archive?").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Extract").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Cancel").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Extract archive?").assertDoesNotExist()
+        composeTestRule.onNodeWithText("test.zip").assertIsDisplayed()
     }
 
     @Test
@@ -185,39 +173,36 @@ class FileBrowserScreenTest {
     }
 
     @Test
-    fun confirmDialog_clickExtract_startsExtraction() {
+    fun clickDirectory_navigateUp_returnsToRoot() {
         composeTestRule.setContent {
             OtterTheme {
                 FileBrowserScreen(viewModel = viewModel)
             }
         }
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("test.zip").performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("Extract archive?").assertIsDisplayed()
 
-        composeTestRule.onNodeWithText("Extract").performClick()
+        composeTestRule.onNodeWithText("folder1").performClick()
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("Extract archive?").assertIsNotDisplayed()
+        composeTestRule.onNodeWithContentDescription("Navigate up").performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText("test.zip").assertIsDisplayed()
+        composeTestRule.onNodeWithText("folder1").assertIsDisplayed()
     }
 
     @Test
-    fun confirmDialog_clickCancel_dismissesDialog() {
+    fun toggleFilter_displaysOnlyArchives() {
         composeTestRule.setContent {
             OtterTheme {
                 FileBrowserScreen(viewModel = viewModel)
             }
         }
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("test.zip").performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("Extract archive?").assertIsDisplayed()
 
-        composeTestRule.onNodeWithText("Cancel").performClick()
+        composeTestRule.onNodeWithContentDescription("Filter archives only").performClick()
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("Extract archive?").assertIsNotDisplayed()
         composeTestRule.onNodeWithText("test.zip").assertIsDisplayed()
     }
 }

@@ -62,7 +62,7 @@ class ZipExtractor @Inject constructor(
                     if (!isActive) break
 
                     // Skip if selective extraction and entry not selected
-                    if (selectedPaths != null && !selectedPaths.contains(entry.name)) {
+                    if (!isEntrySelected(entry.name, selectedPaths)) {
                         continue
                     }
 

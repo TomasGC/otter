@@ -143,6 +143,16 @@ abstract class BaseArchiveExtractor(
         }
     }
 
+    /**
+     * Checks if an archive entry should be extracted under selective extraction.
+     * Null selectedPaths = extract all. Exact match or directory prefix match = include.
+     */
+    protected fun isEntrySelected(entryName: String, selectedPaths: Set<String>?): Boolean {
+        if (selectedPaths == null) return true
+        if (selectedPaths.contains(entryName)) return true
+        return selectedPaths.any { path -> path.endsWith("/") && entryName.startsWith(path) }
+    }
+
     companion object {
         // Shared buffer and throttle constants
         @JvmStatic

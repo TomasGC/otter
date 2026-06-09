@@ -56,7 +56,7 @@ object ArchiveNavigationTestHelper {
         val result = useCase(
             path = resourcePath,
             offset = 0,
-            limit = 1000  // Large enough for all test archives
+            limit = 2000  // Covers root: 6 dirs + 1000 files = 1006 items
         )
 
         // Extract items from result

@@ -75,7 +75,9 @@ class ZipArchiveExtractionInstrumentedTest : BaseArchiveExtractionTest() {
 
         val allItems = browseArchive(archivePath)
         val rootFiles = allItems.filterIsInstance<BrowsableItem.ArchiveFileEntry>().take(10)
-        val firstFolder = allItems.filterIsInstance<BrowsableItem.ArchiveDirectory>().first()
+        // folder_300 has exactly 300 files — all fit in one browse call (limit=2000)
+        val firstFolder = allItems.filterIsInstance<BrowsableItem.ArchiveDirectory>()
+            .first { it.name == "folder_300" }
 
         // Get all files inside the selected folder
         val folderItems = browseArchive(archivePath, firstFolder.path)

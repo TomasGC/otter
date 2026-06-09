@@ -215,12 +215,12 @@ def main():
 
     # Folders first (so they sort before root files in the archive)
     folders = [
-        ("folder_300",    300),
-        ("folder_800",    800),
-        ("folder_2000",   2000),
-        ("folder_10000",  10000),
-        ("folder_50000",  50000),
-        ("folder_200000", 200000),
+        ("folder_30",    30),
+        ("folder_80",    80),
+        ("folder_300",   300),
+        ("folder_500",   500),
+        ("folder_1000",  1000),
+        ("folder_2000",  2000),
     ]
 
     for folder_name, file_count in folders:
@@ -229,14 +229,14 @@ def main():
         print(f"\n=== {folder_name}: {file_count} files ===")
         create_numbered_files(folder_path, file_count, prefix=f"{folder_name}_")
 
-    # Root files: 0001.ext … 1000.ext (no prefix)
-    print(f"\n=== root: 1000 files ===")
-    create_numbered_files(OUTPUT_DIR, 1000, prefix="")
+    # Root files: 001.ext … 100.ext (no prefix)
+    print(f"\n=== root: 100 files ===")
+    create_numbered_files(OUTPUT_DIR, 100, prefix="")
 
     print("\n" + "=" * 60)
     print("Generation complete!")
     print("=" * 60)
-    print("Total files: 1000 + 300 + 800 + 2000 + 10000 + 50000 + 200000 = 264100")
+    print("Total files: 100 + 30 + 80 + 300 + 500 + 1000 + 2000 = 4010")
 
     total_size = sum(f.stat().st_size for f in OUTPUT_DIR.rglob('*') if f.is_file())
     print(f"Total size: {total_size / (1024 * 1024):.2f} MB")

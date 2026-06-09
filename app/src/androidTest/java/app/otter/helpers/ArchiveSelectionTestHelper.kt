@@ -25,7 +25,7 @@ object ArchiveSelectionTestHelper {
             .filterIsInstance<BrowsableItem.ArchiveDirectory>()
             .map {
                 val entryPath = (it.path as ResourcePath.ArchiveEntry).entryPath
-                entryPath.replace("\\", "/")
+                entryPath.trimEnd('/').replace("\\", "/")
             }
             .toSet()
     }

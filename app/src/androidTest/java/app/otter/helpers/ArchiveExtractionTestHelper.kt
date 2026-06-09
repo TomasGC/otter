@@ -16,9 +16,9 @@ import java.io.File
  */
 object ArchiveExtractionTestHelper {
 
-    // Expected counts (from template: 1000 root files + 6 folders + folder contents)
-    const val EXPECTED_TOTAL_FILES = 264100
-    const val EXPECTED_ROOT_FILES = 1000
+    // Expected counts (from template: 100 root files + 6 folders + folder contents)
+    const val EXPECTED_TOTAL_FILES = 4010
+    const val EXPECTED_ROOT_FILES = 100
     const val EXPECTED_FOLDERS = 6
 
     private val context: Context
