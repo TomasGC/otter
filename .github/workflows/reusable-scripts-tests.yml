@@ -1,0 +1,138 @@
+name: Scripts Tests (Reusable)
+
+on:
+  workflow_call:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+
+# ── Layer 1: unit + integration-mock (all parallel) ──────────────────────────
+
+  script-unit-android:
+    name: Scripts Unit — Android
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-test.txt
+      - run: python -m pytest tests/unit/android/ --no-cov -q
+
+  script-unit-cli:
+    name: Scripts Unit — CLI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-test.txt
+      - run: python -m pytest tests/unit/cli/ --no-cov -q
+
+  script-unit-common:
+    name: Scripts Unit — Common
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-test.txt
+      - run: python -m pytest tests/unit/common/ --no-cov -q
+
+  script-integration-mock-cli:
+    name: Scripts Mock — CLI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-test.txt
+      - run: python -m pytest tests/integration_mock/cli/ --no-cov -q
+
+  script-integration-mock-android:
+    name: Scripts Mock — Android
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-test.txt
+      - run: python -m pytest tests/integration_mock/android/ --no-cov -q
+
+  script-coverage:
+    name: Scripts Coverage
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-test.txt
+      - run: python -m pytest tests/unit/ tests/integration_mock/ -q
+
+# ── Layer 2: integration-real (needs all layer-1 jobs) ───────────────────────
+
+  script-integration-real:
+    name: Scripts Integration Real
+    needs:
+      - script-unit-android
+      - script-unit-cli
+      - script-unit-common
+      - script-integration-mock-cli
+      - script-integration-mock-android
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-test.txt
+      - run: python -m pytest tests/integration_real/ --no-cov -q
+
+# ── Layer 3: e2e (needs integration-real) ────────────────────────────────────
+
+  script-e2e:
+    name: Scripts E2E
+    needs: script-integration-real
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-test.txt
+      - name: Run e2e tests
+        run: |
+          python -m pytest tests/e2e/ --no-cov -q
+          STATUS=$?
+          [ $STATUS -eq 5 ] && echo "No e2e tests yet" && exit 0 || exit $STATUS

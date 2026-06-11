@@ -105,6 +105,28 @@ jobs:
 
           echo ""
           echo "SUCCESS: All commit messages valid"
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      scripts: ${{ steps.filter.outputs.scripts }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            scripts:
+              - 'scripts/**/*.py'
+              - 'scripts/pytest.ini'
+              - 'scripts/requirements-test.txt'
+
+  scripts-tests:
+    name: Scripts Tests
+    needs: detect-changes
+    if: needs.detect-changes.outputs.scripts == 'true'
+    uses: ./.github/workflows/reusable-scripts-tests.yml
+
   lint-checks:
     name: Lint Checks
     uses: ./.github/workflows/reusable-lint-checks.yml
