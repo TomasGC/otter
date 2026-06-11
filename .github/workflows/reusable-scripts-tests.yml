@@ -133,6 +133,8 @@ jobs:
       - run: pip install -r requirements-test.txt
       - name: Run e2e tests
         run: |
+          set +e
           python -m pytest tests/e2e/ --no-cov -q
           STATUS=$?
+          set -e
           [ $STATUS -eq 5 ] && echo "No e2e tests yet" && exit 0 || exit $STATUS

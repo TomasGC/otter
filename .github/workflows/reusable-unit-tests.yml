@@ -44,8 +44,11 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Generate template files
+        run: PYTHONPATH=scripts/src python scripts/src/cli/generate_archive_template.py
+
       - name: Generate test archives (RPA only - pure Python, no Docker/7z required)
-        run: python scripts/src/cli/create_test_archives.py --rpa-only
+        run: PYTHONPATH=scripts/src python scripts/src/cli/create_test_archives.py --rpa-only
 
       - name: Run tests
         run: ./gradlew testDebugUnitTest -DtestType=${{ inputs.test-type }}

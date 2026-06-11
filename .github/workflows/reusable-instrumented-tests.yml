@@ -39,8 +39,9 @@ jobs:
 
       - name: Generate test archives
         run: |
+          PYTHONPATH=scripts/src python scripts/src/cli/generate_archive_template.py
           mkdir -p archives/push
-          python scripts/src/cli/create_test_archives.py --rpa-only --output-dir archives/push
+          PYTHONPATH=scripts/src python scripts/src/cli/create_test_archives.py --rpa-only --output-dir archives/push
           python - << 'EOF'
           import zipfile
           from pathlib import Path

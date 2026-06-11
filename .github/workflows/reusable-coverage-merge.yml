@@ -48,8 +48,11 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Generate template files
+        run: PYTHONPATH=scripts/src python scripts/src/cli/generate_archive_template.py
+
       - name: Generate test archives (RPA only)
-        run: python scripts/src/cli/create_test_archives.py --rpa-only
+        run: PYTHONPATH=scripts/src python scripts/src/cli/create_test_archives.py --rpa-only
 
       - name: Generate merged Kover report
         run: |
