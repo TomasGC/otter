@@ -9,7 +9,6 @@ from pathlib import Path
 from unittest.mock import patch, mock_open, MagicMock
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 
 from common.console import (
     setup_windows_encoding,
@@ -19,7 +18,6 @@ from common.console import (
     print_header,
     _log_file
 )
-
 
 class TestSetupWindowsEncoding(unittest.TestCase):
     """Test setup_windows_encoding function."""
@@ -62,7 +60,6 @@ class TestSetupWindowsEncoding(unittest.TestCase):
         # Should not change on non-Windows
         self.assertEqual(sys.stdout, original_stdout)
         self.assertEqual(sys.stderr, original_stderr)
-
 
 class TestSetupLogFile(unittest.TestCase):
     """Test setup_log_file function."""
@@ -132,7 +129,6 @@ class TestSetupLogFile(unittest.TestCase):
             finally:
                 close_log_file()
 
-
 class TestCloseLogFile(unittest.TestCase):
     """Test close_log_file function."""
 
@@ -167,7 +163,6 @@ class TestCloseLogFile(unittest.TestCase):
         close_log_file()
 
         self.assertIsNone(common.console._log_file)
-
 
 class TestLog(unittest.TestCase):
     """Test log function."""
@@ -220,7 +215,6 @@ class TestLog(unittest.TestCase):
 
         mock_print.assert_called_once()
 
-
 class TestPrintHeader(unittest.TestCase):
     """Test print_header function."""
 
@@ -254,7 +248,6 @@ class TestPrintHeader(unittest.TestCase):
             content = log_path.read_text(encoding="utf-8")
             self.assertIn("=" * 60, content)
             self.assertIn("Test Section", content)
-
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """Unit tests for file utilities."""
 
+import json
 import sys
 import unittest
 from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
+import pytest
 
 from common.file_utils import get_project_root
-
 
 class TestGetProjectRoot(unittest.TestCase):
     """Test get_project_root function."""
@@ -57,6 +56,20 @@ class TestGetProjectRoot(unittest.TestCase):
 
         self.assertEqual(root1, root2)
 
-
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestLoadTestSettings:
+    def test_reads_json_from_custom_path(self, tmp_path):
+        from common.file_utils import load_test_settings
+        data = {"test_archives": {"device_path": "/sdcard/otter"}}
+        settings_file = tmp_path / "settings.json"
+        settings_file.write_text(json.dumps(data), encoding="utf-8")
+        result = load_test_settings(path=settings_file)
+        assert result["test_archives"]["device_path"] == "/sdcard/otter"
+
+    def test_raises_when_file_missing(self, tmp_path):
+        from common.file_utils import load_test_settings
+        with pytest.raises(FileNotFoundError):
+            load_test_settings(path=tmp_path / "nonexistent.json")
