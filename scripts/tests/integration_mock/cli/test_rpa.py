@@ -6,21 +6,22 @@ They run in CI without any external tools.
 """
 
 import pickle
-import sys
 import zlib
 from pathlib import Path
 
 import pytest
-
-from cli.create_test_archives import ArchiveCreator
 from fake_subprocess import FakeSubprocessRunner  # only for constructor — never called
 
+from cli.create_test_archives import ArchiveCreator
+
 pytestmark = pytest.mark.integration_mock
+
 
 def _make(tmp_path: Path, num_files: int = 5) -> tuple[ArchiveCreator, Path, Path]:
     tmpl = tmp_path / "template"
     out = tmp_path / "output"
-    tmpl.mkdir(); out.mkdir()
+    tmpl.mkdir()
+    out.mkdir()
     for i in range(num_files):
         (tmpl / f"file_{i:03d}.txt").write_text(f"Content {i}\n", encoding="utf-8")
     sub = tmpl / "subdir"
@@ -28,14 +29,16 @@ def _make(tmp_path: Path, num_files: int = 5) -> tuple[ArchiveCreator, Path, Pat
     (sub / "nested.txt").write_text("Nested\n", encoding="utf-8")
     return ArchiveCreator(FakeSubprocessRunner(), out, tmpl), tmpl, out
 
+
 def _parse_index(rpa_path: Path) -> dict:
     data = rpa_path.read_bytes()
     parts = data[:34].decode("ascii").strip().split()
     idx_off = int(parts[1], 16)
     key = int(parts[2], 16)
     # Safe: archive was created by ArchiveCreator.create_rpa() above in same test session.
-    raw = pickle.loads(zlib.decompress(data[idx_off:]))  # noqa: S301
+    raw = pickle.loads(zlib.decompress(data[idx_off:]))
     return {p: [[o ^ key, s ^ key] for o, s in entries] for p, entries in raw.items()}
+
 
 class TestRpaRealCreation:
     def test_creates_valid_rpa(self, tmp_path):
@@ -76,7 +79,8 @@ class TestRpaRealCreation:
         index = _parse_index(out / "test_archive.rpa")
         for rpa_path, entries in index.items():
             offset, size = entries[0]
-            stored = rpa_bytes[offset:offset + size]
+            end = offset + size
+            stored = rpa_bytes[offset:end]
             fs_path = tmpl / rpa_path.replace("/", "\\")
             if not fs_path.exists():
                 fs_path = tmpl / rpa_path
@@ -95,6 +99,7 @@ class TestRpaRealCreation:
         c.create_rpa()
         assert (out / "test_archive.rpa").read_bytes() == sentinel
 
+
 class TestVersionManagerReal:
     """Version increment on a real gradle file copy — no mocks, real I/O."""
 
@@ -109,6 +114,7 @@ android {
 
     def test_increments_code_in_real_file(self, tmp_path):
         from android.versioning import VersionManager
+
         gradle = tmp_path / "build.gradle.kts"
         gradle.write_text(self.GRADLE, encoding="utf-8")
         code, name = VersionManager(tmp_path).increment(gradle)
@@ -117,6 +123,7 @@ android {
 
     def test_file_content_updated_after_increment(self, tmp_path):
         from android.versioning import VersionManager
+
         gradle = tmp_path / "build.gradle.kts"
         gradle.write_text(self.GRADLE, encoding="utf-8")
         VersionManager(tmp_path).increment(gradle)

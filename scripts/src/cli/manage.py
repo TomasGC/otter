@@ -1,17 +1,17 @@
 """Manager — unified entry point for all Otter project operations."""
 
-import sys
 from pathlib import Path
 from typing import Optional
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from common.subprocess_runner import SubprocessRunner, RealSubprocessRunner
-from cli.actions.build import BuildAction
-from cli.actions.test import TestAction, SUITES as TEST_SUITES
-from cli.actions.test_scripts import TestScriptsAction, SUITES as TEST_SCRIPTS_SUITES
-from cli.actions.create import CreateAction, SUITES as CREATE_SUITES
 from cli.actions.adb import AdbAction
+from cli.actions.build import BuildAction
+from cli.actions.create import SUITES as CREATE_SUITES
+from cli.actions.create import CreateAction
+from cli.actions.test import SUITES as TEST_SUITES
+from cli.actions.test import TestAction
+from cli.actions.test_scripts import SUITES as TEST_SCRIPTS_SUITES
+from cli.actions.test_scripts import TestScriptsAction
+from common.subprocess_runner import RealSubprocessRunner, SubprocessRunner
 
 
 class Manager:
@@ -33,7 +33,8 @@ class Manager:
         # test (Android)
         tp = sub.add_parser("test", help="Run Android tests")
         tp.add_argument(
-            "suites", nargs="*",
+            "suites",
+            nargs="*",
             choices=TEST_SUITES,
             metavar="SUITE",
             help=f"Suites to run: {', '.join(TEST_SUITES)} (default: all; coverage overrides others)",
@@ -42,7 +43,8 @@ class Manager:
         # test-scripts (Python pytest)
         tsp = sub.add_parser("test-scripts", help="Run Python script tests")
         tsp.add_argument(
-            "suites", nargs="*",
+            "suites",
+            nargs="*",
             choices=TEST_SCRIPTS_SUITES,
             metavar="SUITE",
             help=f"Suites to run: {', '.join(TEST_SCRIPTS_SUITES)} (default: all; coverage overrides others)",
@@ -51,7 +53,8 @@ class Manager:
         # create
         cp = sub.add_parser("create", help="Create test resources")
         cp.add_argument(
-            "suites", nargs="*",
+            "suites",
+            nargs="*",
             choices=CREATE_SUITES,
             metavar="SUITE",
             help=f"Suites to run: {', '.join(CREATE_SUITES)} (default: all)",

@@ -2,29 +2,33 @@
 """Unit tests for ArchiveCreator."""
 
 import pickle
-import sys
 import zlib
 from pathlib import Path
 
-import pytest
-
-from cli.create_test_archives import ArchiveCreator
 from fake_subprocess import FakeSubprocessRunner
 
+from cli.create_test_archives import ArchiveCreator
+
 FAKE_7Z = "/fake/7z"
+
 
 def make_creator(tmp_path, runner=None, seven_zip=FAKE_7Z):
     template = tmp_path / "template"
     output = tmp_path / "output"
     template.mkdir(exist_ok=True)
     output.mkdir(exist_ok=True)
-    return ArchiveCreator(
-        runner or FakeSubprocessRunner(),
-        output,
+    return (
+        ArchiveCreator(
+            runner or FakeSubprocessRunner(),
+            output,
+            template,
+            seven_zip_path=seven_zip,
+            dockerfile_dir=tmp_path / "docker",
+        ),
         template,
-        seven_zip_path=seven_zip,
-        dockerfile_dir=tmp_path / "docker",
-    ), template, output
+        output,
+    )
+
 
 def make_template(template_dir: Path, num_files: int = 3) -> None:
     for i in range(num_files):
@@ -33,9 +37,11 @@ def make_template(template_dir: Path, num_files: int = 3) -> None:
     sub.mkdir(exist_ok=True)
     (sub / "nested.txt").write_text("nested\n", encoding="utf-8")
 
+
 # ---------------------------------------------------------------------------
 # RPA — pure Python, no subprocess needed
 # ---------------------------------------------------------------------------
+
 
 class TestCreateRpa:
     def test_creates_rpa_file(self, tmp_path):
@@ -64,9 +70,9 @@ class TestCreateRpa:
         data = (out / "test_archive.rpa").read_bytes()
         parts = data[:34].decode("ascii").strip().split()
         index_offset = int(parts[1], 16)
-        key = int(parts[2], 16)
+        int(parts[2], 16)
         # Safe: data was written by create_rpa() moments ago in the same test process.
-        raw = pickle.loads(zlib.decompress(data[index_offset:]))  # noqa: S301
+        raw = pickle.loads(zlib.decompress(data[index_offset:]))
         assert isinstance(raw, dict) and len(raw) > 0
 
     def test_skips_when_file_already_exists(self, tmp_path):
@@ -85,9 +91,11 @@ class TestCreateRpa:
         c.create_rpa()
         assert runner.call_count == 0
 
+
 # ---------------------------------------------------------------------------
 # 7z archives — subprocess mocked
 # ---------------------------------------------------------------------------
+
 
 class TestCreate7zip:
     def _run(self, tmp_path):
@@ -102,6 +110,7 @@ class TestCreate7zip:
                     p.write_bytes(b"FAKE")
                     break
             from fake_subprocess import FakeResult
+
             return FakeResult(returncode=0)
 
         runner.run = side_effect
@@ -141,9 +150,11 @@ class TestCreate7zip:
         c.create_7zip()
         assert runner.call_count == 0
 
+
 # ---------------------------------------------------------------------------
 # RAR via Docker — subprocess mocked
 # ---------------------------------------------------------------------------
+
 
 class TestCreateRarDocker:
     def _run(self, tmp_path):
@@ -157,6 +168,7 @@ class TestCreateRarDocker:
             if "run" in cmd and "docker" in cmd[0]:
                 (out / "test_archive.rar").write_bytes(b"FAKE_RAR")
             from fake_subprocess import FakeResult
+
             return FakeResult(returncode=0)
 
         runner.run = side_effect
@@ -199,15 +211,18 @@ class TestCreateRarDocker:
             if "build" in cmd:
                 raise subprocess.CalledProcessError(1, cmd, "Build failed")
             from fake_subprocess import FakeResult
+
             return FakeResult(returncode=0)
 
         import subprocess
+
         runner.run = fail_build
         result = c.create_rar_docker()
         assert result is None
 
     def test_does_not_run_docker_when_build_fails(self, tmp_path):
         import subprocess
+
         runner = FakeSubprocessRunner()
         c, _, out = make_creator(tmp_path, runner=runner)
         (tmp_path / "docker").mkdir(exist_ok=True)
@@ -218,6 +233,7 @@ class TestCreateRarDocker:
             if "build" in cmd:
                 raise subprocess.CalledProcessError(1, cmd)
             from fake_subprocess import FakeResult
+
             return FakeResult(returncode=0)
 
         runner.run = fail_build
@@ -225,9 +241,11 @@ class TestCreateRarDocker:
         run_calls = [c for c in runner.calls if "run" in c]
         assert len(run_calls) == 0
 
+
 # ---------------------------------------------------------------------------
 # create_all orchestration
 # ---------------------------------------------------------------------------
+
 
 class TestCreateAll:
     def test_rpa_only_skips_subprocess(self, tmp_path):

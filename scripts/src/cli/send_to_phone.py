@@ -4,11 +4,11 @@
 import subprocess
 import sys
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable
 
-from common.subprocess_runner import SubprocessRunner, RealSubprocessRunner
-from common.file_utils import get_project_root, load_test_settings
 from common.constants import TIMEOUT_FILE_CHECK
+from common.file_utils import get_project_root, load_test_settings
+from common.subprocess_runner import RealSubprocessRunner, SubprocessRunner
 
 
 class FilePusher:
@@ -35,6 +35,7 @@ class FilePusher:
     def _get_connector(self):
         if self._connector is None:
             from cli.adb_connect import DeviceConnector
+
             config = get_project_root() / "temp" / ".adb_device_cache.json"
             self._connector = DeviceConnector(self._runner, config, input_fn=self._input_fn)
         return self._connector
@@ -68,7 +69,9 @@ class FilePusher:
         print(f"\nChecking: {local_path.name}")
         check = self._runner.run(
             ["adb", "shell", f"test -f {remote_file} && echo exists || echo missing"],
-            capture_output=True, text=True, timeout=TIMEOUT_FILE_CHECK,
+            capture_output=True,
+            text=True,
+            timeout=TIMEOUT_FILE_CHECK,
         )
         if "exists" in check.stdout:
             print("Already exists on device, skipping")
@@ -80,7 +83,9 @@ class FilePusher:
 
         mkdir = self._runner.run(
             ["adb", "shell", f"mkdir -p {remote_dir}"],
-            capture_output=True, text=True, timeout=TIMEOUT_FILE_CHECK,
+            capture_output=True,
+            text=True,
+            timeout=TIMEOUT_FILE_CHECK,
         )
         if mkdir.returncode != 0:
             print(f"Failed to create directory: {remote_dir}")
@@ -89,7 +94,10 @@ class FilePusher:
 
         proc = self._runner.popen(
             ["adb", "push", str(local_path), remote_dir],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
         )
         for line in proc.stdout:
             stripped = line.strip()
@@ -127,12 +135,11 @@ def main() -> None:  # pragma: no cover
     default_dest = test_settings["test_archives"]["device_path"]
 
     parser = argparse.ArgumentParser(description="Send files to Android phone via ADB")
-    parser.add_argument("files", nargs="*",
-                        help="File(s) to send (empty = all test archives from test-settings.json)")
-    parser.add_argument("--dest", default=default_dest,
-                        help=f"Destination path on device (default: {default_dest})")
-    parser.add_argument("--ci", action="store_true",
-                        help="Non-interactive mode (fails if device not already connected)")
+    parser.add_argument("files", nargs="*", help="File(s) to send (empty = all test archives from test-settings.json)")
+    parser.add_argument("--dest", default=default_dest, help=f"Destination path on device (default: {default_dest})")
+    parser.add_argument(
+        "--ci", action="store_true", help="Non-interactive mode (fails if device not already connected)"
+    )
     args = parser.parse_args()
 
     project_root = get_project_root()

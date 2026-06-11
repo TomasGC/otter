@@ -3,9 +3,9 @@
 from pathlib import Path
 from typing import Optional
 
+from android import AdbManager, GradleRunner
 from common.file_utils import get_project_root, load_test_settings
 from common.subprocess_runner import SubprocessRunner
-from android import GradleRunner, AdbManager
 
 SUITES = ["unit", "instrumented", "coverage"]
 
@@ -30,6 +30,7 @@ class TestAction:
     def _get_connector(self):
         if self._connector is None:
             from cli.adb_connect import DeviceConnector
+
             config = self._project_root / "temp" / ".adb_device_cache.json"
             self._connector = DeviceConnector(self._runner, config)
         return self._connector

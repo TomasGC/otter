@@ -1,6 +1,12 @@
 """Common utilities for all scripts."""
 
-from .console import setup_windows_encoding, log, print_header, setup_log_file, close_log_file
+from .console import (
+    close_log_file,
+    log,
+    print_header,
+    setup_log_file,
+    setup_windows_encoding,
+)
 from .file_utils import get_project_root
 
 __all__ = [

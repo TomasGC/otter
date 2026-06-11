@@ -4,6 +4,7 @@ import app.otter.domain.inspector.ArchiveInspector
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.ResourcePath
+import app.otter.util.MimeTypeUtil
 
 /**
  * Browses archive contents with hybrid pagination strategy.
@@ -27,7 +28,8 @@ import app.otter.domain.model.ResourcePath
  */
 class ArchiveBrowser(
     private val inspector: ArchiveInspector,
-    private val archivePath: String
+    private val archivePath: String,
+    private val mimeTypeUtil: MimeTypeUtil = MimeTypeUtil()
 ) {
 
     /**
@@ -203,7 +205,7 @@ class ArchiveBrowser(
                 sizeBytes = entry.sizeBytes,
                 lastModified = entry.lastModified,
                 archivePath = resourcePath,
-                mimeType = null // TODO: Determine MIME type from file extension
+                mimeType = mimeTypeUtil.getMimeType(name)
             )
         }
     }

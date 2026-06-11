@@ -1,17 +1,15 @@
 """Unit tests for FilePusher — fake subprocess runner, no real ADB."""
 
-from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
-
-from cli.send_to_phone import FilePusher
 from fake_subprocess import FakeSubprocessRunner
 
+from cli.send_to_phone import FilePusher
 
 # ---------------------------------------------------------------------------
 # ensure_connection
 # ---------------------------------------------------------------------------
+
 
 class TestEnsureConnection:
     def test_returns_true_when_connector_succeeds(self):
@@ -51,6 +49,7 @@ class TestEnsureConnection:
 # ---------------------------------------------------------------------------
 # push_file
 # ---------------------------------------------------------------------------
+
 
 class TestPushFile:
     def test_returns_false_when_file_missing(self, tmp_path):
@@ -93,7 +92,7 @@ class TestPushFile:
 
         runner = FakeSubprocessRunner()
         runner.add_run(returncode=0, stdout="missing")  # check
-        runner.add_run(returncode=0)                    # mkdir
+        runner.add_run(returncode=0)  # mkdir
         runner.set_popen(["100% /sdcard/otter/archive.zip\n"], returncode=0)
 
         pusher = FilePusher(runner)
@@ -108,7 +107,7 @@ class TestPushFile:
 
         runner = FakeSubprocessRunner()
         runner.add_run(returncode=0, stdout="missing")  # check
-        runner.add_run(returncode=0)                    # mkdir
+        runner.add_run(returncode=0)  # mkdir
         runner.set_popen(["error: device offline\n"], returncode=1)
 
         pusher = FilePusher(runner)
@@ -122,7 +121,7 @@ class TestPushFile:
 
         runner = FakeSubprocessRunner()
         runner.add_run(returncode=0, stdout="missing")  # check
-        runner.add_run(returncode=0)                    # mkdir
+        runner.add_run(returncode=0)  # mkdir
         runner.set_popen(["\n", "100% /sdcard/otter/archive.zip\n", "\n"], returncode=0)
 
         pusher = FilePusher(runner)
@@ -134,6 +133,7 @@ class TestPushFile:
 # ---------------------------------------------------------------------------
 # push_files
 # ---------------------------------------------------------------------------
+
 
 class TestPushFiles:
     def test_returns_counts(self, tmp_path):
@@ -174,7 +174,8 @@ class TestPushFiles:
 
 class TestGetConnectorLazy:
     def test_creates_connector_when_none_injected(self, tmp_path):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         runner = FakeSubprocessRunner()
         pusher = FilePusher(runner)  # no connector injected
         mock_dc = MagicMock()

@@ -1,13 +1,9 @@
 """Unit tests for ArchiveTemplateGenerator — pure logic, no real I/O."""
 
 import random
-import sys
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call
 
-import pytest
+from cli.generate_archive_template import FILE_TYPES, ArchiveTemplateGenerator
 
-from cli.generate_archive_template import ArchiveTemplateGenerator, FILE_TYPES
 
 class TestMagicBytes:
     def test_pdf_starts_with_pdf_header(self):
@@ -41,6 +37,7 @@ class TestMagicBytes:
         data = ArchiveTemplateGenerator.webm_bytes()
         assert data[:4] == bytes([0x1A, 0x45, 0xDF, 0xA3])
 
+
 class TestTextContent:
     def test_txt_content_has_lines(self):
         rng = random.Random(42)
@@ -61,6 +58,7 @@ class TestTextContent:
         c1 = ArchiveTemplateGenerator.make_csv_content(random.Random(42))
         c2 = ArchiveTemplateGenerator.make_csv_content(random.Random(42))
         assert c1 == c2
+
 
 class TestRandomExtension:
     def test_returns_extension_from_file_types(self):
@@ -91,6 +89,7 @@ class TestRandomExtension:
         for _ in range(20):
             assert ArchiveTemplateGenerator.random_extension(rng, types) == ".zip"
 
+
 class TestWriteFile:
     def test_writes_binary_for_pdf(self, tmp_path):
         gen = ArchiveTemplateGenerator(random.Random(1))
@@ -117,6 +116,7 @@ class TestWriteFile:
         gen.write_file(p, ".csv")
         assert p.read_text(encoding="utf-8").startswith("Name,Value,Date")
 
+
 class TestWriteFileEdgeCases:
     def test_writes_binary_for_jpeg_alias(self, tmp_path):
         gen = ArchiveTemplateGenerator(random.Random(1))
@@ -130,28 +130,35 @@ class TestWriteFileEdgeCases:
         gen.write_file(p, ".xyz")
         assert "Line" in p.read_text(encoding="utf-8")
 
+
 class TestShims:
     def test_get_random_extension_returns_valid_ext(self):
         from cli.generate_archive_template import get_random_extension
+
         assert get_random_extension() in {e for e, _ in FILE_TYPES}
 
     def test_create_valid_file_shim_creates_file(self, tmp_path):
         from cli.generate_archive_template import create_valid_file
+
         p = tmp_path / "out.txt"
         create_valid_file(p, ".txt")
         assert p.exists()
 
     def test_create_numbered_files_shim_creates_correct_count(self, tmp_path):
         from cli.generate_archive_template import create_numbered_files
+
         create_numbered_files(tmp_path / "d", 4, "pfx_")
         assert len(list((tmp_path / "d").iterdir())) == 4
+
 
 class TestMain:
     def test_generates_output_dir(self, tmp_path, monkeypatch):
         import cli.generate_archive_template as mod
+
         monkeypatch.setattr(mod, "OUTPUT_DIR", tmp_path / "out")
         mod.main()
         assert (tmp_path / "out").exists()
+
 
 class TestCreateFiles:
     def test_creates_correct_count(self, tmp_path):

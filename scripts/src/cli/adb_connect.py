@@ -8,14 +8,14 @@ import sys
 from pathlib import Path
 from typing import Callable, Optional
 
-from common.subprocess_runner import SubprocessRunner, RealSubprocessRunner
-from common.file_utils import get_project_root
 from common.constants import (
-    TIMEOUT_ADB_DEVICES,
-    TIMEOUT_MDNS,
     TIMEOUT_ADB_CONNECT,
+    TIMEOUT_ADB_DEVICES,
     TIMEOUT_ADB_PAIR,
+    TIMEOUT_MDNS,
 )
+from common.file_utils import get_project_root
+from common.subprocess_runner import RealSubprocessRunner, SubprocessRunner
 
 
 class DeviceConnector:
@@ -145,10 +145,7 @@ class DeviceConnector:
                 text=True,
                 timeout=TIMEOUT_ADB_CONNECT,
             )
-            return (
-                "connected" in result.stdout.lower()
-                or "already connected" in result.stdout.lower()
-            )
+            return "connected" in result.stdout.lower() or "already connected" in result.stdout.lower()
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
@@ -180,9 +177,11 @@ class DeviceConnector:
             print("No paired device found on network")
             return None
 
-        # Deduplicate
-        seen: set[str] = set()
-        devices = [d for d in devices if not (d[0] in seen or seen.add(d[0]))]  # type: ignore[func-returns-value]
+        # Deduplicate, keeping first occurrence of each device id
+        unique: dict[str, tuple[str, str, str]] = {}
+        for device in devices:
+            unique.setdefault(device[0], device)
+        devices = list(unique.values())
         print(f"Found {len(devices)} device(s)")
 
         if target_device:
@@ -229,7 +228,7 @@ class DeviceConnector:
             return connection
 
         # Interactive pairing fallback
-        return self._interactive_pair(ip, port)
+        return self._interactive_pair()
 
     # -------------------------------------------------------------------------
     # Private helpers
@@ -254,11 +253,11 @@ class DeviceConnector:
         print("Pairing failed")
         return None
 
-    def _interactive_pair(self, ip: str, connect_port: str) -> Optional[str]:
-        print(f"\nOn your device: Settings → Developer options → Wireless debugging → Pair device")
+    def _interactive_pair(self) -> Optional[str]:
+        print("\nOn your device: Settings → Developer options → Wireless debugging → Pair device")
         try:
             code = self._input("Enter the 6-digit pairing code: ").strip()
-            address = self._input(f"Enter pairing address (IP:PORT): ").strip()
+            address = self._input("Enter pairing address (IP:PORT): ").strip()
             if ":" not in address:
                 print("Invalid format. Expected IP:PORT")
                 return None
@@ -315,9 +314,7 @@ def main():  # pragma: no cover
         sys.stdout = open("nul" if sys.platform == "win32" else "/dev/null", "w")
 
     config = get_project_root() / "temp" / ".adb_device_cache.json"
-    connection = DeviceConnector(RealSubprocessRunner(), config).auto_connect(
-        args.device, args.pair, args.pair_address
-    )
+    connection = DeviceConnector(RealSubprocessRunner(), config).auto_connect(args.device, args.pair, args.pair_address)
     sys.exit(0 if connection else 1)
 
 

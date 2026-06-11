@@ -1,0 +1,104 @@
+name: Kotlin / Validation
+
+on:
+  workflow_call:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  branch-name:
+    name: Validation / Branch Name
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch name format
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          echo "Validating branch name: $BRANCH"
+          if ! echo "$BRANCH" | grep -qE '^(feature|bugfix)/[0-9]+-[a-zA-Z0-9_-]+$'; then
+            echo "ERROR: Invalid branch name format"
+            echo "Expected: feature/123-description or bugfix/123-description"
+            exit 1
+          fi
+          echo "SUCCESS: Branch name format valid"
+
+  commit-messages:
+    name: Validation / Commit Messages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check commit message format
+        run: |
+          echo "Validating commit messages..."
+          COMMITS=$(git log origin/main..HEAD --format="%H %s")
+          if [ -z "$COMMITS" ]; then
+            echo "No new commits to validate"
+            exit 0
+          fi
+          INVALID_COUNT=0
+          while IFS= read -r line; do
+            HASH=$(echo "$line" | cut -d' ' -f1)
+            MSG=$(echo "$line" | cut -d' ' -f2-)
+            echo "Checking: $MSG"
+            if echo "$MSG" | grep -qE '^#[0-9]+: (feat|fix|refactor|test|docs|chore|style|perf):'; then
+              echo "  SUCCESS"
+            elif echo "$MSG" | grep -qE '^docs:'; then
+              FILES=$(git show --name-only --format="" "$HASH")
+              if echo "$FILES" | grep -q "kanban.md"; then
+                echo "  SUCCESS: docs commit with kanban.md"
+              else
+                echo "  INVALID: docs commit without issue number"
+                INVALID_COUNT=$((INVALID_COUNT + 1))
+              fi
+            else
+              echo "  INVALID: expected #123: type: description"
+              echo "  Types: feat, fix, refactor, test, docs, chore, style, perf"
+              INVALID_COUNT=$((INVALID_COUNT + 1))
+            fi
+          done <<< "$COMMITS"
+          if [ $INVALID_COUNT -gt 0 ]; then
+            echo "ERROR: $INVALID_COUNT invalid commit message(s)"
+            exit 1
+          fi
+          echo "SUCCESS: All commit messages valid"
+
+  no-todo:
+    name: Validation / No TODO
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for TODO/FIXME
+        run: |
+          echo "Scanning for TODO/FIXME in app/src..."
+          MATCHES=$(grep -rn --include="*.kt" -E "\b(TODO|FIXME)\b" app/src/ || true)
+          if [ -n "$MATCHES" ]; then
+            echo "ERROR: Found TODO/FIXME comments:"
+            echo "$MATCHES"
+            exit 1
+          fi
+          echo "SUCCESS: No TODO/FIXME found"
+
+  large-files:
+    name: Validation / Large Files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for large files
+        run: |
+          echo "Scanning for files larger than 500KB..."
+          LARGE=$(find . \
+            -not -path './.git/*' \
+            -not -path '*/build/*' \
+            -not -path '*/.gradle/*' \
+            -not -name '*.jar' \
+            -not -name '*.so' \
+            -not -name '*.aar' \
+            -type f -size +500k 2>/dev/null | head -20)
+          if [ -n "$LARGE" ]; then
+            echo "ERROR: Large files detected (>500KB):"
+            echo "$LARGE"
+            exit 1
+          fi
+          echo "SUCCESS: No large files found"

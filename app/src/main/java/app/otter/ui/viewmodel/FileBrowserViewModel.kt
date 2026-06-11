@@ -35,6 +35,7 @@ class FileBrowserViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
+        const val VIEWPORT_SIZE = 50  // items shown at once from current scroll position
         const val HALF_WINDOW = 100   // items kept before and after current position
         const val LOAD_TRIGGER = 60   // load next/prev when within this many items of the cache edge
 
@@ -406,12 +407,18 @@ class FileBrowserViewModel @Inject constructor(
     }
 
     private fun emitVisibleItems() {
-        // Emit all cached items (entire window) sorted by index
         // Create immutable snapshot to avoid ConcurrentModificationException during iteration
         val snapshot = cachedItems.toList()
-        val visibleItems = snapshot
+        val allSorted = snapshot
             .sortedBy { (index, _) -> index }
             .map { (_, item) -> item }
+
+        // Limit to VIEWPORT_SIZE items starting from current scroll position within the cache window.
+        // Clamp to the last available position when the scroll position exceeds cached range
+        // (e.g. fast-fling before next page loads).
+        val rawStart = (lastKnownAbsoluteIndex - currentWindowStart).coerceAtLeast(0)
+        val viewportStart = rawStart.coerceAtMost((allSorted.size - VIEWPORT_SIZE).coerceAtLeast(0))
+        val visibleItems = allSorted.drop(viewportStart).take(VIEWPORT_SIZE)
 
         // Apply filtering and sorting to visible items
         val filtered = if (filterArchivesOnly) {

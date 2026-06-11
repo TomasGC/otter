@@ -1,28 +1,30 @@
 """Unit tests for TestScriptsAction."""
 
-import sys
-from pathlib import Path
-
 import pytest
-
-from cli.actions.test_scripts import TestScriptsAction as ScriptsTestAction, SUITES
 from fake_subprocess import FakeSubprocessRunner
 
+from cli.actions.test_scripts import SUITES
+from cli.actions.test_scripts import TestScriptsAction as ScriptsTestAction
+
 pytestmark = pytest.mark.unit
+
 
 def make_action():
     runner = FakeSubprocessRunner()
     runner.add_run(returncode=0)
     return ScriptsTestAction(runner), runner
 
+
 def pytest_flags(cmd: list[str]) -> list[str]:
     """Return the pytest flags portion of the cmd (after 'python -m pytest <tests_dir>')."""
     return cmd[4:]
+
 
 class TestSuitesConstant:
     def test_contains_expected_suites(self):
         for s in ["unit", "integration-mock", "integration-real", "e2e", "coverage"]:
             assert s in SUITES
+
 
 class TestTestScriptsActionRun:
     def test_no_suites_runs_all_tests(self):

@@ -5,12 +5,10 @@ import pickle
 import subprocess
 import zlib
 from pathlib import Path
-from unittest.mock import MagicMock
 
-import pytest
+from fake_subprocess import FakeSubprocessRunner
 
 from cli.create_test_archives import ArchiveCreator
-from fake_subprocess import FakeSubprocessRunner
 
 FAKE_7Z = "/fake/7z"
 
@@ -18,6 +16,7 @@ FAKE_7Z = "/fake/7z"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def create_minimal_template(template_dir: Path, num_files: int = 5) -> list:
     template_dir.mkdir(parents=True, exist_ok=True)
@@ -44,11 +43,9 @@ def read_rpa_index(rpa_file: Path) -> dict:
     parts = header.strip().split()
     index_offset = int(parts[1], 16)
     key = int(parts[2], 16)
-    index_raw = pickle.loads(zlib.decompress(data[index_offset:]))  # noqa: S301 — trusted test data
-    return {
-        path: [[offset ^ key, size ^ key] for offset, size in entries]
-        for path, entries in index_raw.items()
-    }
+    # Safe: pickle data comes from an archive created by ArchiveCreator in the same test.
+    index_raw = pickle.loads(zlib.decompress(data[index_offset:]))
+    return {path: [[offset ^ key, size ^ key] for offset, size in entries] for path, entries in index_raw.items()}
 
 
 def make_creator(tmp_path, runner=None):
@@ -61,6 +58,7 @@ def make_creator(tmp_path, runner=None):
 # ---------------------------------------------------------------------------
 # TestCreateRpaArchive — pure Python, no subprocess required
 # ---------------------------------------------------------------------------
+
 
 class TestCreateRpaArchive:
     def test_creates_rpa_file(self, tmp_path):
@@ -129,7 +127,8 @@ class TestCreateRpaArchive:
         index = read_rpa_index(output_dir / "test_archive.rpa")
         for path, entries in index.items():
             offset, size = entries[0]
-            stored = rpa_bytes[offset:offset + size]
+            end = offset + size
+            stored = rpa_bytes[offset:end]
             template_path = template_dir / path.replace("/", "\\")
             if not template_path.exists():
                 template_path = template_dir / path
@@ -149,6 +148,7 @@ class TestCreateRpaArchive:
 # ---------------------------------------------------------------------------
 # TestCreate7zipArchives — FakeSubprocessRunner
 # ---------------------------------------------------------------------------
+
 
 class TestCreate7zipArchives:
     def _make_runner_and_creator(self, tmp_path):
@@ -235,6 +235,7 @@ class TestCreate7zipArchives:
 # TestCreateRarArchiveDocker — FakeSubprocessRunner
 # ---------------------------------------------------------------------------
 
+
 class TestCreateRarArchiveDocker:
     def _make_runner_and_creator(self, tmp_path, build_ok=True, run_ok=True):
         runner = FakeSubprocessRunner()
@@ -309,6 +310,7 @@ class TestCreateRarArchiveDocker:
 # TestCreateAll — orchestration
 # ---------------------------------------------------------------------------
 
+
 class TestCreateAll:
     def test_rpa_only_does_not_call_subprocess(self, tmp_path):
         runner = FakeSubprocessRunner()
@@ -338,12 +340,14 @@ class TestCreateAll:
 
     def test_create_all_full_calls_7zip_and_rar(self, tmp_path):
         from unittest.mock import patch
+
         runner = FakeSubprocessRunner()
         creator, template_dir, output_dir = make_creator(tmp_path, runner)
         template_dir.mkdir(parents=True, exist_ok=True)
         (template_dir / "file.txt").write_text("x")
-        with patch.object(creator, "create_7zip", return_value=[]) as m7z, \
-             patch.object(creator, "create_rar_docker", return_value=None) as mrar:
+        with patch.object(creator, "create_7zip", return_value=[]) as m7z, patch.object(
+            creator, "create_rar_docker", return_value=None
+        ) as mrar:
             results = creator.create_all(rpa_only=False)
         m7z.assert_called_once()
         mrar.assert_called_once()
@@ -352,18 +356,18 @@ class TestCreateAll:
 
 class TestToDockerPath:
     def test_windows_converts_backslashes(self):
-        import sys
-        from unittest.mock import patch
         from pathlib import Path
+        from unittest.mock import patch
+
         path = Path("C:\\Users\\user\\archives")
         with patch("sys.platform", "win32"):
             result = ArchiveCreator._to_docker_path(path)
         assert "\\" not in result
 
     def test_linux_returns_path_as_str(self):
-        import sys
-        from unittest.mock import patch
         from pathlib import Path
+        from unittest.mock import patch
+
         path = Path("/home/user/archives")
         with patch("sys.platform", "linux"):
             result = ArchiveCreator._to_docker_path(path)

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 @dataclass
 class FakeResult:
     """Minimal CompletedProcess stand-in."""
+
     returncode: int = 0
     stdout: str = ""
     stderr: str = ""

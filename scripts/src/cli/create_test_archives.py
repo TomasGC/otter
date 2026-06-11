@@ -9,15 +9,13 @@ import zlib
 from pathlib import Path
 from typing import Optional
 
-from common.subprocess_runner import SubprocessRunner, RealSubprocessRunner
 from common.file_utils import get_project_root, load_test_settings
+from common.subprocess_runner import RealSubprocessRunner, SubprocessRunner
 
 PROJECT_ROOT = get_project_root()
 RPA_KEY = 0xDEADBEEF
 
-_DEFAULT_7Z = (
-    r"C:\Program Files\7-Zip\7z.exe" if sys.platform == "win32" else "7z"
-)
+_DEFAULT_7Z = r"C:\Program Files\7-Zip\7z.exe" if sys.platform == "win32" else "7z"
 
 
 class ArchiveCreator:
@@ -93,9 +91,9 @@ class ArchiveCreator:
         print("\n=== Creating 7-Zip archives ===")
         template_glob = str(self._template_dir / "*")
         formats = [
-            ("zip",    ["-tzip"]),
-            ("7z",     ["-t7z"]),
-            ("tar",    ["-ttar"]),
+            ("zip", ["-tzip"]),
+            ("7z", ["-t7z"]),
+            ("tar", ["-ttar"]),
             ("tar.gz", ["-ttar", "-mx=9"]),
         ]
         created = []
@@ -148,11 +146,18 @@ class ArchiveCreator:
         try:
             self._runner.run(
                 [
-                    "docker", "run", "--rm",
-                    "-v", f"{template_docker}:/workspace/template:ro",
-                    "-v", f"{output_docker}:/workspace/output",
+                    "docker",
+                    "run",
+                    "--rm",
+                    "-v",
+                    f"{template_docker}:/workspace/template:ro",
+                    "-v",
+                    f"{output_docker}:/workspace/output",
                     "rar-builder",
-                    "rar", "a", "-r", "/workspace/output/test_archive.rar",
+                    "rar",
+                    "a",
+                    "-r",
+                    "/workspace/output/test_archive.rar",
                     "/workspace/template/",
                 ],
                 check=True,

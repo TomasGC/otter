@@ -5,9 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from common.subprocess_runner import SubprocessRunner, RealSubprocessRunner
 from common.console import log
-from common.file_utils import get_project_root
+from common.subprocess_runner import SubprocessRunner
 
 
 class GradleRunner:

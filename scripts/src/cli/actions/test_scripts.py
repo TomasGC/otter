@@ -2,7 +2,6 @@
 
 import sys
 from pathlib import Path
-from typing import Optional
 
 from common.subprocess_runner import SubprocessRunner
 

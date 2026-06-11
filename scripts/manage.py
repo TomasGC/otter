@@ -13,9 +13,8 @@ Usage:
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent / "src"))
-
-from cli.manage import Manager  # noqa: E402
-
 if __name__ == "__main__":  # pragma: no cover
+    sys.path.insert(0, str(Path(__file__).parent / "src"))
+    from cli.manage import Manager
+
     sys.exit(Manager().dispatch())

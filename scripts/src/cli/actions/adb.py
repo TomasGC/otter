@@ -1,6 +1,5 @@
 """ADB action — connect to Android device and send files."""
 
-from pathlib import Path
 from typing import Optional
 
 from common.file_utils import get_project_root, load_test_settings
@@ -22,11 +21,13 @@ class AdbAction:
 
     def _get_connector(self):
         from cli.adb_connect import DeviceConnector
+
         config = self._project_root / "temp" / ".adb_device_cache.json"
         return DeviceConnector(self._runner, config)
 
     def _get_pusher(self):
         from cli.send_to_phone import FilePusher
+
         return FilePusher(self._runner)
 
     def run_connect(

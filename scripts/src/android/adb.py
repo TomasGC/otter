@@ -4,8 +4,12 @@
 import subprocess
 from pathlib import Path
 
-from common.constants import TIMEOUT_ADB_VERSION, TIMEOUT_ADB_DEVICES, TIMEOUT_APK_INSTALL
-from common.subprocess_runner import SubprocessRunner, RealSubprocessRunner
+from common.constants import (
+    TIMEOUT_ADB_DEVICES,
+    TIMEOUT_ADB_VERSION,
+    TIMEOUT_APK_INSTALL,
+)
+from common.subprocess_runner import SubprocessRunner
 
 
 class AdbManager:

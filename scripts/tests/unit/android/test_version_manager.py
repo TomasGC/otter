@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """Unit tests for VersionManager — pure parsing methods, zero I/O."""
 
-import sys
-from pathlib import Path
-
 import pytest
 
 from android.versioning import VersionManager
@@ -24,6 +21,7 @@ android {
 # parse_version_code
 # ---------------------------------------------------------------------------
 
+
 class TestParseVersionCode:
     def test_parses_simple_code(self):
         assert VersionManager.parse_version_code("versionCode = 42") == 42
@@ -43,9 +41,11 @@ class TestParseVersionCode:
         with pytest.raises(ValueError):
             VersionManager.parse_version_code("")
 
+
 # ---------------------------------------------------------------------------
 # parse_version_name
 # ---------------------------------------------------------------------------
+
 
 class TestParseVersionName:
     def test_parses_semver(self):
@@ -61,9 +61,11 @@ class TestParseVersionName:
     def test_parses_multi_digit_parts(self):
         assert VersionManager.parse_version_name('versionName = "10.20.300"') == "10.20.300"
 
+
 # ---------------------------------------------------------------------------
 # compute_new_name
 # ---------------------------------------------------------------------------
+
 
 class TestComputeNewName:
     def test_increments_patch_component(self):
@@ -81,9 +83,11 @@ class TestComputeNewName:
     def test_new_code_drives_patch(self):
         assert VersionManager.compute_new_name("1.0.0", 100) == "1.0.100"
 
+
 # ---------------------------------------------------------------------------
 # apply_version
 # ---------------------------------------------------------------------------
+
 
 class TestApplyVersion:
     def test_replaces_version_code(self):
@@ -111,9 +115,11 @@ class TestApplyVersion:
         assert result.count("versionCode") == 1
         assert result.count("versionName") == 1
 
+
 # ---------------------------------------------------------------------------
 # Integration tests — real file I/O, uses tmp_path
 # ---------------------------------------------------------------------------
+
 
 class TestVersionManagerIncrement:
     def test_returns_incremented_code(self, tmp_path):
@@ -159,9 +165,10 @@ class TestVersionManagerIncrement:
 
     def test_raises_on_missing_version_code(self, tmp_path):
         gradle = tmp_path / "build.gradle.kts"
-        gradle.write_text('android { }')
+        gradle.write_text("android { }")
         with pytest.raises(ValueError):
             VersionManager(tmp_path).increment(gradle)
+
 
 class TestVersionManagerGetApkPath:
     def test_returns_none_when_dir_missing(self, tmp_path):

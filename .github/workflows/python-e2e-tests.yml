@@ -1,0 +1,28 @@
+name: Python / E2E Tests
+
+on:
+  workflow_call:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-test.txt
+      - name: Run e2e tests
+        run: |
+          set +e
+          python -m pytest tests/e2e/ --no-cov -q
+          STATUS=$?
+          set -e
+          [ $STATUS -eq 5 ] && echo "No e2e tests yet" && exit 0 || exit $STATUS

@@ -3,9 +3,9 @@
 from unittest.mock import MagicMock
 
 import pytest
+from fake_subprocess import FakeSubprocessRunner
 
 from cli.actions.build import BuildAction
-from fake_subprocess import FakeSubprocessRunner
 
 pytestmark = pytest.mark.unit
 
@@ -120,7 +120,8 @@ class TestBuildActionDefaults:
 
 class TestBuildActionConnectorLazy:
     def test_get_connector_creates_when_none(self, tmp_path):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         runner = FakeSubprocessRunner()
         action = BuildAction(runner, project_root=tmp_path)
         mock_dc = MagicMock()

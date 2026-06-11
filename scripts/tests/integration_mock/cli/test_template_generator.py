@@ -1,12 +1,9 @@
 """Integration-real tests for ArchiveTemplateGenerator — real FS, no mocks."""
 
 import random
-import sys
-from pathlib import Path
-
-import pytest
 
 from cli.generate_archive_template import ArchiveTemplateGenerator
+
 
 class TestGenerateStructure:
     def test_generate_creates_expected_folders(self, tmp_path):

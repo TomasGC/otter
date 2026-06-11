@@ -3,9 +3,10 @@
 from unittest.mock import MagicMock
 
 import pytest
-
-from cli.actions.test import TestAction as AndroidTestAction, SUITES
 from fake_subprocess import FakeSubprocessRunner
+
+from cli.actions.test import SUITES
+from cli.actions.test import TestAction as AndroidTestAction
 
 pytestmark = pytest.mark.unit
 
@@ -30,7 +31,9 @@ def make_action(tmp_path, settings=None):
     adb.get_connected.return_value = ["192.168.1.1:5555"]
     connector.auto_connect.return_value = "192.168.1.1:5555"
     action = AndroidTestAction(
-        runner, gradle, adb,
+        runner,
+        gradle,
+        adb,
         project_root=tmp_path,
         test_settings=settings or SETTINGS,
         connector=connector,
@@ -197,7 +200,8 @@ class TestTestActionRun:
 
 class TestLazyCreation:
     def test_get_connector_creates_when_none(self, tmp_path):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         runner = FakeSubprocessRunner()
         action = AndroidTestAction(runner, project_root=tmp_path)
         mock_dc = MagicMock()
@@ -207,6 +211,7 @@ class TestLazyCreation:
 
     def test_get_settings_loads_when_not_injected(self):
         from unittest.mock import patch
+
         runner = FakeSubprocessRunner()
         action = AndroidTestAction(runner)
         with patch("cli.actions.test.load_test_settings", return_value=SETTINGS):

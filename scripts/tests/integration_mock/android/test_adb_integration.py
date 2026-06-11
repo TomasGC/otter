@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """Integration tests for AdbManager — real filesystem, fake subprocess."""
 
-import sys
-from pathlib import Path
-
 import pytest
-
-from android.adb import AdbManager
 from fake_subprocess import FakeSubprocessRunner
 
+from android.adb import AdbManager
+
 pytestmark = pytest.mark.integration_mock
+
 
 class TestInstallApkIntegration:
     """install_apk with real tmp_path APK files."""
@@ -47,6 +45,7 @@ class TestInstallApkIntegration:
         runner = FakeSubprocessRunner().add_run(returncode=0, stdout="Failure [CORRUPT]\n")
         assert AdbManager(runner).install_apk(apk) is False
 
+
 class TestGetDevicesIntegration:
     """get_devices parses real-looking adb output."""
 
@@ -57,20 +56,12 @@ class TestGetDevicesIntegration:
     )
 
     def test_parses_mdns_device_full_line(self):
-        runner = (
-            FakeSubprocessRunner()
-            .add_run(returncode=0)
-            .add_run(returncode=0, stdout=self.ADB_REAL_OUTPUT)
-        )
+        runner = FakeSubprocessRunner().add_run(returncode=0).add_run(returncode=0, stdout=self.ADB_REAL_OUTPUT)
         devices = AdbManager(runner).get_connected()
         assert len(devices) == 1
         assert "ABCD1234EFG" in devices[0]
 
     def test_daemon_line_not_included(self):
-        runner = (
-            FakeSubprocessRunner()
-            .add_run(returncode=0)
-            .add_run(returncode=0, stdout=self.ADB_REAL_OUTPUT)
-        )
+        runner = FakeSubprocessRunner().add_run(returncode=0).add_run(returncode=0, stdout=self.ADB_REAL_OUTPUT)
         devices = AdbManager(runner).get_connected()
         assert not any("daemon" in d for d in devices)

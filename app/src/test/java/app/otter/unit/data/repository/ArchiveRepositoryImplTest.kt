@@ -157,32 +157,30 @@ class ArchiveRepositoryImplTest {
         repository.extractArchive(archive, destinationPath).toList()
     }
 
-    // TODO: Fix flaky test - ClassCastException at line 205
-    // @Test
-    // fun `should emit progress events during extraction`() = runTest {
-    //     val archive = createTestArchive()
-    //     val destinationPath = ResourcePath.FileSystem("file:///downloads")
-    //     val inputStream = ByteArrayInputStream(byteArrayOf())
-    //
-    //     every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns inputStream
-    //     coEvery {
-    //         zipExtractor.extract(any(), any(), any(), any(), any(), any())
-    //     } answers {
-    //         val onProgress = lastArg<(ExtractionProgress) -> Unit>()
-    //         // Simulate progress callbacks
-    //         onProgress(ExtractionProgress.Extracting("file1.txt", 1, 2, 0.5f))
-    //         onProgress(ExtractionProgress.Extracting("file2.txt", 2, 2, 1.0f))
-    //         ExtractionResult.Success("/downloads/test", 2)
-    //     }
-    //
-    //     val results = repository.extractArchive(archive, destinationPath).toList()
-    //
-    //     // Should emit: Idle, Extracting(1), Extracting(2), Success
-    //     assertTrue("Should have at least 4 events, got ${results.size}: ${results.map { it::class.simpleName }}", results.size >= 4)
-    //     assertTrue("First event should be Idle", results[0] is ExtractionProgress.Idle)
-    //     assertTrue("Should contain Extracting events", results.any { it is ExtractionProgress.Extracting })
-    //     assertTrue("Last event should be Success", results.any { it is ExtractionProgress.Success })
-    // }
+    @Test
+    fun `should emit progress events during extraction`() = runTest {
+        val archive = createTestArchive()
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
+        val inputStream = ByteArrayInputStream(byteArrayOf())
+
+        every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns inputStream
+        coEvery {
+            zipExtractor.extract(any(), any(), any(), any(), any(), any())
+        } answers {
+            val onProgress = arg<(ExtractionProgress) -> Unit>(5)
+            onProgress(ExtractionProgress.Extracting("file1.txt", 1, 2, 0.5f))
+            onProgress(ExtractionProgress.Extracting("file2.txt", 2, 2, 1.0f))
+            ExtractionResult.Success("/downloads/test", 2)
+        }
+
+        val results = repository.extractArchive(archive, destinationPath).toList()
+
+        // Should emit: Idle, Extracting(1), Extracting(2), Success
+        assertTrue("Should have at least 4 events, got ${results.size}: ${results.map { it::class.simpleName }}", results.size >= 4)
+        assertTrue("First event should be Idle", results[0] is ExtractionProgress.Idle)
+        assertTrue("Should contain Extracting events", results.any { it is ExtractionProgress.Extracting })
+        assertTrue("Last event should be Success", results.any { it is ExtractionProgress.Success })
+    }
 
     @Test
     fun `should handle cancellation gracefully`() = runTest {

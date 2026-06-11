@@ -20,13 +20,15 @@ class CreateAction:
         self._template_dir = template_dir
 
     def run_template(self, output_dir: Optional[Path] = None) -> int:
-        from cli.generate_archive_template import ArchiveTemplateGenerator, OUTPUT_DIR
+        from cli.generate_archive_template import OUTPUT_DIR, ArchiveTemplateGenerator
+
         ArchiveTemplateGenerator().generate(output_dir or self._output_dir or OUTPUT_DIR)
         return 0
 
     def run_archives(self, rpa_only: bool = False, output_dir: Optional[Path] = None) -> int:
-        from cli.create_test_archives import ArchiveCreator, PROJECT_ROOT, _DEFAULT_7Z
+        from cli.create_test_archives import _DEFAULT_7Z, PROJECT_ROOT, ArchiveCreator
         from common.file_utils import load_test_settings
+
         out = output_dir or self._output_dir
         if out is None:
             out = PROJECT_ROOT / load_test_settings()["test_archives"]["host_path"]

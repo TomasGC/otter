@@ -1,19 +1,19 @@
 """Unit tests for the new Manager (cli.manage)."""
 
-import sys
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
-
-from cli.manage import Manager
 from fake_subprocess import FakeSubprocessRunner
 
+from cli.manage import Manager
+
 pytestmark = pytest.mark.unit
+
 
 def make_manager():
     runner = FakeSubprocessRunner()
     return Manager(runner), runner
+
 
 class TestManagerBuild:
     def test_build_dispatches_to_build_action(self):
@@ -38,6 +38,7 @@ class TestManagerBuild:
             MockAction.return_value.run.return_value = 1
             rc = mgr.dispatch(["build"])
         assert rc == 1
+
 
 class TestManagerTest:
     def test_test_dispatches_to_test_action(self):
@@ -68,6 +69,7 @@ class TestManagerTest:
             MockAction.return_value.run.return_value = 0
             mgr.dispatch(["test", "coverage"])
         MockAction.return_value.run.assert_called_once_with(suites=["coverage"])
+
 
 class TestManagerTestScripts:
     def test_test_scripts_dispatches_to_test_scripts_action(self):
@@ -113,6 +115,7 @@ class TestManagerTestScripts:
             mgr.dispatch(["test-scripts", "e2e"])
         MockAction.return_value.run.assert_called_once_with(suites=["e2e"])
 
+
 class TestManagerCreate:
     def test_create_dispatches_to_create_action(self):
         mgr, runner = make_manager()
@@ -120,36 +123,28 @@ class TestManagerCreate:
             MockAction.return_value.run.return_value = 0
             mgr.dispatch(["create"])
         MockAction.assert_called_once_with(runner)
-        MockAction.return_value.run.assert_called_once_with(
-            suites=[], rpa_only=False, output_dir=None
-        )
+        MockAction.return_value.run.assert_called_once_with(suites=[], rpa_only=False, output_dir=None)
 
     def test_create_template_suite(self):
         mgr, runner = make_manager()
         with patch("cli.manage.CreateAction") as MockAction:
             MockAction.return_value.run.return_value = 0
             mgr.dispatch(["create", "template"])
-        MockAction.return_value.run.assert_called_once_with(
-            suites=["template"], rpa_only=False, output_dir=None
-        )
+        MockAction.return_value.run.assert_called_once_with(suites=["template"], rpa_only=False, output_dir=None)
 
     def test_create_archives_suite(self):
         mgr, runner = make_manager()
         with patch("cli.manage.CreateAction") as MockAction:
             MockAction.return_value.run.return_value = 0
             mgr.dispatch(["create", "archives"])
-        MockAction.return_value.run.assert_called_once_with(
-            suites=["archives"], rpa_only=False, output_dir=None
-        )
+        MockAction.return_value.run.assert_called_once_with(suites=["archives"], rpa_only=False, output_dir=None)
 
     def test_create_rpa_only_flag(self):
         mgr, runner = make_manager()
         with patch("cli.manage.CreateAction") as MockAction:
             MockAction.return_value.run.return_value = 0
             mgr.dispatch(["create", "--rpa-only"])
-        MockAction.return_value.run.assert_called_once_with(
-            suites=[], rpa_only=True, output_dir=None
-        )
+        MockAction.return_value.run.assert_called_once_with(suites=[], rpa_only=True, output_dir=None)
 
     def test_create_output_dir(self, tmp_path):
         mgr, runner = make_manager()
@@ -159,6 +154,7 @@ class TestManagerCreate:
         call_kwargs = MockAction.return_value.run.call_args[1]
         assert call_kwargs["output_dir"] == tmp_path
 
+
 class TestManagerAdb:
     def test_adb_connect_dispatches_to_adb_action(self):
         mgr, runner = make_manager()
@@ -166,18 +162,14 @@ class TestManagerAdb:
             MockAction.return_value.run_connect.return_value = 0
             mgr.dispatch(["adb", "connect"])
         MockAction.assert_called_once_with(runner)
-        MockAction.return_value.run_connect.assert_called_once_with(
-            device=None, pair=None, pair_address=None
-        )
+        MockAction.return_value.run_connect.assert_called_once_with(device=None, pair=None, pair_address=None)
 
     def test_adb_connect_with_device(self):
         mgr, runner = make_manager()
         with patch("cli.manage.AdbAction") as MockAction:
             MockAction.return_value.run_connect.return_value = 0
             mgr.dispatch(["adb", "connect", "--device", "dev:5555"])
-        MockAction.return_value.run_connect.assert_called_once_with(
-            device="dev:5555", pair=None, pair_address=None
-        )
+        MockAction.return_value.run_connect.assert_called_once_with(device="dev:5555", pair=None, pair_address=None)
 
     def test_adb_connect_with_pair(self):
         mgr, runner = make_manager()
@@ -193,9 +185,7 @@ class TestManagerAdb:
         with patch("cli.manage.AdbAction") as MockAction:
             MockAction.return_value.run_send.return_value = 0
             mgr.dispatch(["adb", "send"])
-        MockAction.return_value.run_send.assert_called_once_with(
-            files=None, dest=None, ci=False
-        )
+        MockAction.return_value.run_send.assert_called_once_with(files=None, dest=None, ci=False)
 
     def test_adb_send_with_files(self, tmp_path):
         mgr, runner = make_manager()

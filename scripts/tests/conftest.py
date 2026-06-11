@@ -1,4 +1,5 @@
 """Root conftest — adds src, src/cli, and test helpers to sys.path for all tests."""
+
 import sys
 from pathlib import Path
 

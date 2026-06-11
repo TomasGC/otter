@@ -3,9 +3,9 @@
 from pathlib import Path
 from typing import Optional
 
+from android import AdbManager, GradleRunner, VersionManager
 from common.file_utils import get_project_root
 from common.subprocess_runner import SubprocessRunner
-from android import GradleRunner, AdbManager, VersionManager
 
 
 class BuildAction:
@@ -28,6 +28,7 @@ class BuildAction:
     def _get_connector(self):
         if self._connector is None:
             from cli.adb_connect import DeviceConnector
+
             config = self._project_root / "temp" / ".adb_device_cache.json"
             self._connector = DeviceConnector(self._runner, config)
         return self._connector

@@ -3,8 +3,7 @@
 
 import re
 from pathlib import Path
-
-from common.file_utils import get_project_root
+from typing import Optional
 
 
 class VersionManager:
@@ -23,7 +22,7 @@ class VersionManager:
 
     @staticmethod
     def parse_version_code(content: str) -> int:
-        match = re.search(r'versionCode\s*=\s*(\d+)', content)
+        match = re.search(r"versionCode\s*=\s*(\d+)", content)
         if not match:
             raise ValueError("versionCode not found in build.gradle.kts")
         return int(match.group(1))
@@ -44,7 +43,7 @@ class VersionManager:
 
     @staticmethod
     def apply_version(content: str, new_code: int, new_name: str) -> str:
-        content = re.sub(r'versionCode\s*=\s*\d+', f'versionCode = {new_code}', content)
+        content = re.sub(r"versionCode\s*=\s*\d+", f"versionCode = {new_code}", content)
         content = re.sub(r'versionName\s*=\s*"[^"]+"', f'versionName = "{new_name}"', content)
         return content
 
@@ -52,7 +51,7 @@ class VersionManager:
     # I/O methods — testable with real files via tmp_path
     # -------------------------------------------------------------------------
 
-    def increment(self, gradle_path: Path = None) -> tuple[int, str]:
+    def increment(self, gradle_path: Optional[Path] = None) -> tuple[int, str]:
         """Increment versionCode and versionName in build.gradle.kts."""
         path = gradle_path or (self._project_root / "app" / "build.gradle.kts")
         content = path.read_text(encoding="utf-8")

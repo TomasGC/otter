@@ -1,10 +1,9 @@
-name: Instrumented Tests (Reusable)
+name: Kotlin / Instrumented Tests
 
 on:
   workflow_call:
     inputs:
       retention-days:
-        description: "Test results retention days"
         type: number
         default: 7
 
@@ -12,28 +11,20 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  instrumented-tests:
-    name: Instrumented Tests (Gradle Managed Devices)
+  instrumented:
+    name: Instrumented Tests
     runs-on: ubuntu-latest
     timeout-minutes: 75
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -79,10 +70,6 @@ jobs:
             -k "system-images;android-30;default;x86_64" \
             --device "pixel_4" \
             --force
-          # Increase data partition to 8GB (default is too small for 264K file extraction)
-          # Must delete existing userdata images — emulator ignores -partition-size if they exist
-          # Use sed to replace (not append) — avdmanager already sets disk.dataPartition.size;
-          # >> appending creates duplicate keys and emulator uses first (smaller) value
           AVD_DIR="/home/runner/.android/avd/otter_test_avd.avd"
           sed -i '/^disk.dataPartition.size/d' "$AVD_DIR/config.ini"
           echo "disk.dataPartition.size=8G" >> "$AVD_DIR/config.ini"
@@ -95,11 +82,8 @@ jobs:
           ANDROID_AVD_HOME: /home/runner/.android/avd
         run: |
           export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
-
           AVD_NAME="otter_test_avd"
           echo "Starting AVD: $AVD_NAME"
-
-          # Start emulator in background
           $ANDROID_HOME/emulator/emulator \
             -avd "$AVD_NAME" \
             -no-snapshot-load \
@@ -109,20 +93,14 @@ jobs:
             -no-window \
             -partition-size 8192 \
             -sdcard 2048M &
-
-          # Wait for device to boot (up to 10 minutes)
           echo "Waiting for emulator boot..."
           timeout 600 adb wait-for-device
           adb shell 'until [[ "$(getprop sys.boot_completed)" == "1" ]]; do sleep 2; done'
           sleep 5
           echo "Emulator ready"
-
-          # Disable animations (required for stable Compose UI tests on slow emulators)
           adb shell settings put global window_animation_scale 0
           adb shell settings put global transition_animation_scale 0
           adb shell settings put global animator_duration_scale 0
-
-          # Push archive files individually to avoid adb directory naming behavior
           adb shell mkdir -p /storage/emulated/0/otter-test-archives
           for f in archives/push/test_archive.*; do
             echo "Pushing $f..."
@@ -133,16 +111,14 @@ jobs:
       - name: Run instrumented tests
         run: ./gradlew connectedDebugAndroidTest
 
-      - name: Upload instrumented test results
-        if: always()
+      - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: instrumented-test-results
           path: app/build/reports/androidTests/connected/
           retention-days: ${{ inputs.retention-days }}
 
-      - name: Upload instrumented coverage
-        if: always()
+      - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: instrumented-coverage

@@ -3,9 +3,9 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from cli.actions.adb import AdbAction, SUBVERBS
 from fake_subprocess import FakeSubprocessRunner
+
+from cli.actions.adb import SUBVERBS, AdbAction
 
 pytestmark = pytest.mark.unit
 
@@ -127,6 +127,7 @@ class TestRunSend:
 class TestLazyCreation:
     def test_get_settings_loads_when_not_injected(self):
         from unittest.mock import patch
+
         runner = FakeSubprocessRunner()
         action = AdbAction(runner)  # no test_settings
         with patch("cli.actions.adb.load_test_settings", return_value=SETTINGS):
@@ -134,7 +135,8 @@ class TestLazyCreation:
         assert result == SETTINGS
 
     def test_get_connector_creates_device_connector(self, tmp_path):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         runner = FakeSubprocessRunner()
         action = AdbAction(runner)
         action._project_root = tmp_path
@@ -144,7 +146,8 @@ class TestLazyCreation:
         assert result is mock_dc
 
     def test_get_pusher_creates_file_pusher(self):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         runner = FakeSubprocessRunner()
         action = AdbAction(runner)
         mock_pusher = MagicMock()

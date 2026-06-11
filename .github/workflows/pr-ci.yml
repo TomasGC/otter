@@ -90,8 +90,8 @@ jobs:
           echo "Checking context files..."
 
           CODE_CHANGES=$(git diff --name-only origin/main...HEAD | grep -E '^app/src/' || true)
-          KANBAN_UPDATED=$(git diff --name-only origin/main...HEAD | grep -E '^\.claude/KANBAN\.md$' || true)
-          ARCHITECTURE_UPDATED=$(git diff --name-only origin/main...HEAD | grep -E '^\.claude/ARCHITECTURE\.md$' || true)
+          KANBAN_UPDATED=$(git diff --name-only origin/main...HEAD | grep -E '^\.claude/contexts/kanban\.md$' || true)
+          ARCHITECTURE_UPDATED=$(git diff --name-only origin/main...HEAD | grep -E '^\.claude/contexts/architecture\.md$' || true)
 
           MISSING_FILES=""
           WARNINGS=""
