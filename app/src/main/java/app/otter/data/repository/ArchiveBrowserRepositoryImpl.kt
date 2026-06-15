@@ -12,16 +12,18 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import net.sf.sevenzipjbinding.ExtractAskMode
+import net.sf.sevenzipjbinding.ExtractOperationResult
+import net.sf.sevenzipjbinding.IArchiveExtractCallback
 import net.sf.sevenzipjbinding.IInArchive
+import net.sf.sevenzipjbinding.ISequentialOutStream
+import net.sf.sevenzipjbinding.PropID
 import net.sf.sevenzipjbinding.SevenZip
 import net.sf.sevenzipjbinding.impl.RandomAccessFileInStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
 
-/**
- * Implementation of ArchiveBrowserRepository using 7-Zip JBinding.
- */
 class ArchiveBrowserRepositoryImpl(
     private val context: Context,
     private val pathValidator: app.otter.util.PathValidator,
@@ -39,68 +41,18 @@ class ArchiveBrowserRepositoryImpl(
                 val archiveFile = getFileFromUri(archiveUri) ?: return@withContext Result.failure(
                     IllegalArgumentException("Cannot access archive file")
                 )
-
-                // Track if this is a temporary cache file that needs cleanup
-                if (archiveUri.scheme == "content") {
-                    tempCacheFile = archiveFile
-                }
+                if (archiveUri.scheme == "content") tempCacheFile = archiveFile
 
                 val entries = mutableListOf<ArchiveEntry>()
                 val seenDirectories = mutableSetOf<String>()
 
-                RandomAccessFile(archiveFile, "r").use { randomAccessFile ->
-                    val inStream = RandomAccessFileInStream(randomAccessFile)
-                    val inArchive: IInArchive = SevenZip.openInArchive(null, inStream)
-
+                RandomAccessFile(archiveFile, "r").use { raf ->
+                    val inArchive: IInArchive = SevenZip.openInArchive(null, RandomAccessFileInStream(raf))
                     try {
                         val normalizedPath = path.trim('/').let { if (it.isEmpty()) "" else "$it/" }
-
                         for (i in 0 until inArchive.numberOfItems) {
-                            val itemPath = inArchive.getStringProperty(i, net.sf.sevenzipjbinding.PropID.PATH) ?: continue
-                            val isDirectory = inArchive.getSimpleInterface().getArchiveItem(i).isFolder
-
-                            // Check if entry is at current path level
-                            if (!itemPath.startsWith(normalizedPath)) continue
-
-                            val relativePath = itemPath.removePrefix(normalizedPath)
-                            if (relativePath.isEmpty()) continue
-
-                            val firstSlash = relativePath.indexOf('/')
-                            val isDirectChild = firstSlash == -1 || firstSlash == relativePath.length - 1
-
-                            if (isDirectChild) {
-                                // Direct file or directory
-                                val name = relativePath.trimEnd('/')
-                                val size = if (!isDirectory) {
-                                    inArchive.getSimpleInterface().getArchiveItem(i).size
-                                } else null
-
-                                entries.add(
-                                    ArchiveEntry(
-                                        path = itemPath.trimEnd('/'),
-                                        isDirectory = isDirectory,
-                                        sizeBytes = size ?: 0L,
-                                        compressedSize = 0L,
-                                        lastModified = System.currentTimeMillis()
-                                    )
-                                )
-                            } else {
-                                // Nested item - add parent directory if not seen
-                                val dirName = relativePath.substring(0, firstSlash)
-                                val dirPath = normalizedPath + dirName
-
-                                if (seenDirectories.add(dirPath)) {
-                                    entries.add(
-                                        ArchiveEntry(
-                                            path = dirPath,
-                                            isDirectory = true,
-                                            sizeBytes = 0L,
-                                            compressedSize = 0L,
-                                            lastModified = System.currentTimeMillis()
-                                        )
-                                    )
-                                }
-                            }
+                            val itemPath = inArchive.getStringProperty(i, PropID.PATH) ?: continue
+                            processArchiveEntry(i, itemPath, normalizedPath, inArchive, entries, seenDirectories)
                         }
                     } finally {
                         inArchive.close()
@@ -111,8 +63,40 @@ class ArchiveBrowserRepositoryImpl(
             } catch (e: Exception) {
                 Result.failure(e)
             } finally {
-                // Clean up temporary cache file if created
                 tempCacheFile?.delete()
+            }
+        }
+    }
+
+    private fun processArchiveEntry(
+        index: Int,
+        itemPath: String,
+        normalizedPath: String,
+        inArchive: IInArchive,
+        entries: MutableList<ArchiveEntry>,
+        seenDirectories: MutableSet<String>
+    ) {
+        val relativePath = itemPath.removePrefix(normalizedPath).takeIf {
+            itemPath.startsWith(normalizedPath) && it.isNotEmpty()
+        } ?: return
+
+        val isDirectory = inArchive.getSimpleInterface().getArchiveItem(index).isFolder
+        val firstSlash = relativePath.indexOf('/')
+        val isDirectChild = firstSlash == -1 || firstSlash == relativePath.length - 1
+
+        if (isDirectChild) {
+            val size = if (!isDirectory) inArchive.getSimpleInterface().getArchiveItem(index).size else null
+            entries.add(ArchiveEntry(
+                path = itemPath.trimEnd('/'), isDirectory = isDirectory,
+                sizeBytes = size ?: 0L, compressedSize = 0L, lastModified = System.currentTimeMillis()
+            ))
+        } else {
+            val dirPath = normalizedPath + relativePath.substring(0, firstSlash)
+            if (seenDirectories.add(dirPath)) {
+                entries.add(ArchiveEntry(
+                    path = dirPath, isDirectory = true, sizeBytes = 0L,
+                    compressedSize = 0L, lastModified = System.currentTimeMillis()
+                ))
             }
         }
     }
@@ -127,102 +111,41 @@ class ArchiveBrowserRepositoryImpl(
         var tempCacheFile: File? = null
         try {
             val archiveUri = ResourcePathConverter.toUri(archivePath)
-            val archiveFile = getFileFromUri(archiveUri) ?: throw IllegalArgumentException(
-                "Cannot access archive file"
+            val archiveFile = getFileFromUri(archiveUri)
+                ?: throw IllegalArgumentException("Cannot access archive file")
+            if (archiveUri.scheme == "content") tempCacheFile = archiveFile
+
+            val destinationFile = File(
+                ResourcePathConverter.toUri(destinationPath).path
+                    ?: throw IllegalArgumentException("Invalid destination path")
             )
+            if (!destinationFile.exists()) destinationFile.mkdirs()
 
-            // Track if this is a temporary cache file that needs cleanup
-            if (archiveUri.scheme == "content") {
-                tempCacheFile = archiveFile
-            }
-
-            val destinationUri = ResourcePathConverter.toUri(destinationPath)
-            val destinationFile = File(destinationUri.path ?: throw IllegalArgumentException(
-                "Invalid destination path"
-            ))
-
-            if (!destinationFile.exists()) {
-                destinationFile.mkdirs()
-            }
-
-            RandomAccessFile(archiveFile, "r").use { randomAccessFile ->
-                val inStream = RandomAccessFileInStream(randomAccessFile)
-                val inArchive: IInArchive = SevenZip.openInArchive(null, inStream)
-
+            RandomAccessFile(archiveFile, "r").use { raf ->
+                val inArchive: IInArchive = SevenZip.openInArchive(null, RandomAccessFileInStream(raf))
                 try {
                     val pathSet = entryPaths.toSet()
                     var extractedCount = 0
 
                     for (i in 0 until inArchive.numberOfItems) {
-                        val itemPath = inArchive.getStringProperty(i, net.sf.sevenzipjbinding.PropID.PATH) ?: continue
-                        val normalizedItemPath = itemPath.trimEnd('/')
-
-                        if (normalizedItemPath !in pathSet) continue
+                        val itemPath = inArchive.getStringProperty(i, PropID.PATH)
+                            ?.takeIf { it.trimEnd('/') in pathSet } ?: continue
 
                         val isDirectory = inArchive.getSimpleInterface().getArchiveItem(i).isFolder
                         val outputFile = File(destinationFile, itemPath)
-
-                        // Validate path to prevent traversal attacks
                         pathValidator.validatePath(outputFile, destinationFile, itemPath)
 
                         if (isDirectory) {
                             outputFile.mkdirs()
                         } else {
                             outputFile.parentFile?.mkdirs()
-
-                            val extractionResult = IntArray(1)
-                            inArchive.extract(intArrayOf(i), false, object : net.sf.sevenzipjbinding.IArchiveExtractCallback {
-                                private var currentOutputStream: FileOutputStream? = null
-
-                                override fun setTotal(total: Long) {}
-                                override fun setCompleted(complete: Long) {}
-
-                                override fun getStream(
-                                    index: Int,
-                                    extractAskMode: net.sf.sevenzipjbinding.ExtractAskMode
-                                ): net.sf.sevenzipjbinding.ISequentialOutStream? {
-                                    if (extractAskMode != net.sf.sevenzipjbinding.ExtractAskMode.EXTRACT) {
-                                        return null
-                                    }
-
-                                    currentOutputStream = FileOutputStream(outputFile)
-                                    return net.sf.sevenzipjbinding.ISequentialOutStream { data ->
-                                        val stream = currentOutputStream
-                                            ?: throw IllegalStateException("Output stream closed unexpectedly")
-                                        stream.write(data)
-                                        data.size
-                                    }
-                                }
-
-                                override fun prepareOperation(extractAskMode: net.sf.sevenzipjbinding.ExtractAskMode) {}
-
-                                override fun setOperationResult(
-                                    extractOperationResult: net.sf.sevenzipjbinding.ExtractOperationResult
-                                ) {
-                                    try {
-                                        currentOutputStream?.close()
-                                    } finally {
-                                        currentOutputStream = null
-                                    }
-
-                                    extractionResult[0] = if (extractOperationResult == net.sf.sevenzipjbinding.ExtractOperationResult.OK) {
-                                        1
-                                    } else {
-                                        0
-                                    }
-                                }
-                            })
-
-                            if (extractionResult[0] == 1) {
+                            if (extractFileEntry(inArchive, i, outputFile)) {
                                 extractedCount++
-                                emit(
-                                    ExtractionProgress.Extracting(
-                                        currentFile = itemPath,
-                                        extractedCount = extractedCount,
-                                        totalCount = entryPaths.size,
-                                        progress = extractedCount.toFloat() / entryPaths.size
-                                    )
-                                )
+                                emit(ExtractionProgress.Extracting(
+                                    currentFile = itemPath, extractedCount = extractedCount,
+                                    totalCount = entryPaths.size,
+                                    progress = extractedCount.toFloat() / entryPaths.size
+                                ))
                             }
                         }
                     }
@@ -233,24 +156,45 @@ class ArchiveBrowserRepositoryImpl(
                 }
             }
         } catch (e: Exception) {
-            val errorMessage = "${e::class.simpleName}: ${e.message ?: "Extraction failed"}"
-            emit(ExtractionProgress.Error(errorMessage, e))
+            emit(ExtractionProgress.Error("${e::class.simpleName}: ${e.message ?: "Extraction failed"}", e))
         } finally {
-            // Clean up temporary cache file if created
             tempCacheFile?.delete()
         }
     }.flowOn(Dispatchers.IO)
+
+    private fun extractFileEntry(inArchive: IInArchive, index: Int, outputFile: File): Boolean {
+        val extractionResult = IntArray(1)
+        inArchive.extract(intArrayOf(index), false, object : IArchiveExtractCallback {
+            private var currentOutputStream: FileOutputStream? = null
+
+            override fun setTotal(total: Long) = Unit
+            override fun setCompleted(complete: Long) = Unit
+            override fun prepareOperation(extractAskMode: ExtractAskMode) = Unit
+
+            override fun getStream(index: Int, extractAskMode: ExtractAskMode): ISequentialOutStream? {
+                if (extractAskMode != ExtractAskMode.EXTRACT) return null
+                currentOutputStream = FileOutputStream(outputFile)
+                return ISequentialOutStream { data ->
+                    checkNotNull(currentOutputStream) { "Output stream closed unexpectedly" }.write(data)
+                    data.size
+                }
+            }
+
+            override fun setOperationResult(extractOperationResult: ExtractOperationResult) {
+                try { currentOutputStream?.close() } finally { currentOutputStream = null }
+                extractionResult[0] = if (extractOperationResult == ExtractOperationResult.OK) 1 else 0
+            }
+        })
+        return extractionResult[0] == 1
+    }
 
     private fun getFileFromUri(uri: Uri): File? {
         return when (uri.scheme) {
             "file" -> File(uri.path ?: return null)
             "content" -> {
-                // Copy to cache if content URI (caller must delete after use)
                 val cacheFile = File(context.cacheDir, "$TEMP_ARCHIVE_PREFIX${System.currentTimeMillis()}")
                 context.contentResolver.openInputStream(uri)?.use { input ->
-                    cacheFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
+                    cacheFile.outputStream().use { output -> input.copyTo(output) }
                 }
                 cacheFile
             }

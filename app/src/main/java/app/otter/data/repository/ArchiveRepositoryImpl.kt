@@ -91,21 +91,15 @@ class ArchiveRepositoryImpl @Inject constructor(
      * Extracts the filename from a URI using ContentResolver.
      * Falls back to the last path segment if query fails.
      */
-    private fun getFileNameFromUri(context: Context, uri: Uri): String {
-        // Try to query display name from content resolver
-        context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                if (nameIndex >= 0) {
-                    val displayName = cursor.getString(nameIndex)
-                    if (!displayName.isNullOrBlank()) {
-                        return displayName
-                    }
-                }
-            }
+    private fun queryDisplayName(context: Context, uri: Uri): String? {
+        val projection = arrayOf(android.provider.OpenableColumns.DISPLAY_NAME)
+        return context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            cursor.getString(nameIndex).takeIf { nameIndex >= 0 && !it.isNullOrBlank() }
         }
-
-        // Fallback: extract from URI path
-        return uri.lastPathSegment ?: "unknown"
     }
+
+    private fun getFileNameFromUri(context: Context, uri: Uri): String =
+        queryDisplayName(context, uri) ?: uri.lastPathSegment ?: "unknown"
 }

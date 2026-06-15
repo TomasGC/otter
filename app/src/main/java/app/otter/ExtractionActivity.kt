@@ -10,16 +10,6 @@ import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -98,7 +88,7 @@ class ExtractionActivity : ComponentActivity() {
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
-        permissions: Array<out String>,
+        permissions: Array<String>,
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -162,21 +152,20 @@ class ExtractionActivity : ComponentActivity() {
         }
     }
 
-    private fun getFileNameFromUri(uri: android.net.Uri): String? {
-        return try {
-            when (uri.scheme) {
-                "content" -> {
-                    contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                        if (nameIndex >= 0 && cursor.moveToFirst()) cursor.getString(nameIndex) else null
-                    }
-                }
-                "file" -> uri.lastPathSegment
-                else -> null
-            }
-        } catch (e: Exception) {
-            null
+    private fun queryDisplayName(uri: android.net.Uri): String? =
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (nameIndex >= 0 && cursor.moveToFirst()) cursor.getString(nameIndex) else null
         }
+
+    private fun getFileNameFromUri(uri: android.net.Uri): String? = try {
+        when (uri.scheme) {
+            "content" -> queryDisplayName(uri)
+            "file" -> uri.lastPathSegment
+            else -> null
+        }
+    } catch (e: Exception) {
+        null
     }
 
     private fun getFileName(path: ResourcePath): String? {

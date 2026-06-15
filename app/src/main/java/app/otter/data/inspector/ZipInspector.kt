@@ -64,13 +64,6 @@ class ZipInspector(private val zipFile: File) : ArchiveInspector {
         }
     }
 
-    private fun getZipFileEntry(name: String): java.util.zip.ZipEntry? {
-        if (zipFileForCount == null) {
-            zipFileForCount = ZipFile(zipFile)
-        }
-        return zipFileForCount!!.getEntry(name)
-    }
-
     /**
      * Returns the total number of entries in O(1) time.
      *
@@ -139,7 +132,7 @@ class ZipInspector(private val zipFile: File) : ArchiveInspector {
 
     private fun checkNotClosed() {
         if (closed) {
-            throw IllegalStateException("ZipInspector is closed")
+            error("ZipInspector is closed")
         }
     }
 

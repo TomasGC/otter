@@ -191,6 +191,7 @@ jobs:
       pull-requests: write
     with:
       retention-days: 7
+      head-sha: ${{ github.event.workflow_run.head_sha }}
 
   # Optional: Matrix testing across multiple API levels
   # Uncomment to test on API 26 (min), 30 (stable), 34 (max)
