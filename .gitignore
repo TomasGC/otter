@@ -58,6 +58,7 @@ scripts/htmlcov/
 scripts/coverage.xml
 scripts/coverage.json
 scripts/.coverage
+.coverage
 
 # ============================================
 # Tools

@@ -22,17 +22,17 @@
 **ALL TESTS MUST PASS** - No exceptions
 
 After any code change:
-1. Build: `python scripts/build.py --no-install`
-2. Test: `python scripts/test.py`
+1. Build: `python scripts/manage.py build --no-install`
+2. Test: `python scripts/manage.py test unit`
 3. **If any test fails → BLOCK COMMIT**
 
 Alternative commands:
 ```bash
-python scripts/build.py              # Build + auto-install on device
-python scripts/build.py --no-install # Build only (no device needed)
-python scripts/test.py --unit        # Unit tests only
-python scripts/test.py --instrumented # Instrumented tests (requires device)
-python scripts/test.py --coverage    # Unit tests with coverage report
+python scripts/manage.py build               # Build + auto-install on device
+python scripts/manage.py build --no-install  # Build only (no device needed)
+python scripts/manage.py test unit           # Unit tests only
+python scripts/manage.py test instrumented   # Instrumented tests (requires device)
+python scripts/manage.py test coverage       # Unit tests with coverage report
 ```
 
 **Coverage requirement**: ≥ 80%
@@ -95,47 +95,7 @@ python scripts/test.py --coverage    # Unit tests with coverage report
 
 ### Build & Test Workflow
 
-**Python Scripts** (recommended):
-```bash
-# Build + auto-install (auto-connects device if needed)
-python scripts/build.py
-
-# Build only (no install)
-python scripts/build.py --no-install
-
-# Run unit tests
-python scripts/test.py --unit
-
-# Run instrumented tests (requires device, auto-connects if needed)
-python scripts/test.py --instrumented
-
-# Run all tests
-python scripts/test.py
-
-# Run tests with coverage report
-python scripts/test.py --coverage
-```
-
-**Direct Gradle Commands** (alternative):
-```bash
-# Build debug variant
-./gradlew assembleDebug
-
-# Run unit tests
-./gradlew testDebugUnitTest
-
-# Run instrumented tests (requires emulator/device)
-./gradlew connectedDebugAndroidTest
-
-# Lint check
-./gradlew lintDebug
-
-# Install on device
-./gradlew installDebug
-
-# Coverage (optional)
-./gradlew testDebugUnitTestCoverage
-```
+See `contexts/commands.md` for full command reference.
 
 **After any code change**:
 1. Build must succeed

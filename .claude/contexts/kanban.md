@@ -4,6 +4,18 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ---
 
+2026-06-14 - [#39] Python Scripts - OOP Refactor, 4-Tier Test Suite, Actions CLI
+- Full OOP refactor: AdbManager, GradleRunner, VersionManager, ArchiveCreator, DeviceConnector, ArchiveTemplateGenerator, FilePusher — all accept SubprocessRunner via constructor DI (FakeSubprocessRunner for tests)
+- Added actions CLI layer: AdbAction, BuildAction, TestAction, CreateAction, TestScriptsAction — dispatched by manage.py (5 verbs); removed legacy shims, manage.py is sole entry point
+- 4-tier test pyramid: unit, integration-mock, integration-real, e2e — ~377 tests at 98.2% line coverage
+- Eliminated all Kotlin detekt violations without @Suppress: helper extraction, ignorePrivate for opcode dispatch, smart-cast refactor in RpaPickleParser; upgraded compileSdk/targetSdk to 35 for Compose BOM 2024.11 compatibility
+- Fixed compilation errors from dependency upgrades: ExtractionActivity permissions signature, ExtractionScreen missing setValue import, AppModule GzipExtractor constructor, stale test API calls
+tags: #python #testing #oop #dependency-injection #refactoring #ci-cd #lint #detekt #sdk35
+Ref: https://github.com/TomasGC/otter/issues/39
+Commits: ca220d6, 66e9ed8, cf475d1, 0389778, ed6eddf
+
+---
+
 2026-06-09 - [#25] Archive Browsing with Sliding Window Cache
 - Added domain model: ResourcePath sealed class, BrowsableItem, ArchiveInspector, BrowseItemsUseCase
 - Implemented data layer: ZipInspector, RpaInspector, ArchiveInspectorFactory, FileSystemBrowser, ArchiveBrowser
