@@ -78,7 +78,7 @@ class NotificationHelperTest {
         val outputPath = "/storage/emulated/0/Download/test"
 
         // When
-        val notification = helper.createSuccessNotification(fileName, extractedFilesCount, outputPath)
+        val notification = helper.createSuccessNotification(fileName, extractedFilesCount)
 
         // Then
         assertNotNull("Notification should not be null", notification)
@@ -165,7 +165,7 @@ class NotificationHelperTest {
         val fileName = "文件.zip"
 
         // When
-        val notification = helper.createSuccessNotification(fileName, 10, "/path")
+        val notification = helper.createSuccessNotification(fileName, 10)
 
         // Then
         assertNotNull("Notification should not be null", notification)

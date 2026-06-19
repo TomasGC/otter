@@ -143,6 +143,34 @@ class ExtractionService : Service() {
         super.onDestroy()
     }
 
+    private fun notifyExtractionProgress(fileName: String, progress: ExtractionProgress.Extracting) {
+        val progressPercent = (progress.progress * 100).toInt()
+        Timber.tag(TAG).d("Extracting: ${progress.currentFile} ($progressPercent%)")
+        recentFilesBuffer.add(progress.currentFile)
+        emitProgressEvent(fileName, progress)
+        notificationManager.notify(
+            NOTIFICATION_ID,
+            createProgressNotification(
+                fileName = fileName,
+                progress = progressPercent,
+                extractedCount = progress.extractedCount,
+                totalCount = progress.totalCount,
+                recentFiles = recentFilesBuffer.getFiles()
+            )
+        )
+    }
+
+    private fun showExtractionResult(fileName: String, lastError: String?, count: Int, folder: File) {
+        if (lastError != null) {
+            showCompletionNotification(fileName = fileName, success = false, message = lastError)
+        } else {
+            showCompletionNotification(
+                fileName = fileName, success = true,
+                message = "Extracted $count files", destinationPath = folder
+            )
+        }
+    }
+
     private suspend fun extractArchive(
         archiveUri: ResourcePath,
         fileName: String,
@@ -154,13 +182,11 @@ class ExtractionService : Service() {
 
         try {
             val archiveFile = archiveFileFactory.createFromPath(archiveUri, fileName)
-                ?: throw IllegalStateException("Cannot create archive file")
+                ?: error("Cannot create archive file")
 
-            // Resolve destination folder first
             val destinationFolder = getDestinationFolder(archiveUri, fileName)
             destinationFolder.mkdirs()
 
-            // Enable file logging in the extraction destination folder (to capture all logs)
             if (BuildConfig.DEBUG) {
                 fileLoggingTree = app.otter.util.FileLoggingTree(this, destinationFolder)
                 Timber.plant(fileLoggingTree)
@@ -168,34 +194,14 @@ class ExtractionService : Service() {
             }
 
             Timber.tag(TAG).d("Destination folder: ${destinationFolder.absolutePath}")
-
             val destinationPath = ResourcePathConverter.fromUri(Uri.fromFile(destinationFolder))
-
             Timber.tag(TAG).d("Starting extraction to: ${destinationFolder.absolutePath}")
 
             extractArchiveUseCase(archiveFile, destinationPath, selectedItems).collect { progress ->
                 when (progress) {
                     is ExtractionProgress.Extracting -> {
                         extractedFilesCount = progress.extractedCount
-                        val progressPercent = (progress.progress * 100).toInt()
-                        Timber.tag(TAG).d("Extracting: ${progress.currentFile} ($progressPercent%)")
-
-                        // Add current file to buffer
-                        recentFilesBuffer.add(progress.currentFile)
-
-                        emitProgressEvent(fileName, progress)
-
-                        notificationManager.notify(
-                            NOTIFICATION_ID,
-                            createProgressNotification(
-                                fileName = fileName,
-                                progress = progressPercent,
-                                currentFile = progress.currentFile,
-                                extractedCount = progress.extractedCount,
-                                totalCount = progress.totalCount,
-                                recentFiles = recentFilesBuffer.getFiles()
-                            )
-                        )
+                        notifyExtractionProgress(fileName, progress)
                     }
                     is ExtractionProgress.Success -> {
                         extractedFilesCount = progress.extractedCount
@@ -209,32 +215,12 @@ class ExtractionService : Service() {
                 }
             }
 
-            if (lastError != null) {
-                showCompletionNotification(
-                    fileName = fileName,
-                    success = false,
-                    message = lastError!!
-                )
-            } else {
-                showCompletionNotification(
-                    fileName = fileName,
-                    success = true,
-                    message = "Extracted $extractedFilesCount files",
-                    destinationPath = destinationFolder
-                )
-            }
+            showExtractionResult(fileName, lastError, extractedFilesCount, destinationFolder)
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Fatal error during extraction: ${e.message}")
-            showCompletionNotification(
-                fileName = fileName,
-                success = false,
-                message = e.message ?: "Unknown error"
-            )
+            showCompletionNotification(fileName = fileName, success = false, message = e.message ?: "Unknown error")
         } finally {
-            // Remove file logging tree for this extraction
-            if (fileLoggingTree != null) {
-                Timber.uproot(fileLoggingTree)
-            }
+            if (fileLoggingTree != null) Timber.uproot(fileLoggingTree)
         }
     }
 
@@ -242,15 +228,6 @@ class ExtractionService : Service() {
         val archiveUri = ResourcePathConverter.toUri(archivePath)
         return destinationResolver.resolveDestination(archiveUri, fileName)
     }
-
-    private fun createDownloadsDestination(fileName: String): File {
-        val downloadFolder = android.os.Environment.getExternalStoragePublicDirectory(
-            android.os.Environment.DIRECTORY_DOWNLOADS
-        )
-        val folderName = fileName.substringBeforeLast(".")
-        return File(downloadFolder, "archive")
-    }
-
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -269,19 +246,15 @@ class ExtractionService : Service() {
     }
 
     private fun emitProgressEvent(fileName: String, progress: ExtractionProgress.Extracting) {
-        // Send progress via EventBus (more reliable than broadcasts)
-        serviceScope.launch {
-            eventBus.emitProgress(
-                fileName = fileName,
-                currentFile = progress.currentFile,
-                extractedCount = progress.extractedCount,
-                totalCount = progress.totalCount,
-                progress = progress.progress,
-                recentFiles = recentFilesBuffer.getFiles()
-            )
-        }
+        eventBus.emitProgress(
+            fileName = fileName,
+            currentFile = progress.currentFile,
+            extractedCount = progress.extractedCount,
+            totalCount = progress.totalCount,
+            progress = progress.progress,
+            recentFiles = recentFilesBuffer.getFiles()
+        )
 
-        // Also send broadcast for backward compatibility
         sendProgressBroadcast(
             fileName = fileName,
             currentFile = progress.currentFile,
@@ -294,12 +267,10 @@ class ExtractionService : Service() {
     private fun createProgressNotification(
         fileName: String,
         progress: Int,
-        currentFile: String? = null,
         extractedCount: Int = 0,
         totalCount: Int = 0,
         recentFiles: List<String> = emptyList()
     ): Notification {
-        // Delegate to NotificationHelper for custom layout rendering
         val helper = NotificationHelper(this, notificationManager)
         return helper.createProgressNotification(
             fileName = fileName,
@@ -356,13 +327,6 @@ class ExtractionService : Service() {
             putExtra(EXTRA_PROGRESS, progress)
         }
         Timber.tag(TAG).d("Sending broadcast: $ACTION_EXTRACTION_PROGRESS - $fileName ($extractedCount/$totalCount)")
-        sendBroadcast(intent)
-    }
-
-    private fun sendCompleteBroadcast() {
-        val intent = Intent(ACTION_EXTRACTION_COMPLETE).apply {
-            setPackage(packageName)
-        }
         sendBroadcast(intent)
     }
 

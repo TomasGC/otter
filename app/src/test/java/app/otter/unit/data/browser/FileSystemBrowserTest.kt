@@ -35,7 +35,7 @@ class FileSystemBrowserTest {
     fun setup() {
         context = mockk(relaxed = true)
         mimeTypeUtil = MimeTypeUtil()
-        browser = FileSystemBrowser(context, mimeTypeUtil)
+        browser = FileSystemBrowser(mimeTypeUtil)
     }
 
     @Test

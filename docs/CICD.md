@@ -1,282 +1,418 @@
 # CI/CD Pipeline Documentation - Otter
 
 **Purpose**: GitHub Actions CI/CD pipeline architecture, workflows, and maintenance guide
-**Last Updated**: 2026-06-09
+**Last Updated**: 2026-06-11
 
 ---
 
 ## Overview
 
-Otter uses **GitHub Actions** with optimized reusable workflows for:
-- ✅ Parallel execution (lint + tests)
-- ✅ Fail-fast strategy (early failure detection)
-- ✅ Gradle Managed Devices (official Google solution for instrumented tests)
-- ✅ Kover code coverage (Kotlin-optimized, replaced Jacoco)
-- ✅ Event-driven validation (Push-CI completes → PR-CI triggers via `workflow_run`)
+Otter uses **GitHub Actions** with a grouped reusable workflow architecture split into two sub-pipelines:
+
+- ✅ **Kotlin pipeline** — always runs on push to feature/bugfix branches
+- ✅ **Python pipeline** — conditional, runs only when `scripts/**/*.py` changed
+- ✅ **Parallel execution** — lint/validation independent from tests (maximum progression)
+- ✅ **Fail-forward strategy** — lint/validation failures don't block tests; all blocks are blocking
+- ✅ **Kover code coverage** (Kotlin-optimized, replaces Jacoco)
+- ✅ **Event-driven PR validation** (Push-CI completes → PR-CI triggers via `workflow_run`)
+- ✅ **Pinned third-party actions** (SHA-pinned, supply chain hardened)
 
 ---
 
 ## Workflow Architecture
 
+### Folder Structure
+
+```
+.github/workflows/
+├── push-ci.yml                          # Trigger: feature/** + bugfix/** branches
+├── pr-ci.yml                            # Trigger: workflow_run (after Push-CI)
+├── cd.yml                               # Trigger: v* / test-v* tags
+├── reusable-security-checks.yml         # Called by pr-ci.yml
+├── kotlin/
+│   ├── kotlin.yml                       # Kotlin sub-orchestrator
+│   ├── validation.yml                   # Branch name, commit msgs, TODO check, large files
+│   ├── lint-checks.yml                  # Android lint, ktlint, detekt, OWASP, TruffleHog
+│   ├── unit-tests.yml                   # 3 parallel jobs (domain+service, data, ui)
+│   ├── integration-tests-mock.yml       # 2 parallel jobs (extractors, service+viewmodel)
+│   ├── integration-tests-real.yml       # 1 job (real archives, zero mocks)
+│   ├── build-apk.yml                    # Debug APK + size check (≤50MB)
+│   ├── coverage.yml                     # Kover merge, ≥80% threshold, badge
+│   └── instrumented-tests.yml           # Manual AVD + connectedDebugAndroidTest
+└── python/
+    ├── python.yml                       # Python sub-orchestrator
+    ├── detect-changes.yml               # dorny/paths-filter for scripts/**/*.py
+    ├── unit-tests.yml                   # 3 parallel jobs (android, cli, common)
+    ├── lint-checks.yml                  # 7 parallel: flake8, black+isort, pylint, mypy, bandit, pip-audit, vulture
+    ├── integration-tests-mock.yml       # 2 parallel jobs (cli, android)
+    ├── integration-tests-real.yml       # 1 job (real subprocess)
+    ├── coverage.yml                     # unit + mock + real, --cov-fail-under=80
+    └── e2e-tests.yml                    # Exit-code-5 guard (no tests yet)
+```
+
+---
+
 ### Architecture Overview
 
 ```mermaid
 graph TB
-    subgraph "Reusable Workflows"
-        UnitTests[reusable-unit-tests.yml<br/>JUnit + MockK]
-        BuildAPK[reusable-build-apk.yml<br/>Gradle Assembly]
-        UITests[reusable-instrumented-tests.yml<br/>GMD Pixel 4 API 30]
-        Lint[reusable-lint-checks.yml<br/>ktlint + detekt + Android Lint]
-        Coverage[reusable-coverage-merge.yml<br/>Kover Reports]
-        Security[reusable-security-checks.yml<br/>OWASP + TruffleHog]
+    subgraph "Trigger Workflows (repo root)"
+        PushCI[push-ci.yml<br/>feature/** bugfix/**]
+        PRCI[pr-ci.yml<br/>workflow_run]
+        CD[cd.yml<br/>v* tags]
     end
-    
-    subgraph "Caller Workflows"
-        PushCI[push-ci.yml<br/>Feature/Bugfix Branches]
-        PRCI[pr-ci.yml<br/>After Push-CI via workflow_run]
-        CD[cd.yml<br/>Releases]
+
+    subgraph "Sub-Orchestrators"
+        Kotlin[kotlin/kotlin.yml]
+        Python[python/python.yml]
+        DetectChanges[python/detect-changes.yml]
     end
-    
-    PushCI --> UnitTests
-    PushCI --> Lint
-    PushCI --> BuildAPK
-    PushCI --> UITests
-    PushCI --> Coverage
-    
-    PRCI --> Security
-    
-    CD --> UnitTests
-    CD --> BuildAPK
-    
-    style UnitTests fill:#e1f5ff
-    style BuildAPK fill:#fff4e1
-    style UITests fill:#ffe1f5
-    style Lint fill:#f0ffe1
-    style Coverage fill:#ffe1e1
-    style Security fill:#ffebcc
-    style PushCI fill:#ccf5ff,stroke:#333,stroke-width:2px
-    style PRCI fill:#ccf5ff,stroke:#333,stroke-width:2px
-    style CD fill:#ccf5ff,stroke:#333,stroke-width:2px
+
+    subgraph "Kotlin Reusable Workflows"
+        KVal[kotlin/validation.yml]
+        KLint[kotlin/lint-checks.yml]
+        KUnit[kotlin/unit-tests.yml]
+        KMock[kotlin/integration-tests-mock.yml]
+        KReal[kotlin/integration-tests-real.yml]
+        KBuild[kotlin/build-apk.yml]
+        KCov[kotlin/coverage.yml]
+        KInstr[kotlin/instrumented-tests.yml]
+    end
+
+    subgraph "Python Reusable Workflows"
+        PUnit[python/unit-tests.yml]
+        PLint[python/lint-checks.yml]
+        PMock[python/integration-tests-mock.yml]
+        PReal[python/integration-tests-real.yml]
+        PCov[python/coverage.yml]
+        PE2E[python/e2e-tests.yml]
+    end
+
+    PushCI --> DetectChanges
+    PushCI --> Kotlin
+    PushCI -->|if scripts changed| Python
+
+    Kotlin --> KVal
+    Kotlin --> KLint
+    Kotlin --> KUnit
+    Kotlin --> KMock
+    Kotlin --> KReal
+    Kotlin --> KBuild
+    Kotlin --> KCov
+    Kotlin --> KInstr
+
+    Python --> PUnit
+    Python --> PLint
+    Python --> PMock
+    Python --> PReal
+    Python --> PCov
+    Python --> PE2E
+
+    PRCI --> reusable-security-checks.yml
+    CD --> KUnit
 ```
-
-### Reusable Workflows (`.github/workflows/reusable-*.yml`)
-
-Modular workflows that can be called by multiple pipelines:
-
-| Workflow | Purpose | Input: `gradle-task` | Artifacts |
-|----------|---------|---------------------|-----------|
-| `reusable-unit-tests.yml` | Run any Gradle test task (parameterized) | `testUnit` / `testIntegrationMock` / `testIntegrationReal` | `{artifact-name}-test-results` + `{artifact-name}-coverage-data` |
-| `reusable-build-apk.yml` | Gradle assembly (debug/release) | — | APK file |
-| `reusable-instrumented-tests.yml` | Gradle Managed Devices (Pixel 4 API 30) | — | Test results + coverage |
-| `reusable-lint-checks.yml` | ktlint, detekt, Android Lint | — | Lint reports |
-| `reusable-coverage-merge.yml` | Merge Kover reports from all JVM stages | — | XML + HTML reports |
-| `reusable-security-checks.yml` | OWASP, TruffleHog, APK size | — | Security reports |
-
-**Benefits**:
-- ✅ DRY principle (no duplication between workflows)
-- ✅ Easier maintenance (update once, applies everywhere)
-- ✅ Consistent behavior across pipelines
 
 ---
 
 ### Caller Workflows
 
-#### 1. Push-CI (`push-ci.yml`) - Feature/Bugfix Branch Validation
+#### 1. Push-CI (`push-ci.yml`) — Feature/Bugfix Branch Validation
 
-**Triggers**: Push to `feature/**` or `bugfix/**` branches
+**Triggers**: Push to `feature/**` or `bugfix/**`
 
-**Concurrency**: Cancel in-progress runs on new push (same branch)
+**Concurrency**: Cancel in-progress on new push (same branch)
 
-**Pipeline Flow**:
+**Jobs**:
+1. `detect-changes` — calls `python/detect-changes.yml`, outputs `scripts=true/false`
+2. `kotlin-pipeline` — always runs, calls `kotlin/kotlin.yml` with `secrets: inherit`
+3. `python-pipeline` — runs only if `scripts=true`, calls `python/python.yml`
+
+---
+
+#### 2. PR-CI (`pr-ci.yml`) — Pull Request Validation
+
+**Triggers**: `workflow_run` — fires when Push-CI completes (not `pull_request`)
+
+**Why event-driven**:
+- Starts only after Push-CI **finished** — no race condition, no polling
+- `conclusion != 'success'` → entire workflow skipped immediately
+- No open PR for the branch → skipped
+
+**Jobs**:
+- `check-pr-exists` — verifies open PR targeting `main`
+- `pr-validation` — PR title format check (`#123: type: description`)
+- `context-check` — validates `.claude/contexts/kanban.md` updated when `app/src/` changed
+- `context-comment` — posts PR comment if context files missing
+- `security-checks` — calls `reusable-security-checks.yml` (OWASP + TruffleHog)
+
+**Security hardening**:
+- Injection fix: PR title via `env:` block — not interpolated in shell
+- Privilege separation: `context-check` has `contents: read` only; `context-comment` has `pull-requests: write` but no checkout
+
+---
+
+#### 3. CD (`cd.yml`) — Release Pipeline
+
+**Triggers**: `v*` tags (stable release) or `test-v*` tags (pre-release)
+
+**Flow**: Unit Tests → Build Release APK (signed) → Create GitHub Release → Upload APK
+
+**Security**: Release keystore in GitHub Secrets (`RELEASE_KEYSTORE_BASE64`)
+
+---
+
+## Kotlin Pipeline
+
+### Flow Diagram
 
 ```mermaid
 graph TB
     Start([Push to feature/** or bugfix/**])
-    
-    ValidateBranch[Validate Branch Name<br/>feature/123-description]
-    ValidateCommit[Validate Commit Messages<br/>#123: type: description]
-    
-    Start --> ValidateBranch
-    Start --> ValidateCommit
-    
-    ValidateBranch --> Parallel
-    ValidateCommit --> Parallel
-    
-    subgraph Parallel["Parallel (~3 min)"]
-        Lint[Lint Checks<br/>ktlint + detekt + Android Lint]
-        subgraph UnitParallel["Unit Tests (3 parallel jobs)"]
-            UnitDS[Domain + Service<br/>testType=unit-domain-service]
-            UnitData[Data Layer<br/>testType=unit-data]
-            UnitUI[UI + ViewModel<br/>testType=unit-ui]
-        end
+
+    subgraph Independent["Independent (no gates)"]
+        Validation[validation.yml<br/>Branch name · Commit msgs<br/>No TODO · Large files]
+        LintChecks[lint-checks.yml<br/>Android Lint · ktlint · detekt<br/>OWASP · TruffleHog]
     end
-    
-    subgraph IntegMockParallel["Integration Mock (2 parallel jobs)"]
-        IntegMockExt[Extractors<br/>testType=integration-mock-extractor]
-        IntegMockOther[Service + ViewModel<br/>testType=integration-mock-other]
+
+    subgraph UnitParallel["unit-tests.yml (3 parallel)"]
+        UnitDS[Domain + Service]
+        UnitData[Data Layer]
+        UnitUI[UI + ViewModel]
     end
-    
-    Parallel --> IntegMockParallel
-    IntegMockParallel --> IntegReal[Integration Real Tests<br/>2 tests<br/>testType=integration-real]
-    IntegReal --> Build[Build APK Debug<br/>~1-2 min]
-    IntegReal --> CoverageReport[Coverage Report<br/>Kover merged XML + HTML<br/>Threshold: ≥80%]
-    Build --> UITests[UI Tests<br/>GMD Pixel 4 API 30<br/>68 tests, ~8-10 min]
-    UITests --> End([Success ✓])
-    CoverageReport --> End
-    
-    style Start fill:#e1f5ff
-    style ValidateBranch fill:#fff4e1
-    style ValidateCommit fill:#fff4e1
-    style Lint fill:#f0ffe1
-    style UnitTests fill:#f0ffe1
-    style Build fill:#ffe1f5
-    style UITests fill:#ffe1e1
-    style CoverageReport fill:#ffebcc
-    style End fill:#ccffcc
+
+    subgraph MockParallel["integration-tests-mock.yml (2 parallel)"]
+        MockExt[Extractors]
+        MockOther[Service + ViewModel]
+    end
+
+    Real[integration-tests-real.yml<br/>1 job]
+
+    Build[build-apk.yml<br/>assembleDebug + size check]
+    Coverage[coverage.yml<br/>Kover merge ≥80%]
+    Instrumented[instrumented-tests.yml<br/>68 tests · manual AVD]
+
+    Start --> Independent
+    Start --> UnitParallel
+    UnitParallel --> MockParallel
+    MockParallel --> Real
+    Real --> Build
+    Real --> Coverage
+    Build --> Instrumented
 ```
 
-**Validation Rules**:
-- **Branch name**: `feature/123-description` or `bugfix/123-description` (letters, digits, hyphens, underscores)
-- **Commit message**: `#123: type: description` (types: feat, fix, refactor, test, docs, chore, style, perf)
-- **Exception**: `docs:` without issue number allowed when commit modifies `kanban.md`
+**Key design**:
+- Validation and lint run **independently** — failures don't block tests
+- Each block **is blocking** — failed block = failed pipeline
+- `integration-mock` waits only for `unit-tests` (not lint/validation)
+- `coverage` needs `integration-real` (all 6 `.ic` artifacts must exist)
 
-**Test Stages** (sequential, fail-fast):
-1. Unit tests (3 parallel jobs, 439 total) — `testType=unit-domain-service|unit-data|unit-ui`
-2. Integration mock (2 parallel jobs, 94 total) — `testType=integration-mock-extractor|integration-mock-other`
-3. Integration real (2 tests) — `testType=integration-real`
-4. Instrumented (68) — `pixel4api30DebugAndroidTest` (after build)
+### Validation Checks (`kotlin/validation.yml`)
 
-**Coverage Threshold**: ≥80% — merges Kover artifacts from all 3 JVM test stages
+| Job | Check | Rule |
+|-----|-------|------|
+| Branch Name | `grep -qE '^(feature\|bugfix)/[0-9]+-[a-zA-Z0-9_-]+'` | `feature/123-desc` or `bugfix/123-desc` |
+| Commit Messages | git log format | `#123: type: description` |
+| No TODO | `grep -rn --include="*.kt" -E "\b(TODO\|FIXME)\b" app/src/` | Zero matches |
+| Large Files | `find . -not .git -not build -not *.jar/.so/.aar -size +500k` | Zero matches |
 
-**Artifacts**:
-- unit/integration-mock/integration-real test results (retention: 3 days)
-- Coverage report (retention: 7 days)
-- APK debug (retention: 3 days)
-- UI test results (retention: 3 days)
+### Lint Checks (`kotlin/lint-checks.yml`)
+
+| Job | Tool | Behavior |
+|-----|------|----------|
+| Android Lint | `./gradlew lintDebug` | Blocking |
+| Kotlin Style | `ktlint` via reviewdog (SHA-pinned) | Non-blocking output (advisory), blocking job |
+| Kotlin Quality | `./gradlew detekt` | Blocking |
+| Dependencies | `./gradlew dependencyCheckAnalyze` (timeout: 20 min) | Blocking — add `NVD_API_KEY` secret to avoid rate limits |
+| Secrets | `trufflesecurity/trufflehog` (SHA-pinned), `--only-verified` | Blocking |
+
+**Permissions**: `contents: read` at workflow level (all jobs restricted)
+
+### Unit Tests (`kotlin/unit-tests.yml`)
+
+3 parallel jobs, each: checkout → JDK17 → Gradle → Python 3.11 → generate archive template → create RPA archive → `./gradlew testDebugUnitTest -DtestType=<type>`
+
+| Job | `-DtestType` | Artifact |
+|-----|-------------|----------|
+| Domain + Service | `unit-domain-service` | `unit-domain-service-coverage-data` |
+| Data Layer | `unit-data` | `unit-data-coverage-data` |
+| UI + ViewModel | `unit-ui` | `unit-ui-coverage-data` |
+
+**Why archive generation before tests**: Data layer tests and integration tests load real archive files from `archives/` (gitignored). `generate_archive_template.py` creates the template, `create_test_archives.py --rpa-only` creates `test_archive.rpa`.
+
+### Integration Tests Mock (`kotlin/integration-tests-mock.yml`)
+
+2 parallel jobs, same archive generation setup:
+
+| Job | `-DtestType` | Artifact |
+|-----|-------------|---------|
+| Extractors | `integration-mock-extractor` | `integration-mock-extractor-coverage-data` |
+| Service + ViewModel | `integration-mock-other` | `integration-mock-other-coverage-data` |
+
+### Integration Tests Real (`kotlin/integration-tests-real.yml`)
+
+1 job, `-DtestType=integration-real`, artifact: `integration-real-coverage-data`
+
+Zero mocks — real archive files, real Kotlin code.
+
+### Build APK (`kotlin/build-apk.yml`)
+
+1. `./gradlew assembleDebug`
+2. APK size check: fails if ≥50MB (`du -k` → integer division)
+3. Uploads `debug-apk` artifact
+
+### Coverage (`kotlin/coverage.yml`)
+
+1. Downloads all `*-coverage-data` artifacts (pattern matches all 6 `.ic` files) with `merge-multiple: true`
+2. Generates archive template (needed for Kover compilation)
+3. `./gradlew koverXmlReportDebug && ./gradlew koverHtmlReportDebug`
+4. Parses XML: `grep '<counter type="LINE"'` → `missed` + `covered` → `%`
+5. Fails if `COVERED * 100 / TOTAL < 80`
+6. Uploads coverage report artifact
+7. Creates coverage badge if `COVERAGE_GIST_ID` secret configured
+
+**`continue-on-error: true`** on artifact download: allows coverage to run even if some jobs failed (will then fail on 0 lines check).
+
+### Instrumented Tests (`kotlin/instrumented-tests.yml`)
+
+Manual AVD management (more control than Gradle Managed Devices alone):
+
+1. Generate test archives including ZIP (inline Python script)
+2. Enable KVM
+3. `./gradlew pixel4api30Setup` — installs system image (GMD task)
+4. `avdmanager create avd` — Pixel 4 API 30, 8GB data partition
+5. Start emulator (`-no-snapshot-load -no-audio -no-boot-anim -gpu swiftshader_indirect`)
+6. Wait for boot (`adb wait-for-device` + `sys.boot_completed`)
+7. Disable animations (stability)
+8. Push test archives to `/storage/emulated/0/otter-test-archives/`
+9. `./gradlew connectedDebugAndroidTest`
+
+**Timeout**: 75 minutes total
 
 ---
 
-#### 2. PR-CI (`pr-ci.yml`) - Pull Request Validation
+## Python Pipeline
 
-**Triggers**: `workflow_run` — fires when Push-CI workflow completes (not `pull_request`)
-
-**Why event-driven** (replaces `pull_request` trigger + polling):
-- PR-CI starts only after Push-CI has **finished** — no race condition, no polling
-- `conclusion != 'success'` → entire workflow skipped immediately
-- No open PR for the branch → skipped (prevents spurious runs on direct pushes)
-
-**Pipeline Flow**:
+### Flow Diagram
 
 ```mermaid
 graph TB
-    Start([Push-CI Completed])
-    
-    Start --> ConclusionCheck{Push-CI<br/>Conclusion?}
-    ConclusionCheck -->|failure/cancelled| Skip([Skipped ⏭])
-    ConclusionCheck -->|success| CheckPR[Check Open PR<br/>gh pr list --head branch --base main]
-    
-    CheckPR --> PRExists{Open PR<br/>exists?}
-    PRExists -->|no| SkipNoPR([Skipped ⏭])
-    PRExists -->|yes| Parallel
-    
-    subgraph Parallel["Parallel Validation"]
-        PRTitle[PR Title Validation<br/>#123: type: description]
-        ContextCheck[Context Files Check<br/>KANBAN.md mandatory]
-        SecurityChecks[Security Checks<br/>OWASP + TruffleHog]
+    Detect([detect-changes.yml<br/>scripts/**/*.py changed?])
+
+    Detect -->|scripts=true| Start
+
+    subgraph Independent["Independent (no gates)"]
+        PLint[lint-checks.yml<br/>7 parallel jobs]
     end
-    
-    Parallel --> End([Ready to Merge ✓])
-    
-    style Start fill:#e1f5ff
-    style ConclusionCheck fill:#fff4e1
-    style CheckPR fill:#fff4e1
-    style PRExists fill:#ffe1f5
-    style PRTitle fill:#f0ffe1
-    style ContextCheck fill:#f0ffe1
-    style SecurityChecks fill:#ffebcc
-    style End fill:#ccffcc
-    style Skip fill:#f0f0f0
-    style SkipNoPR fill:#f0f0f0
+
+    subgraph UnitParallel["unit-tests.yml (3 parallel)"]
+        PUnitAndroid[Android]
+        PUnitCLI[CLI]
+        PUnitCommon[Common]
+    end
+
+    subgraph MockParallel["integration-tests-mock.yml (2 parallel)"]
+        PMockCLI[CLI]
+        PMockAndroid[Android]
+    end
+
+    PReal[integration-tests-real.yml]
+    PCov[coverage.yml<br/>--cov-fail-under=80]
+    PE2E[e2e-tests.yml<br/>exit-code-5 guard]
+
+    Start([Python pipeline start]) --> Independent
+    Start --> UnitParallel
+    UnitParallel --> MockParallel
+    MockParallel --> PReal
+    PReal --> PCov
+    PReal --> PE2E
 ```
 
-**Security hardening** (Issue #25):
-- **Injection fix**: PR title passed via `env:` block — not interpolated directly into shell string
-- **Pwn-request mitigation**: `context-check` has `contents: read` only (no write); `context-comment` has `pull-requests: write` but no checkout — privileges separated by design
+### Change Detection (`python/detect-changes.yml`)
 
-**Validation Rules**:
-- **Push-CI conclusion**: Must be `success` (gate 1 — structural, not checked at runtime)
-- **Open PR**: Must exist targeting `main` (gate 2 — `check-pr-exists` job)
-- **PR title**: `#123: type: description`
-- **KANBAN.md**: Must be updated if `app/src/` changed (mandatory)
+Uses `dorny/paths-filter@v3`:
+
+```yaml
+filters: |
+  scripts:
+    - 'scripts/**/*.py'
+    - 'scripts/pytest.ini'
+    - 'scripts/requirements-test.txt'
+```
+
+Output: `scripts=true/false` → consumed by `push-ci.yml` `if:` condition.
+
+### Unit Tests (`python/unit-tests.yml`)
+
+3 parallel jobs, `working-directory: scripts`, Python 3.12:
+
+| Job | Command |
+|-----|---------|
+| Android | `pytest tests/unit/android/ --no-cov -q` |
+| CLI | `pytest tests/unit/cli/ --no-cov -q` |
+| Common | `pytest tests/unit/common/ --no-cov -q` |
+
+### Lint Checks (`python/lint-checks.yml`)
+
+7 parallel jobs, all **blocking**:
+
+| Job | Tool | Command |
+|-----|------|---------|
+| Python Lint | `flake8` | `flake8 src/ tests/ --max-line-length=120 --statistics` |
+| Style Checks | `black` + `isort` | `black --check --line-length=120` + `isort --check --profile=black` |
+| Quality | `pylint` | `pylint src/ tests/ --fail-under=7.0 --disable=C0114,C0115,C0116` (+ `requirements-test.txt` installed) |
+| Type Checks | `mypy` | `mypy src/ --ignore-missing-imports --no-error-summary` |
+| Security | `bandit` | `bandit -r src/ -ll -q` |
+| Vulnerabilities | `pip-audit` | `pip-audit` (after installing `requirements-test.txt`) |
+| Dead Code | `vulture` | `vulture src/ tests/ --min-confidence=80` |
+
+**Note**: `pylint` installs `requirements-test.txt` in addition to `pylint` itself — prevents false `E0401 import-error` failures.
+
+### Integration Tests (`python/integration-tests-mock.yml` + `real`)
+
+Mock: 2 parallel jobs (`tests/integration_mock/cli/` + `tests/integration_mock/android/`)
+
+Real: 1 job (`tests/integration_real/`) — real subprocess, no `FakeSubprocessRunner`
+
+### Coverage (`python/coverage.yml`)
+
+Covers all 3 tiers:
+
+```bash
+python -m pytest tests/unit/ tests/integration_mock/ tests/integration_real/ \
+  --cov=src --cov-report=term-missing --cov-fail-under=80 -q
+```
+
+No XML parsing — `pytest-cov` built-in threshold enforcement.
+
+### E2E Tests (`python/e2e-tests.yml`)
+
+Exit-code-5 guard (no test collection = no tests yet, not a failure):
+
+```bash
+set +e
+python -m pytest tests/e2e/ --no-cov -q
+STATUS=$?
+set -e
+[ $STATUS -eq 5 ] && echo "No e2e tests yet" && exit 0 || exit $STATUS
+```
 
 ---
 
-#### 3. CD (`cd.yml`) - Release Pipeline
-
-**Triggers**:
-- `v*` tags (e.g., `v1.0.0`) → Stable release
-- `test-v*` tags (e.g., `test-v1.0.0`) → Pre-release
-
-**Pipeline Flow**:
-
-```mermaid
-graph TB
-    Start([Tag Created<br/>v* or test-v*])
-    
-    Start --> CheckTag{Tag Type?}
-    
-    CheckTag -->|v1.0.0| Stable[Stable Release]
-    CheckTag -->|test-v1.0.0| PreRelease[Pre-release]
-    
-    Stable --> UnitTests[Unit Tests Release]
-    PreRelease --> UnitTests
-    
-    UnitTests --> Build[Build Release APK<br/>Signed with keystore]
-    Build --> CreateRelease[Create GitHub Release]
-    
-    Stable --> SetStable[Set as Stable Release]
-    PreRelease --> SetPre[Set Prerelease Flag]
-    
-    SetStable --> CreateRelease
-    SetPre --> CreateRelease
-    
-    CreateRelease --> Upload[Upload Signed APK]
-    Upload --> End([Published ✓])
-    
-    style Start fill:#e1f5ff
-    style CheckTag fill:#fff4e1
-    style Stable fill:#ccffcc
-    style PreRelease fill:#fff4e1
-    style UnitTests fill:#f0ffe1
-    style Build fill:#ffe1f5
-    style CreateRelease fill:#ffe1e1
-    style End fill:#ccffcc
-```
-
-**Security**: Release keystore stored in GitHub Secrets (`RELEASE_KEYSTORE_BASE64`)
-
----
-
-## Code Coverage: Kover Migration (Issue #33)
+## Code Coverage: Kover
 
 ### Why Kover?
 
-**Before (Jacoco)**:
-- ❌ JVM-focused (not optimized for Kotlin)
-- ❌ `.exec` binary format (not human-readable)
-- ❌ Instrumentation overhead
-- ❌ HTML report parsing (fragile with grep)
-
-**After (Kover)**:
-- ✅ Kotlin-optimized (better coroutine coverage)
-- ✅ `.ic` binary format (Kover-specific)
-- ✅ XML format with `<counter type="LINE">` (robust parsing)
-- ✅ Gradle-native (no plugin conflicts)
-- ✅ Works seamlessly with Robolectric (241 unit tests)
+| | Jacoco (before) | Kover (after) |
+|--|----------------|---------------|
+| Language | JVM-focused | Kotlin-optimized |
+| Format | `.exec` binary | `.ic` binary |
+| XML parsing | Fragile HTML grep | Robust `<counter type="LINE">` |
+| Coroutine coverage | Poor | Accurate |
+| Gradle integration | Plugin conflicts | Native |
 
 ### Kover Configuration
 
-**File**: `app/build.gradle.kts` (lines 6, 184-217)
+**File**: `app/build.gradle.kts`
 
 ```kotlin
 plugins {
@@ -287,477 +423,112 @@ koverReport {
     filters {
         excludes {
             classes(
-                "**/R.class",              // Android generated
-                "**/BuildConfig.*",        // Build config
-                "**/*_Hilt*",              // Hilt DI
-                "**/*_Factory",            // Hilt factories
-                "**/ExtractionService",    // Android Service (tested via instrumented)
-                "**/ExtractionActivity",   // Android Activity (tested via instrumented)
-                "**/BaseArchiveExtractor"  // Base class (tested via implementations)
+                "**/R.class",
+                "**/BuildConfig.*",
+                "**/*_Hilt*",
+                "**/*_Factory",
+                "**/ExtractionService",    // Tested via instrumented
+                "**/ExtractionActivity",   // Tested via instrumented
+                "**/BaseArchiveExtractor"  // Tested via implementations
             )
         }
     }
-    
     verify {
-        rule {
-            minBound(80) // Minimum 80% coverage
-        }
+        rule { minBound(80) }
     }
 }
 ```
 
-### Kover in CI/CD Pipeline
-
-#### Data Flow Diagram
+### Coverage Data Flow
 
 ```mermaid
 sequenceDiagram
-    participant Tests as Unit Tests Job
-    participant Artifact as GitHub Artifacts
-    participant Coverage as Coverage Report Job
-    participant Gradle as Gradle Kover
-    participant Parser as Bash Parser
-    participant Badge as Coverage Badge
-    
-    Tests->>Tests: Run ./gradlew testDebugUnitTest
-    Tests->>Tests: Generate testDebugUnitTest.ic
-    Tests->>Artifact: Upload .ic file
-    
-    Note over Artifact: Artifact stored<br/>retention: 3 days
-    
-    Coverage->>Artifact: Download .ic file
-    Artifact->>Coverage: testDebugUnitTest.ic
-    
-    Coverage->>Gradle: koverXmlReportDebug
-    Gradle->>Coverage: reportDebug.xml
-    
-    Coverage->>Gradle: koverHtmlReportDebug
-    Gradle->>Coverage: HTML report
-    
-    Coverage->>Parser: Parse XML<br/><counter type="LINE">
-    Parser->>Parser: Calculate percentage
-    
-    alt Coverage < 80%
-        Parser->>Coverage: Fail build ❌
-    else Coverage ≥ 80%
-        Parser->>Badge: Update badge
-        Parser->>Coverage: Success ✓
+    participant Unit as unit-tests.yml (3 jobs)
+    participant Mock as integration-tests-mock.yml (2 jobs)
+    participant Real as integration-tests-real.yml (1 job)
+    participant Artifacts as GitHub Artifacts
+    participant Coverage as kotlin/coverage.yml
+    participant Kover as Gradle Kover
+
+    Unit->>Artifacts: Upload *-coverage-data (.ic files × 3)
+    Mock->>Artifacts: Upload *-coverage-data (.ic files × 2)
+    Real->>Artifacts: Upload integration-real-coverage-data (.ic × 1)
+
+    Coverage->>Artifacts: Download pattern "*-coverage-data" (merge-multiple: true)
+    Artifacts->>Coverage: 6 .ic files → app/build/kover/bin-reports/
+
+    Coverage->>Kover: koverXmlReportDebug + koverHtmlReportDebug
+    Kover->>Coverage: reportDebug.xml + HTML
+
+    Coverage->>Coverage: Parse XML: missed + covered → %
+    alt < 80%
+        Coverage->>Coverage: exit 1 ❌
+    else ≥ 80%
+        Coverage->>Coverage: Upload report + create badge ✓
     end
-    
-    Coverage->>Artifact: Upload XML + HTML
-    
-    style Tests fill:#e1f5ff
-    style Artifact fill:#fff4e1
-    style Coverage fill:#f0ffe1
-    style Gradle fill:#ffe1f5
-    style Parser fill:#ffe1e1
-    style Badge fill:#ccffcc
-```
-
-#### Step 1: Unit Tests Upload Coverage Data
-
-**File**: `.github/workflows/reusable-unit-tests.yml` (line 52-58)
-
-```yaml
-- name: Run unit tests
-  run: ./gradlew testDebugUnitTest
-
-- name: Upload coverage data
-  if: always()
-  uses: actions/upload-artifact@v4
-  with:
-    name: unit-test-coverage-data
-    path: app/build/kover/bin-reports/testDebugUnitTest.ic  # .ic format
-    retention-days: ${{ inputs.retention-days }}
-```
-
-**Key Change** (Issue #33):
-- Before: `app/build/jacoco/testDebugUnitTest.exec`
-- After: `app/build/kover/bin-reports/testDebugUnitTest.ic`
-
----
-
-#### Step 2: Coverage Report Job Downloads and Generates Reports
-
-**File**: `.github/workflows/push-ci.yml` (lines 142-186)
-
-```yaml
-coverage-report:
-  name: Generate Coverage Report
-  needs: unit-tests
-  runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
-
-    - name: Setup Gradle
-      uses: gradle/gradle-build-action@v2
-      with:
-        cache-read-only: false
-
-    - name: Download coverage data
-      uses: actions/download-artifact@v4
-      with:
-        name: unit-test-coverage-data
-        path: app/build/kover/bin-reports/  # Download .ic file
-
-    - name: Generate coverage reports
-      run: |
-        ./gradlew koverXmlReportDebug   # Generate XML
-        ./gradlew koverHtmlReportDebug  # Generate HTML
-
-    - name: Extract coverage percentage
-      id: coverage
-      run: |
-        XML_REPORT="app/build/reports/kover/reportDebug.xml"
-        
-        if [ ! -f "$XML_REPORT" ]; then
-          echo "Coverage report not found"
-          echo "percentage=0" >> $GITHUB_OUTPUT
-          exit 0
-        fi
-        
-        # Parse Kover XML format: <counter type="LINE" missed="X" covered="Y"/>
-        MISSED=$(grep '<counter type="LINE"' "$XML_REPORT" | sed -n 's/.*missed="\([0-9]*\)".*/\1/p')
-        COVERED=$(grep '<counter type="LINE"' "$XML_REPORT" | sed -n 's/.*covered="\([0-9]*\)".*/\1/p')
-        
-        TOTAL=$((MISSED + COVERED))
-        if [ "$TOTAL" -eq 0 ]; then
-          COVERAGE=0
-        else
-          COVERAGE=$((COVERED * 100 / TOTAL))
-        fi
-        
-        echo "Coverage: ${COVERAGE}%"
-        echo "percentage=$COVERAGE" >> $GITHUB_OUTPUT
-        
-        # Fail if coverage < 80%
-        if [ "$COVERAGE" -lt 80 ]; then
-          echo "ERROR: Coverage ${COVERAGE}% is below 80% threshold"
-          exit 1
-        fi
-        
-        echo "SUCCESS: Coverage ${COVERAGE}% meets 80% threshold"
-
-    - name: Upload coverage report
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-report
-        path: app/build/reports/kover/  # Upload XML + HTML
-        retention-days: 7
-```
-
-**Key Changes** (Issue #33):
-1. **Artifact path**: `jacoco/` → `kover/bin-reports/`
-2. **Gradle tasks**: `jacocoTestDebugUnitTestReport` → `koverXmlReportDebug` + `koverHtmlReportDebug`
-3. **Report format**: Jacoco HTML → Kover XML (robust parsing with `<counter>` elements)
-4. **Upload path**: `jacoco/` → `kover/`
-
----
-
-### Coverage Metrics (Post-Migration)
-
-| Metric | Value | Notes |
-|--------|-------|-------|
-| **Overall Coverage** | 30.4% → 89.9% | +59.5 points (Issue #33) |
-| **ResourcePathConverter** | 71% → 89.9% | +18.9 points (21 tests added) |
-| **Threshold** | ≥80% | Enforced in CI (fails build if below) |
-| **Excluded** | Android generated, Hilt DI, Activities/Services | Tested via instrumented tests |
-
-**Coverage Evolution**:
-
-```mermaid
-graph LR
-    Before[Before Issue #33<br/>Overall: 30.4%<br/>ResourcePathConverter: 71%]
-    After[After Issue #33<br/>Overall: 89.9%<br/>ResourcePathConverter: 89.9%]
-    
-    Before -->|+59.5 points| After
-    
-    style Before fill:#ffcccc
-    style After fill:#ccffcc
 ```
 
 ---
 
-## Instrumented Tests: Gradle Managed Devices (Issue #14)
+## Security Hardening
 
-### Why Gradle Managed Devices?
+### SHA-Pinned Actions
 
-**Before** (`reactivecircus/android-emulator-runner`):
-- ❌ Third-party GitHub Action wrapper
-- ❌ ~70% success rate (crashpad_handler hang, boot timeouts)
-- ❌ Complex AVD caching setup
-- ❌ Long boot times (~5-7 min first run)
+All third-party actions pinned to full commit SHA (prevents supply chain attacks from mutable tags):
 
-**After** (Gradle Managed Devices):
-- ✅ Official Google solution (built into Android Gradle Plugin 7.4+)
-- ✅ 100% success rate (no crashpad_handler issues)
-- ✅ Native Gradle caching (AVD snapshots)
-- ✅ Faster boot (~3-4 min with caching)
-- ✅ Better resource management
+| Action | Tag | SHA |
+|--------|-----|-----|
+| `reviewdog/action-setup` | v1.3.0 | `3f401fe1d58fe77e10d665ab713057375e39b887` |
+| `trufflesecurity/trufflehog` | v3 | `a05cf0859455b5b16317ed35d3cea0a7b1d3e3fa` |
+| `schneegans/dynamic-badges-action` | v1.7.0 | `e9a478b16159b4d31420099ba146cdc50f134483` |
 
-### Configuration
-
-**File**: `app/build.gradle.kts`
-
-```kotlin
-android {
-    testOptions {
-        managedDevices {
-            devices {
-                pixel4api30(ManagedVirtualDevice) {
-                    device = "Pixel 4"
-                    apiLevel = 30
-                    systemImageSource = "aosp"
-                }
-            }
-        }
-    }
-}
-```
-
-**Workflow**: `.github/workflows/reusable-instrumented-tests.yml`
-
-```yaml
-- name: Run instrumented tests
-  run: ./gradlew pixel4api30DebugAndroidTest
-```
-
-**Benefits**:
-- ✅ No third-party action (supply chain security)
-- ✅ Declarative configuration (version-controlled)
-- ✅ AVD snapshots cached automatically (faster reruns)
-
----
-
-## Code Quality Checks
-
-### ktlint - Kotlin Style Enforcement
-
-**Configuration**: `.editorconfig` (Android Kotlin style guide)
-
-**Workflow Integration**:
-```yaml
-- name: Run ktlint
-  run: ./gradlew ktlintCheck
-
-- name: Reviewdog ktlint
-  uses: reviewdog/action-setup@v1
-  with:
-    reporter: github-pr-review
-    fail_on_error: false  # Non-blocking warnings
-```
-
-**Output**: Checkstyle format → Reviewdog PR comments
-
----
-
-### Detekt - Kotlin Static Analysis
-
-**Configuration**: `detekt.yml`
-
-**Rules Enforced**:
-- ComplexMethod (≤15 cyclomatic complexity)
-- LongMethod (≤60 lines)
-- MagicNumber (no hardcoded values)
-- MaxLineLength (120 chars)
-- UnreachableCode, UnsafeCast (potential bugs)
-
-**Workflow Integration**:
-```yaml
-- name: Run detekt
-  run: ./gradlew detekt
-
-- name: Upload detekt report
-  uses: actions/upload-artifact@v4
-  with:
-    name: detekt-report
-    path: app/build/reports/detekt/
-```
-
----
-
-### Android Lint - Android-Specific Issues
-
-**Configuration**: `app/build.gradle.kts`
-
-```kotlin
-lint {
-    abortOnError = false  // Non-blocking
-    checkReleaseBuilds = true
-    xmlReport = true
-}
-```
-
-**Workflow Integration**:
-```yaml
-- name: Run Android Lint
-  run: ./gradlew lintDebug
-
-- name: Reviewdog Android Lint
-  uses: reviewdog/action-setup@v1
-  with:
-    reporter: github-pr-review
-    tool_name: androidlint
-```
-
-**Checks**:
-- Resource optimization suggestions
-- API usage validation
-- Accessibility checks
-- Security issues (UnspecifiedRegisterReceiverFlag, etc.)
-
----
-
-## Security & Compliance
+**Maintenance**: Add `package-ecosystem: github-actions` in Dependabot config to keep SHAs updated.
 
 ### OWASP Dependency Check
 
-**Purpose**: Vulnerability scanning for dependencies
+`./gradlew dependencyCheckAnalyze` — blocking, timeout 20 min.
 
-**Configuration**:
-```yaml
-- name: OWASP Dependency Check
-  run: |
-    ./gradlew dependencyCheckAnalyze
-    # CVSS threshold: 7.0 (High/Critical only)
-```
+Add `NVD_API_KEY` secret in Settings → Secrets → Actions to avoid NVD rate limits on first run (without key: very slow or fails with HTTP 403).
 
-**Suppressions**: `app/dependency-check-suppressions.xml`
+Suppressions: `app/dependency-check-suppressions.xml`
+
+### TruffleHog
+
+SHA-pinned, `--only-verified` (reduces false positives), `fetch-depth: 0` (full history scan).
 
 ---
 
-### TruffleHog - Secret Detection
+## CI/CD Metrics
 
-**Purpose**: Scans git history for exposed secrets
+### Test Counts
 
-**Configuration**:
-```yaml
-- name: TruffleHog
-  uses: trufflesecurity/trufflehog@v3
-  with:
-    path: ./
-    base: ${{ github.event.repository.default_branch }}
-    head: HEAD
-    extra_args: --only-verified
-```
+| Category | Count | Runner |
+|----------|-------|--------|
+| **Kotlin unit (JVM)** | 439 | JUnit + MockK |
+| **Kotlin integration mock** | 94 | JUnit + real files |
+| **Kotlin integration real** | 2 | JUnit, no mocks |
+| **Kotlin instrumented** | 68 | AndroidJUnit4 + Hilt |
+| **Kotlin total** | **603** | |
+| **Python unit** | ~290 | pytest |
+| **Python integration mock** | 39 | pytest + real FS |
+| **Python integration real** | 17 | pytest + real subprocess |
+| **Python total** | **~370** | 98.1% coverage |
 
-**Scope**: Verified secrets only (reduces false positives)
+### Pipeline Performance
 
----
+| Pipeline | Typical Duration | Bottleneck |
+|----------|-----------------|------------|
+| Push-CI (Kotlin) | ~20-25 min | Instrumented tests (~10 min) |
+| Push-CI (Python) | ~5 min | Integration real |
+| PR-CI | ~2 min | Security checks |
+| CD | ~5 min | Release build |
 
-### APK Size Check
+### Coverage
 
-**Purpose**: Monitors app bloat
-
-**Threshold**: 50MB
-
-**Configuration**:
-```yaml
-- name: Check APK size
-  run: |
-    APK_SIZE=$(stat -f%z app/build/outputs/apk/debug/*.apk)
-    MAX_SIZE=$((50 * 1024 * 1024))  # 50MB
-    
-    if [ "$APK_SIZE" -gt "$MAX_SIZE" ]; then
-      echo "ERROR: APK size ${APK_SIZE} exceeds ${MAX_SIZE}"
-      exit 1
-    fi
-```
-
----
-
-## Performance Optimizations
-
-### Parallel Execution (Issue #10)
-
-**Before vs After Comparison**:
-
-```mermaid
-graph TB
-    subgraph "Before (Sequential - ~20 min)"
-        B1[Lint Checks<br/>~3 min]
-        B2[Unit Tests<br/>~3 min]
-        B3[Build APK<br/>~2 min]
-        B4[UI Tests<br/>~10 min]
-        
-        B1 --> B2 --> B3 --> B4
-    end
-    
-    subgraph "After (Parallel - ~14 min)"
-        A1[Lint Checks<br/>~3 min]
-        A2[Unit Tests<br/>~3 min]
-        A3[Build APK<br/>~2 min]
-        A4[UI Tests<br/>~10 min]
-        
-        A1 --> A3
-        A2 --> A3
-        A3 --> A4
-    end
-    
-    style B1 fill:#ffcccc
-    style B2 fill:#ffcccc
-    style B3 fill:#ffcccc
-    style B4 fill:#ffcccc
-    style A1 fill:#ccffcc
-    style A2 fill:#ccffcc
-    style A3 fill:#ccffcc
-    style A4 fill:#ccffcc
-```
-
-**Performance Gain**: ~30% faster (20 min → 14 min)
-
-**Configuration**: `needs: [lint-checks, unit-tests]` (both must complete)
-
----
-
-### Concurrency Control (Issue #33)
-
-**Purpose**: Cancel in-progress runs when new push arrives (same branch)
-
-**Configuration** (`.github/workflows/push-ci.yml`):
-```yaml
-concurrency:
-  group: push-ci-${{ github.ref }}
-  cancel-in-progress: true
-```
-
-**Benefits**:
-- ✅ Saves CI minutes (no wasted runs)
-- ✅ Faster feedback (only latest run matters)
-- ✅ Reduces queue time
-
----
-
-### Gradle Caching
-
-**Configuration**:
-```yaml
-- name: Setup Gradle
-  uses: gradle/gradle-build-action@v2
-  with:
-    cache-read-only: false
-
-- name: Cache Gradle dependencies
-  uses: actions/cache@v4
-  with:
-    path: |
-      ~/.gradle/caches
-      ~/.gradle/wrapper
-    key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-    restore-keys: |
-      ${{ runner.os }}-gradle-
-```
-
-**Benefits**:
-- ✅ ~40% faster builds (dependency download eliminated)
-- ✅ AVD snapshots cached (Gradle Managed Devices)
+| Language | Tool | Threshold | Current |
+|----------|------|-----------|---------|
+| Kotlin | Kover | ≥80% | ~89.9% |
+| Python | pytest-cov | ≥80% | ~98.1% |
 
 ---
 
@@ -765,234 +536,71 @@ concurrency:
 
 ### Coverage Report Not Found
 
-**Error**:
-```
-Unable to download artifact(s): Artifact not found for name: unit-test-coverage-data
-```
+**Error**: `Artifact not found for name: *-coverage-data`
 
-**Root Cause**: Mismatch between build tool and CI configuration
+**Causes**:
+- A unit or integration job failed before uploading artifact
+- `coverage.yml` has `continue-on-error: true` on download — will then fail with "No coverage data (0 lines)"
 
-**Solution**:
-1. Verify Gradle plugin: `id("org.jetbrains.kotlinx.kover")` in `app/build.gradle.kts`
-2. Check artifact path:
-   - Upload: `app/build/kover/bin-reports/testDebugUnitTest.ic`
-   - Download: `app/build/kover/bin-reports/`
-3. Verify Gradle tasks: `koverXmlReportDebug`, `koverHtmlReportDebug` (not `jacoco*`)
+**Solution**: Check which test job failed first in the Kotlin pipeline.
 
-**Reference**: Issue #33 - Kover migration
+### OWASP Fails with HTTP 403
 
----
+**Error**: `org.owasp.dependencycheck.exception.ExceptionCollection: Failed to connect to the NVD API`
 
-### UI Tests Timeout
+**Solution**: Add `NVD_API_KEY` secret (free registration at https://nvd.nist.gov/developers/request-an-api-key).
 
-**Error**:
-```
-TimeoutCancellationException: Timed out waiting for 30000 ms
-```
+### Python Lint False Positives
 
-**Root Cause**: Race condition in test (event collection timing)
+**vulture**: `--min-confidence=80` may flag callback methods or dynamically-used code. Add to `.vulture_whitelist.py` in `scripts/`.
 
-**Example** (flaky test pattern):
-```kotlin
-// ❌ Bad - Race condition
-val processedFiles = mutableSetOf<String>()
-val collectionJob = launch {
-    eventBus.progressState.collect { event ->
-        processedFiles.add(event.fileName)
-    }
-}
-context.startService(intent)
+**pylint**: Score < 7.0 causes failure. Check specific error codes and add to `--disable=` as needed. `requirements-test.txt` must include all project deps.
 
-withTimeout(30000) {
-    while (processedFiles.size < 2) {
-        delay(100)  // Polling - can miss events!
-    }
-}
-```
+### Instrumented Tests Timeout
 
-**Solution**: Use Flow operators instead of polling:
-```kotlin
-// ✅ Good - Proper Flow collection
-val files = eventBus.progressState
-    .filterNotNull()
-    .map { it.fileName }
-    .take(2)
-    .toSet()
-```
+**Error**: Emulator boot timeout (600s exceeded)
 
----
+**Investigation**:
+- Check KVM enablement step
+- Check `pixel4api30Setup` (system image download)
+- AVD data partition: 8GB set in `config.ini`
 
-### Push-CI and PR-CI Running Simultaneously
+### Push-CI and PR-CI Timing
 
-**Error**: PR-CI starts before Push-CI completes, causing false failures
-
-**Solution** (Issue #23): PR-CI polls Push-CI status
-
-**Race Condition Visualization**:
-
-```mermaid
-sequenceDiagram
-    participant Dev as Developer
-    participant Push as Push-CI
-    participant PR as PR-CI
-    
-    Note over Dev,PR: BEFORE (Race Condition)
-    Dev->>Push: Push to feature branch
-    Dev->>PR: Create Pull Request
-    
-    par Push-CI and PR-CI run simultaneously
-        Push->>Push: Running tests...
-        PR->>Push: Check status
-        Push->>PR: "in_progress"
-        PR->>PR: ❌ False failure
-    end
-    
-    Note over Dev,PR: AFTER (Sequential with Polling)
-    Dev->>Push: Push to feature branch
-    Dev->>PR: Create Pull Request
-    
-    PR->>Push: Check status (poll)
-    Push->>PR: "in_progress"
-    PR->>PR: Wait 30s...
-    
-    PR->>Push: Check status (poll)
-    Push->>PR: "in_progress"
-    PR->>PR: Wait 30s...
-    
-    Push->>Push: ✓ Completed
-    PR->>Push: Check status (poll)
-    Push->>PR: "completed"
-    PR->>PR: ✓ Start validation
-```
-
-**Configuration** (`.github/workflows/pr-ci.yml`):
-```yaml
-- name: Wait for Push-CI
-  run: |
-    MAX_WAIT=1800  # 30 minutes
-    ELAPSED=0
-    
-    while [ $ELAPSED -lt $MAX_WAIT ]; do
-      STATUS=$(gh run list --workflow=push-ci.yml --json status | jq -r '.[0].status')
-      
-      if [ "$STATUS" == "completed" ]; then
-        break
-      fi
-      
-      sleep 30
-      ELAPSED=$((ELAPSED + 30))
-    done
-```
-
-**Benefits**:
-- ✅ Sequential execution (Push-CI → PR-CI)
-- ✅ No false failures from 'in_progress' status
-- ✅ Max wait: 30 minutes (timeout protection)
-
----
-
-### Gradle Build Cache Corruption
-
-**Error**:
-```
-Execution failed for task ':app:compileDebugKotlin'
-> Compilation error. See log for more details
-```
-
-**Solution**: Clear cache and retry
-```yaml
-- name: Clean Gradle cache
-  run: |
-    rm -rf ~/.gradle/caches/
-    ./gradlew clean
-    ./gradlew assembleDebug
-```
-
----
-
-## CI/CD Metrics
-
-### Pipeline Performance (Post-Optimization)
-
-| Pipeline | Duration | Success Rate | Bottleneck |
-|----------|----------|--------------|------------|
-| Push-CI | ~14 min | 95% | UI Tests (8-10 min) |
-| PR-CI | ~2 min | 98% | Security Checks (3 min) |
-| CD | ~5 min | 100% | Release Build (3 min) |
-
-**Pipeline Duration Breakdown**:
-
-```mermaid
-pie title Push-CI Duration Breakdown (14 min)
-    "UI Tests (GMD)" : 10
-    "Lint Checks" : 3
-    "Unit Tests" : 3
-    "Build APK" : 2
-    "Coverage Report" : 1
-```
-
-### Test Execution
-
-| Test Type | Count | Duration | Success Rate |
-|-----------|-------|----------|--------------|
-| Unit Tests | 241 | ~2-3 min | 100% |
-| Instrumented Tests | 84 | ~8-10 min | 100% (GMD) |
-
-**Test Distribution**:
-
-```mermaid
-pie title Test Count Distribution (325 total)
-    "Unit Tests" : 241
-    "Instrumented Tests" : 84
-```
-
-### Coverage (Post-Issue #33)
-
-| Component | Before | After | Change |
-|-----------|--------|-------|--------|
-| Overall | 30.4% | 89.9% | +59.5 points |
-| ResourcePathConverter | 71% | 89.9% | +18.9 points |
-
-**Coverage Trend**:
-
-```mermaid
-xychart-beta
-    title "Code Coverage Evolution"
-    x-axis ["Before #33", "After #33"]
-    y-axis "Coverage %" 0 --> 100
-    bar [30.4, 89.9]
-    line [80, 80]
-```
+PR-CI uses `workflow_run` trigger — starts only after Push-CI completes. No polling needed.
 
 ---
 
 ## Maintenance
 
-### Adding New Workflow
+### Adding a New Kotlin Test Stage
 
-1. Create reusable workflow in `.github/workflows/reusable-*.yml`
-2. Define inputs (retention-days, variant, etc.)
-3. Call from `push-ci.yml` or `pr-ci.yml` with `uses:`
-4. Test on feature branch before merging
+1. Create `kotlin/integration-tests-<name>.yml` with `on: workflow_call`
+2. Upload `<name>-coverage-data` artifact (pattern `*-coverage-data` auto-includes it)
+3. Add job to `kotlin/kotlin.yml` with correct `needs:` entry
+4. No changes needed to `push-ci.yml` or `coverage.yml`
 
-### Updating Dependencies
+### Adding a New Python Lint Check
 
-**Gradle**:
+1. Add new job to `python/lint-checks.yml`
+2. `pip install <tool>` in the job's steps
+3. No changes needed to `python/python.yml`
+
+### Updating Pinned Action SHAs
+
 ```bash
-./gradlew dependencyUpdates
-```
+# Get SHA for a specific tag
+gh api repos/<owner>/<repo>/git/ref/tags/<tag> --jq '.object.sha'
 
-**GitHub Actions**:
-```bash
-# Check for action updates
-gh api repos/:owner/:repo/actions/workflows --jq '.workflows[].path' | xargs -I {} cat {}
+# Example
+gh api repos/trufflesecurity/trufflehog/git/ref/tags/v3.88.1 --jq '.object.sha'
 ```
 
 ### Rotating Secrets
 
-1. Update secret in GitHub Settings > Secrets and variables > Actions
-2. Test with CD pipeline (`test-v*` tag)
-3. Verify release APK signs correctly
+1. Update in Settings → Secrets and variables → Actions
+2. Test with CD pipeline (`test-v*` tag) for release secrets
+3. For `NVD_API_KEY`: no testing needed (OWASP will just be faster)
 
 ---
 
@@ -1000,15 +608,19 @@ gh api repos/:owner/:repo/actions/workflows --jq '.workflows[].path' | xargs -I 
 
 ### Official Documentation
 
+- [GitHub Actions Workflow Syntax](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions)
+- [Reusable Workflows](https://docs.github.com/en/actions/using-workflows/reusing-workflows)
 - [Gradle Managed Devices](https://developer.android.com/studio/test/gradle-managed-devices)
 - [Kover Gradle Plugin](https://github.com/Kotlin/kotlinx-kover)
-- [GitHub Actions Workflow Syntax](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions)
+- [dorny/paths-filter](https://github.com/dorny/paths-filter)
 
 ### Related Issues
 
+- [#39](https://github.com/TomasGC/otter/issues/39) - Python Scripts OOP refactor + 4-tier test suite
 - [#33](https://github.com/TomasGC/otter/issues/33) - CI/CD Pipeline Optimization and Kover Migration
+- [#25](https://github.com/TomasGC/otter/issues/25) - Archive browsing (PR-CI security hardening)
 - [#23](https://github.com/TomasGC/otter/issues/23) - Fix CI to Run After Feature-CI
-- [#14](https://github.com/TomasGC/otter/issues/14) - Add 7-Zip Extraction Support (GMD migration)
+- [#14](https://github.com/TomasGC/otter/issues/14) - 7-Zip support (GMD migration)
 - [#10](https://github.com/TomasGC/otter/issues/10) - Restructure GitHub Actions Workflows
 
 ---

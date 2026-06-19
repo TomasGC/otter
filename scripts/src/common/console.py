@@ -3,9 +3,8 @@
 
 import io
 import sys
-from pathlib import Path
 from datetime import datetime
-
+from pathlib import Path
 
 # Global log file handle
 _log_file = None

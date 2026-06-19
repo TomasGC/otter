@@ -110,7 +110,6 @@ class NotificationHelper(
     fun createSuccessNotification(
         fileName: String,
         extractedFilesCount: Int,
-        outputPath: String
     ): Notification {
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle("Extraction Complete")

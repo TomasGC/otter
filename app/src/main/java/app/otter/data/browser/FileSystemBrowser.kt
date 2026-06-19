@@ -1,6 +1,5 @@
 package app.otter.data.browser
 
-import android.content.Context
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.ResourcePath
@@ -22,7 +21,6 @@ import javax.inject.Inject
  * This class performs file I/O operations on Dispatchers.IO for thread-safety.
  */
 class FileSystemBrowser @Inject constructor(
-    private val context: Context,
     private val mimeTypeUtil: MimeTypeUtil
 ) {
 

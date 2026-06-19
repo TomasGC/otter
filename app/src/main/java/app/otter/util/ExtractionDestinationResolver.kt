@@ -126,134 +126,68 @@ class ExtractionDestinationResolver @Inject constructor(
         return File(downloadFolder, folderName)
     }
 
-    /**
-     * Extracts real file path from a content URI.
-     *
-     * @param uri The content URI
-     * @return The real path, or null if cannot be determined
-     */
-    /**
-     * Gets the parent directory path from MediaStore content URI.
-     * Works for Samsung My Files which uses content://media/external/file/XXX URIs.
-     *
-     * @param uri The MediaStore content URI
-     * @return The parent directory path, or null if cannot be determined
-     */
-    fun getPathFromMediaStore(uri: Uri): String? {
-        return try {
-            Timber.tag(TAG).d("Querying MediaStore for URI: $uri")
-
-            context.contentResolver.query(
-                uri,
-                arrayOf(android.provider.MediaStore.MediaColumns.DATA),
-                null,
-                null,
-                null
-            )?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val columnIndex = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.DATA)
-                    if (columnIndex >= 0) {
-                        val filePath = cursor.getString(columnIndex)
-                        Timber.tag(TAG).d("MediaStore file path: $filePath")
-
-                        if (filePath != null) {
-                            val parentPath = File(filePath).parent
-                            Timber.tag(TAG).d("MediaStore parent path: $parentPath")
-                            return parentPath
-                        }
-                    }
-                }
-            }
-
-            Timber.tag(TAG).d("MediaStore query returned null")
-            null
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "Error querying MediaStore")
-            null
-        }
+    fun getPathFromMediaStore(uri: Uri): String? = try {
+        Timber.tag(TAG).d("Querying MediaStore for URI: $uri")
+        val filePath = queryDataColumn(uri) ?: return null
+        File(filePath).parent
+    } catch (e: Exception) {
+        Timber.tag(TAG).e(e, "Error querying MediaStore")
+        null
     }
 
-    /**
-     * Builds a file path by walking up the DocumentFile hierarchy.
-     * This works even when getRealPathFromUri() fails (e.g., Samsung My Files).
-     *
-     * @param documentFile The DocumentFile to get the path for
-     * @return The real path, or null if cannot be determined
-     */
+    private fun queryDataColumn(uri: Uri): String? =
+        context.contentResolver.query(
+            uri, arrayOf(android.provider.MediaStore.MediaColumns.DATA), null, null, null
+        )?.use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            val idx = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.DATA)
+            if (idx < 0) return@use null
+            cursor.getString(idx)
+        }
+
     fun getPathFromDocumentHierarchy(documentFile: DocumentFile?): String? {
         if (documentFile == null) return null
-
-        try {
+        return try {
             val uri = documentFile.uri
             Timber.tag(TAG).d("Building path from hierarchy for URI: $uri")
-
-            // Try standard document URI parsing
-            if (DocumentsContract.isDocumentUri(context, uri)) {
-                val docId = DocumentsContract.getDocumentId(uri)
-                Timber.tag(TAG).d("Document ID: $docId")
-
-                // Handle different authorities
-                when (uri.authority) {
-                    EXTERNAL_STORAGE_AUTHORITY -> {
-                        // com.android.externalstorage.documents
-                        val split = docId.split(":")
-                        if (split.size >= 2) {
-                            val type = split[0]
-                            val path = split[1]
-
-                            if ("primary".equals(type, ignoreCase = true)) {
-                                val realPath = "${android.os.Environment.getExternalStorageDirectory()}/$path"
-                                Timber.tag(TAG).d("Resolved from external storage: $realPath")
-                                return realPath
-                            }
-                        }
-                    }
-                    "com.samsung.android.app.myfiles.providers.FileProvider",
-                    "com.sec.android.app.myfiles.FileProvider" -> {
-                        // Samsung My Files specific handling
-                        // Extract path from docId which often contains the full path
-                        val path = docId.substringAfter(":", "")
-                        if (path.isNotEmpty() && path.startsWith("/")) {
-                            Timber.tag(TAG).d("Resolved Samsung My Files path: $path")
-                            return path
-                        }
-
-                        // Try to extract from URI path
-                        val uriPath = uri.path
-                        if (uriPath != null && uriPath.contains("/storage/emulated/")) {
-                            val extractedPath = uriPath.substringAfter("/storage/emulated/")
-                            val finalPath = "/storage/emulated/$extractedPath"
-                            Timber.tag(TAG).d("Extracted Samsung path from URI: $finalPath")
-                            return finalPath
-                        }
-                    }
-                    DOWNLOADS_PROVIDER_AUTHORITY -> {
-                        // Downloads provider
-                        context.contentResolver.query(uri, arrayOf("_data"), null, null, null)?.use { cursor ->
-                            if (cursor.moveToFirst()) {
-                                val columnIndex = cursor.getColumnIndex("_data")
-                                if (columnIndex >= 0) {
-                                    val path = cursor.getString(columnIndex)
-                                    if (path != null) {
-                                        Timber.tag(TAG).d("Resolved downloads path: $path")
-                                        return path
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    else -> {
-                        Timber.tag(TAG).d("Unknown authority: ${uri.authority}")
-                    }
-                }
-            }
-
-            return null
+            if (!DocumentsContract.isDocumentUri(context, uri)) return null
+            val docId = DocumentsContract.getDocumentId(uri)
+            resolveDocumentPath(uri, docId)
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Error building path from document hierarchy")
-            return null
+            null
         }
     }
+
+    private fun resolveDocumentPath(uri: Uri, docId: String): String? = when (uri.authority) {
+        EXTERNAL_STORAGE_AUTHORITY -> resolveExternalStorageDocPath(docId)
+        "com.samsung.android.app.myfiles.providers.FileProvider",
+        "com.sec.android.app.myfiles.FileProvider" -> resolveSamsungDocPath(uri, docId)
+        DOWNLOADS_PROVIDER_AUTHORITY -> resolveDownloadsDocPath(uri)
+        else -> null
+    }
+
+    private fun resolveExternalStorageDocPath(docId: String): String? {
+        val split = docId.split(":")
+        if (split.size < 2 || !split[0].equals("primary", ignoreCase = true)) return null
+        return "${android.os.Environment.getExternalStorageDirectory()}/${split[1]}"
+    }
+
+    private fun resolveSamsungDocPath(uri: Uri, docId: String): String? {
+        val path = docId.substringAfter(":", "")
+        if (path.isNotEmpty() && path.startsWith("/")) return path
+        val uriPath = uri.path ?: return null
+        if (!uriPath.contains("/storage/emulated/")) return null
+        return "/storage/emulated/${uriPath.substringAfter("/storage/emulated/")}"
+    }
+
+    private fun resolveDownloadsDocPath(uri: Uri): String? =
+        context.contentResolver.query(uri, arrayOf("_data"), null, null, null)?.use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            val idx = cursor.getColumnIndex("_data")
+            if (idx < 0) return@use null
+            cursor.getString(idx)
+        }
 
     fun getRealPathFromUri(uri: Uri): String? {
         return try {

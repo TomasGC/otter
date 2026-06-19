@@ -102,7 +102,7 @@ class RpaInspector(private val rpaFile: File) : ArchiveInspector {
 
     private fun checkNotClosed() {
         if (closed) {
-            throw IllegalStateException("RpaInspector is closed")
+            error("RpaInspector is closed")
         }
     }
 
@@ -139,16 +139,12 @@ class RpaInspector(private val rpaFile: File) : ArchiveInspector {
         rpaFile.inputStream().use { input ->
             val headerBytes = ByteArray(HEADER_SIZE)
             val bytesRead = input.read(headerBytes)
-            if (bytesRead < HEADER_SIZE) {
-                throw IllegalArgumentException("Invalid RPA header: file too small")
-            }
+            require(bytesRead >= HEADER_SIZE) { "Invalid RPA header: file too small" }
 
             val headerString = String(headerBytes, Charsets.US_ASCII)
 
             // Check magic "RPA-3.0 "
-            if (!headerString.startsWith(MAGIC_RPA3)) {
-                throw IllegalArgumentException("Not an RPA-3.0 archive")
-            }
+            require(headerString.startsWith(MAGIC_RPA3)) { "Not an RPA-3.0 archive" }
 
             // Parse index offset (hex)
             val offsetHex = headerString.substring(8, 24).trim()

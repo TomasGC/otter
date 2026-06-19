@@ -1,0 +1,28 @@
+name: Python / Detect Changes
+
+on:
+  workflow_call:
+    outputs:
+      scripts:
+        description: "Whether Python scripts changed"
+        value: ${{ jobs.detect.outputs.scripts }}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  detect:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      scripts: ${{ steps.filter.outputs.scripts }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            scripts:
+              - 'scripts/**/*.py'
+              - 'scripts/pytest.ini'
+              - 'scripts/requirements-test.txt'

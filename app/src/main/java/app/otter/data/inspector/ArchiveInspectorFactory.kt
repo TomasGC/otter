@@ -10,114 +10,55 @@ import javax.inject.Singleton
 @Singleton
 class ArchiveInspectorFactory @Inject constructor() {
 
-    /**
-     * Creates a new ArchiveInspector instance for the given file.
-     * Detection is performed each time this method is called.
-     *
-     * @param file The archive file to inspect
-     * @return Result containing the inspector or an error
-     */
+    companion object {
+        private val ZIP_MAGIC = byteArrayOf(0x50, 0x4B, 0x03, 0x04)
+        private val RAR_MAGIC = byteArrayOf(0x52, 0x61, 0x72, 0x21, 0x1A, 0x07)
+        private val SEVEN_ZIP_MAGIC = byteArrayOf(0x37, 0x7A, 0xBC.toByte(), 0xAF.toByte(), 0x27, 0x1C)
+    }
+
     fun create(file: File): Result<ArchiveInspector> {
         return runCatching {
-            // Validate file
-            when {
-                !file.exists() -> throw IllegalArgumentException("File does not exist: ${file.absolutePath}")
-                !file.isFile -> throw IllegalArgumentException("Path is not a file: ${file.absolutePath}")
-            }
-
-            // Detect format
-            val archiveType = detectFormat(file)
-
-            // Create inspector based on detected type
-            when (archiveType) {
-                ArchiveType.ZIP -> ZipInspector(file)
-                ArchiveType.RPA -> RpaInspector(file)
-                ArchiveType.RAR -> throw UnsupportedOperationException("RAR format is not yet supported")
-                ArchiveType.SEVEN_ZIP -> throw UnsupportedOperationException("SEVEN_ZIP format is not yet supported")
-                ArchiveType.TAR -> throw UnsupportedOperationException("TAR format is not yet supported")
-                ArchiveType.TAR_GZ -> throw UnsupportedOperationException("TAR_GZ format is not yet supported")
-                ArchiveType.TAR_BZ2 -> throw UnsupportedOperationException("TAR_BZ2 format is not yet supported")
-            }
+            require(file.exists()) { "File does not exist: ${file.absolutePath}" }
+            require(file.isFile) { "Path is not a file: ${file.absolutePath}" }
+            createInspectorForType(detectFormat(file), file)
         }
     }
 
-    /**
-     * Detects the archive format by checking file extension first,
-     * then falling back to magic bytes if extension is ambiguous.
-     */
+    private fun createInspectorForType(archiveType: ArchiveType, file: File): ArchiveInspector = when (archiveType) {
+        ArchiveType.ZIP -> ZipInspector(file)
+        ArchiveType.RPA -> RpaInspector(file)
+        else -> throw UnsupportedOperationException("${archiveType.name} format is not yet supported for inspection")
+    }
+
     private fun detectFormat(file: File): ArchiveType {
-        // Try extension first
         val typeByExtension = detectByExtension(file.name)
 
-        // If extension detection succeeds and matches ZIP, verify with magic bytes
         if (typeByExtension == ArchiveType.ZIP) {
-            // Verify ZIP magic bytes (PK\x03\x04)
             val magicBytes = readMagicBytes(file, 4)
-            if (magicBytes.size >= 4 &&
-                magicBytes[0] == 0x50.toByte() &&
-                magicBytes[1] == 0x4B.toByte() &&
-                magicBytes[2] == 0x03.toByte() &&
-                magicBytes[3] == 0x04.toByte()
-            ) {
-                return ArchiveType.ZIP
-            }
+            if (hasMatchingMagic(magicBytes, ZIP_MAGIC)) return ArchiveType.ZIP
         }
 
-        // If no extension match, try magic bytes
         if (typeByExtension == null) {
-            val typeByMagic = detectByMagicBytes(file)
-            if (typeByMagic != null) {
-                return typeByMagic
-            }
+            detectByMagicBytes(file)?.let { return it }
         }
 
-        // If extension detection succeeded (but not ZIP), return it
-        if (typeByExtension != null) {
-            return typeByExtension
-        }
-
-        // Unknown format
-        throw IllegalArgumentException(
+        return typeByExtension ?: throw IllegalArgumentException(
             "Could not detect archive format for file: ${file.name}"
         )
     }
 
-    /**
-     * Detects archive format by reading magic bytes from the file header.
-     */
     private fun detectByMagicBytes(file: File): ArchiveType? {
         val magicBytes = readMagicBytes(file, 8)
-
         return when {
-            // ZIP: PK\x03\x04
-            magicBytes.size >= 4 &&
-                    magicBytes[0] == 0x50.toByte() &&
-                    magicBytes[1] == 0x4B.toByte() &&
-                    magicBytes[2] == 0x03.toByte() &&
-                    magicBytes[3] == 0x04.toByte() -> ArchiveType.ZIP
-
-            // RAR: Rar!\x1A\x07
-            magicBytes.size >= 6 &&
-                    magicBytes[0] == 0x52.toByte() &&
-                    magicBytes[1] == 0x61.toByte() &&
-                    magicBytes[2] == 0x72.toByte() &&
-                    magicBytes[3] == 0x21.toByte() &&
-                    magicBytes[4] == 0x1A.toByte() &&
-                    magicBytes[5] == 0x07.toByte() -> ArchiveType.RAR
-
-            // 7z: 7z\xBC\xAF\x27\x1C
-            magicBytes.size >= 6 &&
-                    magicBytes[0] == 0x37.toByte() &&
-                    magicBytes[1] == 0x7A.toByte() &&
-                    magicBytes[2] == 0xBC.toByte() &&
-                    magicBytes[3] == 0xAF.toByte() &&
-                    magicBytes[4] == 0x27.toByte() &&
-                    magicBytes[5] == 0x1C.toByte() -> ArchiveType.SEVEN_ZIP
-
-            // Unknown
+            hasMatchingMagic(magicBytes, ZIP_MAGIC) -> ArchiveType.ZIP
+            hasMatchingMagic(magicBytes, RAR_MAGIC) -> ArchiveType.RAR
+            hasMatchingMagic(magicBytes, SEVEN_ZIP_MAGIC) -> ArchiveType.SEVEN_ZIP
             else -> null
         }
     }
+
+    private fun hasMatchingMagic(bytes: ByteArray, magic: ByteArray): Boolean =
+        bytes.size >= magic.size && bytes.copyOfRange(0, magic.size).contentEquals(magic)
 
     /**
      * Detects archive format by file extension.

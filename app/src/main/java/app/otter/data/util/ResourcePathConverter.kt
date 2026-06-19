@@ -107,106 +107,68 @@ object ResourcePathConverter {
         return File(path)
     }
 
-    /**
-     * Resolves a content:// URI to its real file system path.
-     *
-     * Handles various Android content providers:
-     * - MediaStore (images, videos, audio)
-     * - ExternalStorageProvider (primary storage, SD cards)
-     * - DownloadsProvider (downloads folder)
-     *
-     * @param context Android application context
-     * @param uri The content URI to resolve
-     * @return Real file system path, or null if resolution fails
-     */
-    fun getRealPathFromContentUri(context: Context, uri: Uri): String? {
-        try {
-            // Method 1: Query DATA column (works for some providers)
-            context.contentResolver.query(
-                uri,
-                arrayOf(MediaStore.MediaColumns.DATA),
-                null,
-                null,
-                null
-            )?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val columnIndex = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
-                    if (columnIndex >= 0) {
-                        val path = cursor.getString(columnIndex)
-                        if (!path.isNullOrBlank() && File(path).exists()) {
-                            return path
-                        }
-                    }
-                }
-            }
+    fun getRealPathFromContentUri(context: Context, uri: Uri): String? = try {
+        getDataColumnPath(context, uri)
+            ?: resolveSamsungPath(uri)
+            ?: resolveDocumentUri(context, uri)
+    } catch (e: Exception) {
+        Timber.e(e, "Failed to resolve real path from content URI")
+        null
+    }
 
-            // Method 2: Samsung My Files FileProvider (check authority first, not DocumentUri)
-            if (uri.authority == "com.sec.android.app.myfiles.FileProvider") {
-                try {
-                    // Samsung URI format: content://com.sec.android.app.myfiles.FileProvider/device_storage/0/Download/file.zip
-                    // Extract path directly from URI (not using getDocumentId which throws exception)
-                    val uriPath = uri.path ?: uri.encodedPath ?: ""
-                    Timber.d("Samsung My Files URI path: $uriPath")
-
-                    // Remove leading slash: /device_storage/0/Download/file.zip -> device_storage/0/Download/file.zip
-                    val cleanPath = uriPath.removePrefix("/")
-                    val pathComponents = cleanPath.split("/")
-
-                    if (pathComponents.size >= 3 && pathComponents[0] == "device_storage") {
-                        // Transform: device_storage/0/Download/file.zip -> /storage/emulated/0/Download/file.zip
-                        val relativePath = pathComponents.drop(2).joinToString("/")
-                        val realPath = "${android.os.Environment.getExternalStorageDirectory()}/$relativePath"
-                        Timber.d("Samsung My Files transformed: $cleanPath -> $realPath")
-                        return realPath
-                    }
-                } catch (e: Exception) {
-                    Timber.e(e, "Failed to parse Samsung My Files URI")
-                }
-            }
-
-            // Method 3: For DocumentFile URIs (Documents Provider)
-            if (DocumentsContract.isDocumentUri(context, uri)) {
-                val docId = DocumentsContract.getDocumentId(uri)
-
-                // ExternalStorageProvider
-                if (uri.authority == "com.android.externalstorage.documents") {
-                    val split = docId.split(":")
-                    val type = split[0]
-                    if ("primary".equals(type, ignoreCase = true)) {
-                        return "${android.os.Environment.getExternalStorageDirectory()}/${split[1]}"
-                    }
-                }
-
-                // DownloadsProvider
-                if (uri.authority == "com.android.providers.downloads.documents") {
-                    val contentUri = ContentUris.withAppendedId(
-                        Uri.parse("content://downloads/public_downloads"),
-                        docId.toLongOrNull() ?: return null
-                    )
-                    return getRealPathFromContentUri(context, contentUri)
-                }
-
-                // MediaProvider
-                if (uri.authority == "com.android.providers.media.documents") {
-                    val split = docId.split(":")
-                    val type = split[0]
-
-                    val contentUri = when (type) {
-                        "image" -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-                        "video" -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-                        "audio" -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-                        else -> return null
-                    }
-
-                    val selection = "_id=?"
-                    val selectionArgs = arrayOf(split[1])
-                    return getRealPathFromContentUri(context, contentUri)
-                }
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to resolve real path from content URI")
+    private fun getDataColumnPath(context: Context, uri: Uri): String? =
+        context.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DATA), null, null, null)?.use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            val idx = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+            if (idx < 0) return@use null
+            val path = cursor.getString(idx)
+            if (!path.isNullOrBlank() && File(path).exists()) path else null
         }
 
-        return null
+    private fun resolveSamsungPath(uri: Uri): String? {
+        if (uri.authority != "com.sec.android.app.myfiles.FileProvider") return null
+        return try {
+            val components = (uri.path ?: uri.encodedPath ?: "").removePrefix("/").split("/")
+            if (components.size >= 3 && components[0] == "device_storage") {
+                "${android.os.Environment.getExternalStorageDirectory()}/${components.drop(2).joinToString("/")}"
+            } else null
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to parse Samsung My Files URI")
+            null
+        }
+    }
+
+    private fun resolveDocumentUri(context: Context, uri: Uri): String? {
+        if (!DocumentsContract.isDocumentUri(context, uri)) return null
+        val docId = DocumentsContract.getDocumentId(uri)
+        return when (uri.authority) {
+            "com.android.externalstorage.documents" -> resolveExternalStoragePath(docId)
+            "com.android.providers.downloads.documents" -> resolveDownloadsPath(context, docId)
+            "com.android.providers.media.documents" -> resolveMediaProviderPath(context, docId)
+            else -> null
+        }
+    }
+
+    private fun resolveExternalStoragePath(docId: String): String? {
+        val split = docId.split(":")
+        if (split.size < 2 || !split[0].equals("primary", ignoreCase = true)) return null
+        return "${android.os.Environment.getExternalStorageDirectory()}/${split[1]}"
+    }
+
+    private fun resolveDownloadsPath(context: Context, docId: String): String? {
+        val id = docId.toLongOrNull() ?: return null
+        val contentUri = ContentUris.withAppendedId(Uri.parse("content://downloads/public_downloads"), id)
+        return getRealPathFromContentUri(context, contentUri)
+    }
+
+    private fun resolveMediaProviderPath(context: Context, docId: String): String? {
+        val split = docId.split(":")
+        val contentUri = when (split[0]) {
+            "image" -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            "video" -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            "audio" -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            else -> return null
+        }
+        return getRealPathFromContentUri(context, contentUri)
     }
 }

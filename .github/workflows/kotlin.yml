@@ -1,0 +1,39 @@
+name: Kotlin Pipeline
+
+on:
+  workflow_call:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  validation:
+    uses: ./.github/workflows/kotlin-validation.yml
+
+  lint-checks:
+    uses: ./.github/workflows/kotlin-lint-checks.yml
+    secrets: inherit
+
+  unit-tests:
+    uses: ./.github/workflows/kotlin-unit-tests.yml
+
+  integration-mock:
+    needs: [unit-tests]
+    uses: ./.github/workflows/kotlin-integration-mock.yml
+
+  integration-real:
+    needs: [integration-mock]
+    uses: ./.github/workflows/kotlin-integration-real.yml
+
+  build-apk:
+    needs: [integration-real]
+    uses: ./.github/workflows/kotlin-build-apk.yml
+
+  coverage:
+    needs: [integration-real]
+    uses: ./.github/workflows/kotlin-coverage.yml
+    secrets: inherit
+
+  instrumented-tests:
+    needs: [build-apk]
+    uses: ./.github/workflows/kotlin-instrumented-tests.yml

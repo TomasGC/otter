@@ -5,33 +5,41 @@ import javax.inject.Singleton
 
 @Singleton
 class MimeTypeUtil @Inject constructor() {
+
     fun getMimeType(filename: String): String {
         val extension = filename.substringAfterLast('.', "").lowercase()
+        return MIME_TYPES[extension] ?: DEFAULT_MIME_TYPE
+    }
 
-        // Archive types (comprehensive list)
-        return when (extension) {
-            "zip" -> "application/zip"
-            "rar" -> "application/x-rar-compressed"
-            "7z" -> "application/x-7z-compressed"
-            "tar" -> "application/x-tar"
-            "gz", "gzip" -> "application/gzip"
-            "bz2", "bzip2" -> "application/x-bzip2"
-            "xz" -> "application/x-xz"
-            "tgz" -> "application/x-compressed-tar"
-            "tbz2" -> "application/x-bzip-compressed-tar"
-            "txz" -> "application/x-xz-compressed-tar"
-            "rpa" -> "application/x-rpa"
+    companion object {
+        private const val DEFAULT_MIME_TYPE = "application/octet-stream"
+
+        private val MIME_TYPES = mapOf(
+            // Archive types (comprehensive list)
+            "zip" to "application/zip",
+            "rar" to "application/x-rar-compressed",
+            "7z" to "application/x-7z-compressed",
+            "tar" to "application/x-tar",
+            "gz" to "application/gzip",
+            "gzip" to "application/gzip",
+            "bz2" to "application/x-bzip2",
+            "bzip2" to "application/x-bzip2",
+            "xz" to "application/x-xz",
+            "tgz" to "application/x-compressed-tar",
+            "tbz2" to "application/x-bzip-compressed-tar",
+            "txz" to "application/x-xz-compressed-tar",
+            "rpa" to "application/x-rpa",
             // Common file types
-            "txt" -> "text/plain"
-            "pdf" -> "application/pdf"
-            "jpg", "jpeg" -> "image/jpeg"
-            "png" -> "image/png"
-            "gif" -> "image/gif"
-            "mp4" -> "video/mp4"
-            "mkv" -> "video/x-matroska"
-            "mp3" -> "audio/mpeg"
-            "flac" -> "audio/flac"
-            else -> "application/octet-stream"  // Generic binary
-        }
+            "txt" to "text/plain",
+            "pdf" to "application/pdf",
+            "jpg" to "image/jpeg",
+            "jpeg" to "image/jpeg",
+            "png" to "image/png",
+            "gif" to "image/gif",
+            "mp4" to "video/mp4",
+            "mkv" to "video/x-matroska",
+            "mp3" to "audio/mpeg",
+            "flac" to "audio/flac",
+        )
     }
 }

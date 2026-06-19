@@ -25,64 +25,9 @@ Android archive extractor with archive browsing and real-time progress tracking
 - Python 3.8+
 - Android SDK or connected Android device
 
-## Build Commands (Kotlin/Android)
+## Build & Test
 
-```bash
-# Build debug APK (auto-increments version)
-python scripts/build.py
-
-# Build without installing
-python scripts/build.py --no-install
-
-# Run unit tests
-python scripts/test.py --unit
-
-# Run instrumented tests (requires device)
-python scripts/test.py --instrumented
-
-# Run all tests
-python scripts/test.py
-
-# Run tests with coverage
-python scripts/test.py --coverage
-```
-
-## Test Python Scripts
-
-The build/test scripts themselves have unit tests for reliability:
-
-```bash
-# Install test dependencies
-pip install pytest pytest-cov pytest-mock
-
-# Run Python script tests
-cd scripts
-pytest
-
-# Run with coverage
-pytest --cov=src --cov-report=term-missing
-
-# Run only unit tests
-pytest -m unit
-
-# Run specific test file
-pytest tests/unit/common/test_console.py
-```
-
-**Test structure:**
-```
-scripts/
-├── src/                    # Source code
-│   ├── common/            # Shared utilities
-│   ├── android/           # Android build utilities
-│   └── cli/               # CLI scripts
-└── tests/                 # Test suite
-    ├── unit/              # Unit tests
-    ├── integration/       # Integration tests
-    └── e2e/               # End-to-end tests
-```
-
-**Coverage target:** ≥80%
+See [`.claude/contexts/commands.md`](.claude/contexts/commands.md) for the full command reference (build, test, ADB, archive creation, Python script tests).
 
 ## Project Structure
 
@@ -99,37 +44,11 @@ app/src/main/java/app/otter/
 ### First-time setup
 
 ```bash
-# Ensure Python dependencies (if any)
-pip install -r requirements.txt  # If requirements.txt exists
-
 # Connect Android device or start emulator
 adb devices
 ```
 
-### Run tests
-
-```bash
-# Unit tests only
-python scripts/test.py --unit
-
-# Instrumented tests (requires device)
-python scripts/test.py --instrumented
-
-# All tests with coverage
-python scripts/test.py --coverage
-```
-
-### Build APK
-
-```bash
-# Build and auto-install on connected device
-python scripts/build.py
-
-# Build without installing
-python scripts/build.py --no-install
-```
-
-Output: `app/build/outputs/apk/debug/app-debug.apk`
+Output APK: `app/build/outputs/apk/debug/app-debug.apk`
 
 ## CI/CD
 

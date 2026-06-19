@@ -67,8 +67,8 @@ object ArchiveExtractionTestHelper {
             ArchiveType.ZIP -> ZipExtractor(pathValidator, tempFileManager, sevenZipHelper)
             ArchiveType.RAR -> RarExtractor(pathValidator, archiveLibraryManager, tempFileManager, sevenZipHelper)
             ArchiveType.TAR -> TarExtractor(pathValidator, tempFileManager, sevenZipHelper)
-            ArchiveType.TAR_GZ -> GzipExtractor(pathValidator, tempFileManager, sevenZipHelper)
-            ArchiveType.GZIP -> GzipExtractor(pathValidator, tempFileManager, sevenZipHelper)
+            ArchiveType.TAR_GZ -> GzipExtractor(tempFileManager, sevenZipHelper)
+            ArchiveType.GZIP -> GzipExtractor(tempFileManager, sevenZipHelper)
             ArchiveType.SEVEN_ZIP -> SevenZipExtractor(pathValidator, archiveLibraryManager, tempFileManager, sevenZipHelper)
         }
 

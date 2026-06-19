@@ -470,9 +470,8 @@ class FileBrowserViewModelTest {
 
         // Then
         val state = viewModel.uiState.value as FileBrowserUiState.Success
-        // For paginated results, emitVisibleItems currently shows ALL cached items (100)
-        // TODO: Should limit to VIEWPORT_SIZE (50) - track in Phase 6/7
-        assertEquals(100, state.items.size)
+        // emitVisibleItems limits visible items to VIEWPORT_SIZE starting from scroll position (0 at init)
+        assertEquals(FileBrowserViewModel.VIEWPORT_SIZE, state.items.size)
 
         // Calculate expected lexicographic order (file_0, file_1, file_10, file_11, ...)
         val sortedNames = paginatedItems.map { it.name }.sortedBy { it.lowercase() }

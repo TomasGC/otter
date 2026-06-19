@@ -56,7 +56,7 @@ class ArchiveLibraryManager @Inject constructor() {
         return try {
             val randomAccessFile = RandomAccessFile(archiveFile, "r")
             SevenZip.openInArchive(null, RandomAccessFileInStream(randomAccessFile))
-                ?: throw IllegalStateException("Failed to open archive: ${archiveFile.name} ($ERROR_MESSAGE_UNSUPPORTED_FORMAT)")
+                ?: error("Failed to open archive: ${archiveFile.name} ($ERROR_MESSAGE_UNSUPPORTED_FORMAT)")
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Failed to open archive: ${archiveFile.name}")
             throw e

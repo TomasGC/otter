@@ -1,0 +1,74 @@
+name: Kotlin / Integration Tests Mock
+
+on:
+  workflow_call:
+    inputs:
+      retention-days:
+        type: number
+        default: 7
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  extractors:
+    name: Integration Tests / Mock / Extractors
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: PYTHONPATH=scripts/src python scripts/src/cli/generate_archive_template.py
+      - run: PYTHONPATH=scripts/src python scripts/src/cli/create_test_archives.py --rpa-only
+      - run: ./gradlew testDebugUnitTest -DtestType=integration-mock-extractor
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-mock-extractor-test-results
+          path: app/build/test-results/testDebugUnitTest/
+          retention-days: ${{ inputs.retention-days }}
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-mock-extractor-coverage-data
+          path: app/build/kover/bin-reports/testDebugUnitTest.ic
+          retention-days: ${{ inputs.retention-days }}
+
+  service-viewmodel:
+    name: Integration Tests / Mock / Service + ViewModel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: PYTHONPATH=scripts/src python scripts/src/cli/generate_archive_template.py
+      - run: PYTHONPATH=scripts/src python scripts/src/cli/create_test_archives.py --rpa-only
+      - run: ./gradlew testDebugUnitTest -DtestType=integration-mock-other
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-mock-other-test-results
+          path: app/build/test-results/testDebugUnitTest/
+          retention-days: ${{ inputs.retention-days }}
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-mock-other-coverage-data
+          path: app/build/kover/bin-reports/testDebugUnitTest.ic
+          retention-days: ${{ inputs.retention-days }}

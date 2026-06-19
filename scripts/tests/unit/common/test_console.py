@@ -6,25 +6,21 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch, mock_open, MagicMock
-
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
+from unittest.mock import MagicMock, patch
 
 from common.console import (
-    setup_windows_encoding,
-    setup_log_file,
     close_log_file,
     log,
     print_header,
-    _log_file
+    setup_log_file,
+    setup_windows_encoding,
 )
 
 
 class TestSetupWindowsEncoding(unittest.TestCase):
     """Test setup_windows_encoding function."""
 
-    @patch('sys.platform', 'win32')
+    @patch("sys.platform", "win32")
     def test_setup_windows_encoding_on_windows(self):
         """Should setup UTF-8 encoding on Windows."""
         # Save original
@@ -51,7 +47,7 @@ class TestSetupWindowsEncoding(unittest.TestCase):
             sys.stdout = original_stdout
             sys.stderr = original_stderr
 
-    @patch('sys.platform', 'linux')
+    @patch("sys.platform", "linux")
     def test_setup_windows_encoding_on_linux(self):
         """Should not modify encoding on Linux."""
         original_stdout = sys.stdout
@@ -70,6 +66,7 @@ class TestSetupLogFile(unittest.TestCase):
     def setUp(self):
         """Clean up log file state before each test."""
         import common.console
+
         common.console._log_file = None
 
     def tearDown(self):
@@ -122,11 +119,12 @@ class TestSetupLogFile(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             temp_path = Path(tmpdir)
 
-            log_path = setup_log_file(temp_path, prefix="test")
+            setup_log_file(temp_path, prefix="test")
 
             try:
                 # Should be able to write to log file
                 import common.console
+
                 self.assertIsNotNone(common.console._log_file)
                 self.assertFalse(common.console._log_file.closed)
             finally:
@@ -139,6 +137,7 @@ class TestCloseLogFile(unittest.TestCase):
     def setUp(self):
         """Clean up log file state before each test."""
         import common.console
+
         common.console._log_file = None
 
     def tearDown(self):
@@ -152,6 +151,7 @@ class TestCloseLogFile(unittest.TestCase):
             setup_log_file(temp_path, prefix="test")
 
             import common.console
+
             self.assertIsNotNone(common.console._log_file)
 
             close_log_file()
@@ -161,6 +161,7 @@ class TestCloseLogFile(unittest.TestCase):
     def test_close_log_file_when_already_closed(self):
         """Should handle closing when no file is open."""
         import common.console
+
         common.console._log_file = None
 
         # Should not raise exception
@@ -175,25 +176,26 @@ class TestLog(unittest.TestCase):
     def setUp(self):
         """Clean up log file state before each test."""
         import common.console
+
         common.console._log_file = None
 
     def tearDown(self):
         """Clean up log file state after each test."""
         close_log_file()
 
-    @patch('builtins.print')
+    @patch("builtins.print")
     def test_log_prints_to_console(self, mock_print):
         """Should print message to console."""
         log("Test message")
 
         mock_print.assert_called_once_with("Test message", end="\n")
 
-    @patch('builtins.print')
+    @patch("builtins.print")
     def test_log_with_custom_end(self, mock_print):
         """Should use custom end character."""
-        log("Test", end='')
+        log("Test", end="")
 
-        mock_print.assert_called_once_with("Test", end='')
+        mock_print.assert_called_once_with("Test", end="")
 
     def test_log_writes_to_file_when_configured(self):
         """Should write to log file if configured."""
@@ -210,10 +212,11 @@ class TestLog(unittest.TestCase):
             self.assertIn("Test message\n", content)
             self.assertIn("Another message\n", content)
 
-    @patch('builtins.print')
+    @patch("builtins.print")
     def test_log_without_file_configured(self, mock_print):
         """Should only print to console when no log file configured."""
         import common.console
+
         common.console._log_file = None
 
         log("Test message")
@@ -227,13 +230,14 @@ class TestPrintHeader(unittest.TestCase):
     def setUp(self):
         """Clean up log file state before each test."""
         import common.console
+
         common.console._log_file = None
 
     def tearDown(self):
         """Clean up log file state after each test."""
         close_log_file()
 
-    @patch('builtins.print')
+    @patch("builtins.print")
     def test_print_header_formats_correctly(self, mock_print):
         """Should print formatted header with separators."""
         print_header("Test Section")
@@ -256,5 +260,5 @@ class TestPrintHeader(unittest.TestCase):
             self.assertIn("Test Section", content)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

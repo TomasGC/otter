@@ -70,7 +70,7 @@ object AppModule {
         RarExtractor(pathValidator, archiveLibraryManager, tempFileManager, sevenZipHelper),
         SevenZipExtractor(pathValidator, archiveLibraryManager, tempFileManager, sevenZipHelper),
         TarExtractor(pathValidator, tempFileManager, sevenZipHelper),
-        GzipExtractor(pathValidator, tempFileManager, sevenZipHelper),
+        GzipExtractor(tempFileManager, sevenZipHelper),
         RpaExtractor(pathValidator, tempFileManager, sevenZipHelper)
     )
 

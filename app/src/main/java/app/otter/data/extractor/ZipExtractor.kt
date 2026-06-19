@@ -56,36 +56,25 @@ class ZipExtractor @Inject constructor(
 
             // Extract from temp file using ZipFileReader abstraction
             zipFileReaderFactory.create(tempFile).use { reader ->
-                val entries = reader.getEntries()
-
-                for (entry in entries) {
+                for (entry in reader.getEntries().filter { isEntrySelected(it.name, selectedPaths) }) {
                     if (!isActive) break
 
-                    // Skip if selective extraction and entry not selected
-                    if (!isEntrySelected(entry.name, selectedPaths)) {
-                        continue
-                    }
-
-                    // Path traversal protection + directory creation
                     val outputFile = pathValidator.createSafeOutputFile(destinationPath, entry.name)
 
-                    // Extract using reader
                     reader.getInputStream(entry).use { input ->
                         outputFile.outputStream().buffered(BUFFER_SIZE_BYTES).use { output ->
-                            var bytesRead: Int
-                            while (input.read(buffer).also { bytesRead = it } != -1 && isActive) {
+                            while (true) {
+                                val bytesRead = input.read(buffer)
+                                if (bytesRead == -1 || !isActive) break
                                 output.write(buffer, 0, bytesRead)
                             }
                         }
                     }
 
-                    // Check if cancelled during file extraction
-                    if (!isActive) break
-
-                    extractedCount++
-
-                    // Use base class helper for throttled progress notifications
-                    notifyProgress(extractedCount, totalCount, entry.name, throttler, onProgress)
+                    if (isActive) {
+                        extractedCount++
+                        notifyProgress(extractedCount, totalCount, entry.name, throttler, onProgress)
+                    }
                 }
             }
 

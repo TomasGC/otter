@@ -56,7 +56,9 @@ __pycache__/
 scripts/.pytest_cache/
 scripts/htmlcov/
 scripts/coverage.xml
+scripts/coverage.json
 scripts/.coverage
+.coverage
 
 # ============================================
 # Tools

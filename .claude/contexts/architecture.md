@@ -1,7 +1,7 @@
 # Project Architecture - Otter (Android Archive Extractor)
 
 **Purpose**: System architecture and design decisions for Otter (ZIP + RAR + 7z + TAR + RPA extraction with background service)
-**Last Updated**: 2026-06-02
+**Last Updated**: 2026-06-12
 
 ---
 
@@ -19,7 +19,7 @@
 | **DI** | Hilt (Dagger) | Dependency injection |
 | **Async** | Kotlin Coroutines | Asynchronous programming |
 | **Reactive** | Flow | Reactive data streams |
-| **Build** | Gradle (KTS) + Python scripts | Kotlin DSL + cross-platform ADB automation |
+| **Build** | Gradle (KTS) + Python scripts (manage.py) | Kotlin DSL + cross-platform build/test/ADB automation via OOP DI scripts |
 | **Testing** | JUnit + MockK + Coroutines Test | 603 tests (439 unit + 94 integ-mock + 2 integ-real + 68 instrumented) |
 | **ZIP Extraction** | java.util.zip + IZipFileReader | Native ZIP (testable via interface) |
 | **RAR Extraction** | 7-Zip-JBinding | RAR4/RAR5 support (.so libs) |
@@ -1281,23 +1281,29 @@ graph TB
 
 **For detailed CI/CD pipeline documentation, see [docs/CICD.md](../docs/CICD.md)**
 
-The project uses GitHub Actions with optimized reusable workflows:
+The project uses GitHub Actions with workflows grouped by language prefix (GitHub does not support subdirectories under `.github/workflows/`):
 - ✅ Parallel execution (lint + tests)
 - ✅ Kover code coverage (Kotlin-optimized, replaced Jacoco in Issue #33)
 - ✅ Gradle Managed Devices for instrumented tests
 - ✅ Event-driven validation (Push-CI completes → PR-CI triggers via workflow_run)
+- ✅ Python script tests (4-tier: unit, integration-mock, integration-real, e2e)
 
-**Key Workflows**:
-- `push-ci.yml` - Feature/bugfix branch validation (~14 min)
-- `pr-ci.yml` - Pull request validation (~2 min)
-- `cd.yml` - Release pipeline (~5 min)
+**Key Workflows** (kotlin-* / python-* prefix = pipeline grouping):
+- `push-ci.yml` → `kotlin.yml` + `python.yml` pipelines (feature/bugfix branch validation)
+- `kotlin-*.yml` - Kotlin pipeline stages (validation, lint-checks, unit-tests, integration-mock/real, build-apk, instrumented-tests, coverage)
+- `python-*.yml` - Python pipeline stages (detect-changes, lint-checks, unit-tests, integration-mock/real, e2e-tests, coverage)
+- `pr-ci.yml` - Pull request validation
+- `cd.yml` - Release pipeline
+
+**CI Archive Generation** (archives/ is gitignored, generated on the fly):
+1. `generate_archive_template.py` — creates `archives/template/` with valid test files
+2. `create_test_archives.py --rpa-only` — creates `archives/test_archive.rpa` from template
+3. Both require `PYTHONPATH=scripts/src` for cross-module imports
 
 **Coverage**: ≥80% threshold enforced
-**Test Count**: 603 tests
-- Unit (JVM): 439
-- Integration mock (JVM): 94
-- Integration real (JVM): 2
-- Instrumented (device): 68
+**Test Count**: 603 Kotlin tests + ~377 Python script tests
+- Kotlin unit (JVM): 439 | integration mock: 94 | integration real: 2 | instrumented: 68
+- Python unit: ~290 | integration mock: 39 | integration real: 23 | e2e: 0
 **Success Rate**: 95-100% (improved with Gradle Managed Devices)
 
 ---

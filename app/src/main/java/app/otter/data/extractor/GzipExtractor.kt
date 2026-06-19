@@ -3,7 +3,6 @@ package app.otter.data.extractor
 import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
-import app.otter.util.PathValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
@@ -26,7 +25,6 @@ import javax.inject.Inject
  * Example: photo.jpg.gz → photo.jpg
  */
 class GzipExtractor @Inject constructor(
-    private val pathValidator: PathValidator,
     tempFileManager: ITempFileManager,
     sevenZipHelper: SevenZipExtractorHelper
 ) : BaseArchiveExtractor(tempFileManager, sevenZipHelper, SingleFileProgressCalculator()) {

@@ -1,6 +1,6 @@
 # Tests - Otter
 
-**Last Updated**: 2026-06-02
+**Last Updated**: 2026-06-12
 
 ---
 
@@ -92,14 +92,14 @@ app/src/
 
 ```bash
 # Unit + integration mock + integration real (fast, no device)
-python scripts/src/cli/test.py --unit
+python scripts/manage.py test unit
 
 # With Kover coverage report
-python scripts/src/cli/test.py --coverage
+python scripts/manage.py test coverage
 # Report: app/build/reports/kover/html/index.html
 
 # Instrumented tests (requires device connected via ADB)
-python scripts/src/cli/test.py --instrumented
+python scripts/manage.py test instrumented
 
 # Gradle direct (specific stage via -DtestType)
 ./gradlew testDebugUnitTest                                    # all JVM tests
@@ -132,10 +132,10 @@ Tests that need real archive files use `System.getProperty("archives.dir")` (set
 Generate locally:
 ```bash
 # RPA only (pure Python, no Docker/7z)
-python scripts/src/cli/create_test_archives.py --rpa-only
+python scripts/manage.py create archives --rpa-only
 
 # All formats (requires 7-Zip + Docker for RAR)
-python scripts/src/cli/create_test_archives.py
+python scripts/manage.py create archives
 ```
 
 CI generates RPA automatically before running tests.
@@ -152,70 +152,99 @@ CI generates RPA automatically before running tests.
 
 | Module | Tests | Description |
 |--------|-------|-------------|
-| `android/test_adb.py` | ~30 | ADB connect, device detection, mDNS pairing |
-| `android/test_gradle.py` | ~25 | Gradle build, version increment, APK install |
-| `android/test_versioning.py` | ~20 | Version code/name parsing and bumping |
-| `common/test_console.py` | ~25 | Console output formatting, colors |
-| `common/test_file_utils.py` | ~10 | File utility functions |
+| `unit/android/test_adb_manager.py` | 20 | AdbManager class (DI pattern) |
+| `unit/android/test_gradle_runner.py` | 10 | GradleRunner class (DI pattern) |
+| `unit/android/test_version_manager.py` | 31 | VersionManager class (DI pattern) |
+| `unit/cli/test_archive_creator.py` | 22 | ArchiveCreator class (ZIP/TAR/7z/RPA) |
+| `unit/cli/test_archive_template_generator.py` | 30 | ArchiveTemplateGenerator (magic bytes, extensions, I/O) |
+| `unit/cli/test_device_connector.py` | 58 | DeviceConnector class (mDNS, pairing, all branches) |
+| `unit/cli/test_file_pusher.py` | 17 | FilePusher class (push, skip, mkdir, connector=None paths) |
+| `unit/cli/test_manage.py` | ~15 | Manager dispatch + verb routing |
+| `unit/cli/actions/test_adb_action.py` | ~13 | AdbAction (connect, send, lazy creation) |
+| `unit/cli/actions/test_build_action.py` | ~15 | BuildAction (build, install, version, connector) |
+| `unit/cli/actions/test_test_action.py` | ~25 | TestAction (unit, instrumented, coverage, device flow) |
+| `unit/cli/actions/test_create_action.py` | ~10 | CreateAction (archives, template, rpa-only) |
+| `unit/cli/actions/test_test_scripts_action.py` | ~10 | TestScriptsAction (all tiers) |
+| `unit/common/test_console.py` | 14 | Console output formatting |
+| `unit/common/test_file_utils.py` | 8 | File utility functions + load_test_settings |
+| `integration_mock/cli/test_archive_creation.py` | 32 | ArchiveCreator integration (real FS, multiple formats) |
+| `integration_mock/android/test_adb_integration.py` | 7 | ADB integration (real mDNS) |
+| `integration_real/test_rpa_real.py` | 9 | RPA archive real creation + parsing |
+| `integration_real/test_template_generator_real.py` | 8 | ArchiveTemplateGenerator real FS output |
+| `integration_real/cli/test_archive_docker.py` | 6 | Archive creation via Docker (7z, tar) with real tools |
+| **Total** | **~377** | 98.2% line coverage |
 
 ### Directory Structure
 
 ```
 scripts/
-├── src/                              # Source modules
+├── manage.py                              # Entry point: python manage.py <verb> [args]
+├── src/
 │   ├── android/
-│   │   ├── adb.py                   # ADB device management, mDNS auto-connect, pairing
-│   │   ├── gradle.py                # Gradle task execution, APK install
-│   │   └── versioning.py            # versionCode/versionName read + increment
+│   │   ├── adb.py                        # AdbManager class
+│   │   ├── gradle.py                     # GradleRunner class
+│   │   └── versioning.py                 # VersionManager class
 │   ├── cli/
-│   │   ├── build.py                 # Entry: build + install APK
-│   │   ├── test.py                  # Entry: run unit/instrumented/coverage tests
-│   │   ├── adb_connect.py           # Entry: auto-connect device via mDNS
-│   │   ├── create_test_archives.py  # Create ZIP/RAR/7z/TAR/RPA test archives
-│   │   ├── generate_archive_template.py  # Generate archive from template config
-│   │   └── send_to_phone.py         # Push test archives to device via ADB
+│   │   ├── actions/                      # High-level CLI verb implementations
+│   │   │   ├── adb.py                    # AdbAction (connect, send)
+│   │   │   ├── build.py                  # BuildAction (build, install)
+│   │   │   ├── create.py                 # CreateAction (archives, template)
+│   │   │   ├── test.py                   # TestAction (unit, instrumented, coverage)
+│   │   │   └── test_scripts.py           # TestScriptsAction (Python test tiers)
+│   │   ├── adb_connect.py               # DeviceConnector class
+│   │   ├── create_test_archives.py       # ArchiveCreator class
+│   │   ├── generate_archive_template.py  # ArchiveTemplateGenerator class
+│   │   ├── manage.py                     # argparse dispatcher → actions
+│   │   └── send_to_phone.py             # FilePusher class
 │   └── common/
-│       ├── console.py               # Rich console output (colors, spinners, tables)
-│       └── file_utils.py            # Path helpers
+│       ├── console.py                    # Rich console output
+│       ├── constants.py                  # Shared string constants
+│       ├── file_utils.py                 # Path helpers + load_test_settings
+│       └── subprocess_runner.py          # SubprocessRunner protocol + RealSubprocessRunner
 │
 ├── tests/
+│   ├── helpers/
+│   │   ├── fake_subprocess.py            # FakeSubprocessRunner + FakePopen (DI test doubles)
+│   │   └── adb_fixtures.py              # Shared ADB test fixtures
 │   ├── unit/
-│   │   ├── android/
-│   │   │   ├── test_adb.py          # Unit tests for adb module
-│   │   │   ├── test_gradle.py       # Unit tests for gradle module
-│   │   │   └── test_versioning.py   # Unit tests for versioning module
-│   │   └── common/
-│   │       ├── test_console.py      # Unit tests for console module
-│   │       └── test_file_utils.py   # Unit tests for file_utils module
-│   └── integration/                 # (placeholder, future)
+│   │   ├── android/                     # AdbManager, GradleRunner, VersionManager
+│   │   ├── cli/
+│   │   │   ├── actions/                 # Action class unit tests
+│   │   │   ├── test_archive_creator.py
+│   │   │   ├── test_archive_template_generator.py
+│   │   │   ├── test_device_connector.py
+│   │   │   ├── test_file_pusher.py
+│   │   │   └── test_manage.py
+│   │   └── common/                      # Console, file_utils
+│   ├── integration_mock/                # Real FS + FakeSubprocessRunner
+│   │   ├── cli/test_archive_creation.py
+│   │   └── android/test_adb_integration.py
+│   ├── integration_real/                # Real FS + real subprocess, no mocks
+│   │   ├── cli/test_archive_docker.py   # Docker workspace under repo temp/ (pytest tmp_path ACLs block Docker mounts on Windows)
+│   │   ├── test_rpa_real.py
+│   │   └── test_template_generator_real.py
+│   └── e2e/                             # End-to-end (real device/docker)
 │
-├── pytest.ini                        # Pytest config (markers: unit, integration)
-├── requirements-test.txt             # pytest, pytest-cov, pytest-mock
-└── docker/
-    └── rar.Dockerfile               # Docker image for RAR archive creation (unrar-free)
+├── pytest.ini                            # Pytest config (markers: unit, integration)
+└── requirements-test.txt
 ```
 
 ### Run Commands
 
 ```bash
-cd scripts
+# Via manage.py (recommended)
+python scripts/manage.py test-scripts            # All tiers
+python scripts/manage.py test-scripts unit       # Unit only (fast)
+python scripts/manage.py test-scripts integration-mock
+python scripts/manage.py test-scripts integration-real
+python scripts/manage.py test-scripts coverage   # With coverage report
 
-# All tests
-pytest
-
-# With coverage
-pytest --cov=src --cov-report=term-missing
-
-# Unit only (fast)
-pytest -m unit
-
-# Specific module
-pytest tests/unit/android/test_adb.py -v
-
-# Install test deps first
-pip install -r requirements-test.txt
+# Direct pytest (from repo root, with PYTHONPATH)
+cd scripts && pytest
+cd scripts && pytest --cov=src --cov-report=term-missing
+cd scripts && pytest -m unit
 ```
 
 ### Coverage Target
 
-≥ 80%
+≥ 80% (current: 98.2%)

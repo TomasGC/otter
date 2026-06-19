@@ -69,59 +69,18 @@ class RpaExtractor @Inject constructor(
             val throttler = ProgressThrottler()
 
             // Extract each file
-            tempFile.inputStream().use { archiveStream ->
+            tempFile.inputStream().use {
                 index.forEach { entry ->
                     if (!isActive) return@forEach
-
-                    // Entry contains de-obfuscated offset/size from RpaInspector
-                    val realOffset = entry.offset
-                    val realSize = entry.size
-
-                    Timber.tag(getTag()).d("Extracting: ${entry.name} (offset=$realOffset, size=$realSize)")
-
-                    // Path traversal protection + directory creation
+                    Timber.tag(getTag()).d("Extracting: ${entry.name} (offset=${entry.offset}, size=${entry.size})")
                     val outputFile = pathValidator.createSafeOutputFile(destinationPath, entry.name)
-
-                    // Seek to file position (mark not supported, reopen stream)
-                    tempFile.inputStream().use { fileStream ->
-                        fileStream.skip(realOffset)
-
-                        // Extract file data with progress updates
-                        outputFile.outputStream().buffered(BUFFER_SIZE_BYTES).use { output ->
-                            var remaining = realSize
-                            var bytesExtracted = 0L
-
-                            while (remaining > 0 && isActive) {
-                                val toRead = minOf(remaining, buffer.size.toLong()).toInt()
-                                val bytesRead = fileStream.read(buffer, 0, toRead)
-                                if (bytesRead == -1) break
-                                output.write(buffer, 0, bytesRead)
-                                remaining -= bytesRead
-                                bytesExtracted += bytesRead
-
-                                // Notify progress during file extraction (for large files)
-                                if (throttler.shouldNotify()) {
-                                    val fileProgress = bytesExtracted.toFloat() / realSize.toFloat()
-                                    val overallProgress = (extractedCount.toFloat() + fileProgress) / index.size.toFloat()
-                                    onProgress(
-                                        ExtractionProgress.Extracting(
-                                            currentFile = entry.name,
-                                            extractedCount = extractedCount,
-                                            totalCount = index.size,
-                                            progress = overallProgress
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Check if cancelled during file extraction
+                    extractEntryData(
+                        tempFile, buffer,
+                        EntryExtractCtx(entry.name, entry.offset, entry.size, extractedCount, index.size, outputFile),
+                        throttler, onProgress
+                    ) { isActive }
                     if (!isActive) return@forEach
-
                     extractedCount++
-
-                    // Use base class helper for throttled progress notifications
                     notifyProgress(extractedCount, index.size, entry.name, throttler, onProgress)
                 }
             }
@@ -154,6 +113,58 @@ class RpaExtractor @Inject constructor(
                 Timber.tag(getTag()).d("Temp file deleted: $deleted")
             }
         }
+    }
+
+    private data class EntryExtractCtx(
+        val name: String, val offset: Long, val size: Long,
+        val extractedCount: Int, val totalCount: Int,
+        val outputFile: File
+    )
+
+    private fun extractEntryData(
+        tempFile: File,
+        buffer: ByteArray,
+        ctx: EntryExtractCtx,
+        throttler: ProgressThrottler,
+        onProgress: (ExtractionProgress) -> Unit,
+        isActiveCheck: () -> Boolean
+    ) {
+        tempFile.inputStream().use { fileStream ->
+            fileStream.skip(ctx.offset)
+            writeEntryToFile(fileStream, buffer, ctx, throttler, onProgress, isActiveCheck)
+        }
+    }
+
+    private fun writeEntryToFile(
+        fileStream: java.io.InputStream,
+        buffer: ByteArray,
+        ctx: EntryExtractCtx,
+        throttler: ProgressThrottler,
+        onProgress: (ExtractionProgress) -> Unit,
+        isActiveCheck: () -> Boolean
+    ) {
+        ctx.outputFile.outputStream().buffered(BUFFER_SIZE_BYTES).use { output ->
+            var remaining = ctx.size
+            var bytesExtracted = 0L
+            while (remaining > 0 && isActiveCheck()) {
+                val toRead = minOf(remaining, buffer.size.toLong()).toInt()
+                val bytesRead = fileStream.read(buffer, 0, toRead)
+                if (bytesRead == -1) break
+                output.write(buffer, 0, bytesRead)
+                remaining -= bytesRead
+                bytesExtracted += bytesRead
+                if (throttler.shouldNotify()) notifyChunkProgress(ctx, bytesExtracted, onProgress)
+            }
+        }
+    }
+
+    private fun notifyChunkProgress(ctx: EntryExtractCtx, bytesExtracted: Long, onProgress: (ExtractionProgress) -> Unit) {
+        val fileProgress = bytesExtracted.toFloat() / ctx.size.toFloat()
+        val overallProgress = (ctx.extractedCount.toFloat() + fileProgress) / ctx.totalCount.toFloat()
+        onProgress(ExtractionProgress.Extracting(
+            currentFile = ctx.name, extractedCount = ctx.extractedCount,
+            totalCount = ctx.totalCount, progress = overallProgress
+        ))
     }
 
     companion object {

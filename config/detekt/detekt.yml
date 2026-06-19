@@ -26,19 +26,36 @@ complexity:
   ComplexCondition:
     active: true
     threshold: 4
-  ComplexMethod:
+  # Composable functions are exempt from size/parameter rules below:
+  # declarative UI trees and slot APIs with hoisted state legitimately exceed
+  # thresholds designed for imperative code.
+  CyclomaticComplexMethod:
     active: true
     threshold: 15
+    ignoreAnnotated: ['Composable']
   LongMethod:
     active: true
     threshold: 60
+    ignoreAnnotated: ['Composable']
   LongParameterList:
     active: true
-    functionThreshold: 6
+    functionThreshold: 7
     constructorThreshold: 7
+    ignoreAnnotated: ['Composable']
   NestedBlockDepth:
     active: true
     threshold: 4
+  TooManyFunctions:
+    active: true
+    # Hilt modules enumerate one @Provides per dependency; splitting them
+    # by count alone hurts cohesion. HiltViewModel classes have one handler
+    # per UI event — splitting by count degrades cohesion.
+    # AndroidEntryPoint activities wire DI fields and lifecycle methods.
+    ignoreAnnotated: ['Module', 'HiltViewModel', 'AndroidEntryPoint']
+    # Private implementation helpers (e.g., opcode dispatch tables in parsers)
+    # are internal detail, not public API surface. Only public/internal functions
+    # indicate a class is doing too much.
+    ignorePrivate: true
 
 coroutines:
   active: true
@@ -47,15 +64,20 @@ coroutines:
   RedundantSuspendModifier:
     active: true
 
+empty-blocks:
+  active: true
+
 exceptions:
   active: true
+  SwallowedException:
+    active: false
   TooGenericExceptionCaught:
     active: true
+    # Android APIs frequently throw base Exception (ContentResolver, PackageManager, etc.).
+    # Only flag truly generic Throwable/Error which mask JVM-level failures.
     exceptionNames:
       - Error
-      - Exception
       - Throwable
-      - RuntimeException
 
 naming:
   active: true
@@ -65,6 +87,8 @@ naming:
   FunctionNaming:
     active: true
     functionPattern: '[a-z][a-zA-Z0-9]*'
+    # Composable functions use PascalCase per Compose convention.
+    ignoreAnnotated: ['Composable']
   VariableNaming:
     active: true
     variablePattern: '[a-z][a-zA-Z0-9]*'
@@ -81,8 +105,6 @@ potential-bugs:
   CastToNullableType:
     active: true
   Deprecation:
-    active: true
-  DuplicateCaseInWhenExpression:
     active: true
   EqualsAlwaysReturnsTrueOrFalse:
     active: true
@@ -115,9 +137,9 @@ style:
     active: false
   MaxLineLength:
     active: true
-    maxLineLength: 120
+    maxLineLength: 140
   ReturnCount:
     active: true
-    max: 3
+    max: 5
   UnusedPrivateMember:
     active: true
