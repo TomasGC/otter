@@ -25,10 +25,6 @@ class TestRunTemplate:
     def test_calls_generator_generate(self, tmp_path):
         action, _ = make_action(tmp_path)
         mock_gen = MagicMock()
-        with patch("cli.actions.create.CreateAction.run_template") as mock_rt:
-            mock_rt.return_value = 0
-            rc = action.run_template(output_dir=tmp_path)
-        # Direct call via real method — patch ArchiveTemplateGenerator
         with patch("cli.generate_archive_template.ArchiveTemplateGenerator") as MockGen:
             MockGen.return_value = mock_gen
             rc = action.run_template(output_dir=tmp_path)
@@ -50,15 +46,7 @@ class TestRunArchives:
         with patch("cli.create_test_archives.ArchiveCreator") as MockCreator:
             MockCreator.return_value = mock_creator
             action.run_archives(output_dir=tmp_path)
-        mock_creator.create_all.assert_called_once_with(rpa_only=False)
-
-    def test_passes_rpa_only_flag(self, tmp_path):
-        action, runner = make_action(tmp_path)
-        mock_creator = MagicMock()
-        with patch("cli.create_test_archives.ArchiveCreator") as MockCreator:
-            MockCreator.return_value = mock_creator
-            action.run_archives(rpa_only=True, output_dir=tmp_path)
-        mock_creator.create_all.assert_called_once_with(rpa_only=True)
+        mock_creator.create_all.assert_called_once_with()
 
     def test_returns_0_on_success(self, tmp_path):
         action, _ = make_action(tmp_path)
@@ -111,14 +99,6 @@ class TestCreateActionRun:
         with patch.object(action, "run_template", return_value=0), patch.object(action, "run_archives", return_value=1):
             rc = action.run()
         assert rc == 1
-
-    def test_rpa_only_passed_to_run_archives(self, tmp_path):
-        action, _ = make_action(tmp_path)
-        with patch.object(action, "run_template", return_value=0), patch.object(
-            action, "run_archives", return_value=0
-        ) as ma:
-            action.run(suites=["archives"], rpa_only=True)
-        ma.assert_called_once_with(rpa_only=True, output_dir=None)
 
     def test_output_dir_passed_to_run_template(self, tmp_path):
         action, _ = make_action()
