@@ -123,28 +123,21 @@ class TestManagerCreate:
             MockAction.return_value.run.return_value = 0
             mgr.dispatch(["create"])
         MockAction.assert_called_once_with(runner)
-        MockAction.return_value.run.assert_called_once_with(suites=[], rpa_only=False, output_dir=None)
+        MockAction.return_value.run.assert_called_once_with(suites=[], output_dir=None)
 
     def test_create_template_suite(self):
         mgr, runner = make_manager()
         with patch("cli.manage.CreateAction") as MockAction:
             MockAction.return_value.run.return_value = 0
             mgr.dispatch(["create", "template"])
-        MockAction.return_value.run.assert_called_once_with(suites=["template"], rpa_only=False, output_dir=None)
+        MockAction.return_value.run.assert_called_once_with(suites=["template"], output_dir=None)
 
     def test_create_archives_suite(self):
         mgr, runner = make_manager()
         with patch("cli.manage.CreateAction") as MockAction:
             MockAction.return_value.run.return_value = 0
             mgr.dispatch(["create", "archives"])
-        MockAction.return_value.run.assert_called_once_with(suites=["archives"], rpa_only=False, output_dir=None)
-
-    def test_create_rpa_only_flag(self):
-        mgr, runner = make_manager()
-        with patch("cli.manage.CreateAction") as MockAction:
-            MockAction.return_value.run.return_value = 0
-            mgr.dispatch(["create", "--rpa-only"])
-        MockAction.return_value.run.assert_called_once_with(suites=[], rpa_only=True, output_dir=None)
+        MockAction.return_value.run.assert_called_once_with(suites=["archives"], output_dir=None)
 
     def test_create_output_dir(self, tmp_path):
         mgr, runner = make_manager()
