@@ -243,10 +243,14 @@ class RarDockerFormat(ArchiveFormat):
         try:
             self._runner.run(
                 [
-                    "docker", "run", "--rm",
-                    "-v", f"{template_docker}:/workspace/template:ro",
-                    "-v", f"{output_docker}:/workspace/output",
-                    "rar-builder", "rar", "a", "-r",
+                    "docker",
+                    "run",
+                    "--rm",
+                    "-v",
+                    f"{template_docker}:/workspace/template:ro",
+                    "-v",
+                    f"{output_docker}:/workspace/output",
+                    "rar-builder",
                     "/workspace/output/test_archive.rar",
                     "/workspace/template/",
                 ],
@@ -254,6 +258,9 @@ class RarDockerFormat(ArchiveFormat):
                 capture_output=True,
                 text=True,
             )
+            if not out.exists():
+                print("  [SKIP] RAR archive was not created by Docker run")
+                return None
             size_mb = out.stat().st_size / (1024 * 1024)
             print(f"  RAR archive created: {out.name} ({size_mb:.2f} MB)")
             return out

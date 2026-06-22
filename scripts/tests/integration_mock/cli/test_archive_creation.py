@@ -11,8 +11,6 @@ from pathlib import Path
 import pytest
 from fake_subprocess import FakeResult, FakeSubprocessRunner
 
-pytestmark = pytest.mark.integration_mock
-
 from cli.create_test_archives import (
     ArchiveCreator,
     ArchiveFormat,
@@ -23,6 +21,8 @@ from cli.create_test_archives import (
     TarGzFormat,
     ZipFormat,
 )
+
+pytestmark = pytest.mark.integration_mock
 
 FAKE_7Z = "/fake/7z"
 
@@ -138,7 +138,8 @@ class TestCreateRpaArchive:
         index = read_rpa_index(out / "test_archive.rpa")
         for path, entries in index.items():
             offset, size = entries[0]
-            stored = rpa_bytes[offset : offset + size]
+            end = offset + size
+            stored = rpa_bytes[offset:end]
             template_path = tmpl / path.replace("/", "\\")
             if not template_path.exists():
                 template_path = tmpl / path
@@ -489,10 +490,12 @@ class TestCreateAll:
 
     def test_result_keys_match_format_names(self, tmp_path):
         tmpl, out = _dirs(tmp_path)
-        results = ArchiveCreator([
-            _StubFormat(out, tmpl, "rpa"),
-            _StubFormat(out, tmpl, "zip"),
-        ]).create_all()
+        results = ArchiveCreator(
+            [
+                _StubFormat(out, tmpl, "rpa"),
+                _StubFormat(out, tmpl, "zip"),
+            ]
+        ).create_all()
         assert set(results.keys()) == {"rpa", "zip"}
 
     def test_creates_output_dir_via_main_then_all_formats_called(self, tmp_path):
@@ -507,9 +510,11 @@ class TestCreateAll:
 
     def test_result_includes_none_for_unavailable_format(self, tmp_path):
         tmpl, out = _dirs(tmp_path)
-        results = ArchiveCreator([
-            _StubFormat(out, tmpl, "ok", out / "file"),
-            _StubFormat(out, tmpl, "skip", None),
-        ]).create_all()
+        results = ArchiveCreator(
+            [
+                _StubFormat(out, tmpl, "ok", out / "file"),
+                _StubFormat(out, tmpl, "skip", None),
+            ]
+        ).create_all()
         assert results["ok"] is not None
         assert results["skip"] is None

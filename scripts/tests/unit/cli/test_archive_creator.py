@@ -405,17 +405,21 @@ class TestCreateAll:
 
     def test_result_keys_match_format_names(self, tmp_path):
         tmpl, out = _dirs(tmp_path)
-        results = ArchiveCreator([
-            _StubFormat(out, tmpl, "fmt1"),
-            _StubFormat(out, tmpl, "fmt2"),
-        ]).create_all()
+        results = ArchiveCreator(
+            [
+                _StubFormat(out, tmpl, "fmt1"),
+                _StubFormat(out, tmpl, "fmt2"),
+            ]
+        ).create_all()
         assert set(results.keys()) == {"fmt1", "fmt2"}
 
     def test_result_includes_none_for_unavailable_format(self, tmp_path):
         tmpl, out = _dirs(tmp_path)
-        results = ArchiveCreator([
-            _StubFormat(out, tmpl, "ok", out / "file.zip"),
-            _StubFormat(out, tmpl, "skip", None),
-        ]).create_all()
+        results = ArchiveCreator(
+            [
+                _StubFormat(out, tmpl, "ok", out / "file.zip"),
+                _StubFormat(out, tmpl, "skip", None),
+            ]
+        ).create_all()
         assert results["ok"] is not None
         assert results["skip"] is None

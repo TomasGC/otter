@@ -78,7 +78,8 @@ class TestRpaRealCreation:
         index = _parse_index(out / "test_archive.rpa")
         for rpa_path, entries in index.items():
             offset, size = entries[0]
-            stored = rpa_bytes[offset : offset + size]
+            end = offset + size
+            stored = rpa_bytes[offset:end]
             fs_path = tmpl / rpa_path.replace("/", "\\")
             if not fs_path.exists():
                 fs_path = tmpl / rpa_path

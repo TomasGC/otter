@@ -26,7 +26,11 @@ class CreateAction:
         return 0
 
     def run_archives(self, output_dir: Optional[Path] = None) -> int:
-        from cli.create_test_archives import PROJECT_ROOT, ArchiveCreator, _default_formats
+        from cli.create_test_archives import (
+            PROJECT_ROOT,
+            ArchiveCreator,
+            _default_formats,
+        )
         from common.file_utils import load_test_settings
 
         out = output_dir or self._output_dir

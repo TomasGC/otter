@@ -10,18 +10,17 @@ concurrency:
   group: push-ci-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
-  detect-changes:
-    uses: ./.github/workflows/python-detect-changes.yml
-
   kotlin-pipeline:
-    uses: ./.github/workflows/kotlin.yml
+    uses: TomasGC/condor/.github/workflows/kotlin-push-ci.yml@main
     secrets: inherit
+    with:
+      pre-test-command: python scripts/manage.py create
+      archives-local-dir: archives/
+      device-archives-path: /sdcard/otter-test-archives
+      app-name: otter
 
   python-pipeline:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.scripts == 'true'
-    uses: ./.github/workflows/python.yml
+    uses: TomasGC/condor/.github/workflows/python-push-ci.yml@main
+    with:
+      skip-on-no-changes: true
