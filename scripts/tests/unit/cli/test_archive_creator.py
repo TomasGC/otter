@@ -1,33 +1,33 @@
 #!/usr/bin/env python3
-"""Unit tests for ArchiveCreator."""
+"""Unit tests for archive format classes and ArchiveCreator orchestrator."""
 
 import pickle
+import subprocess
+import tarfile
+import zipfile
 import zlib
 from pathlib import Path
+from typing import Optional
 
-from fake_subprocess import FakeSubprocessRunner
+from fake_subprocess import FakeResult, FakeSubprocessRunner
 
-from cli.create_test_archives import ArchiveCreator
+from cli.create_test_archives import (
+    ArchiveCreator,
+    ArchiveFormat,
+    RarDockerFormat,
+    RpaFormat,
+    SevenZipFormat,
+    TarFormat,
+    TarGzFormat,
+    ZipFormat,
+)
 
 FAKE_7Z = "/fake/7z"
 
 
-def make_creator(tmp_path, runner=None, seven_zip=FAKE_7Z):
-    template = tmp_path / "template"
-    output = tmp_path / "output"
-    template.mkdir(exist_ok=True)
-    output.mkdir(exist_ok=True)
-    return (
-        ArchiveCreator(
-            runner or FakeSubprocessRunner(),
-            output,
-            template,
-            seven_zip_path=seven_zip,
-            dockerfile_dir=tmp_path / "docker",
-        ),
-        template,
-        output,
-    )
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def make_template(template_dir: Path, num_files: int = 3) -> None:
@@ -38,236 +38,388 @@ def make_template(template_dir: Path, num_files: int = 3) -> None:
     (sub / "nested.txt").write_text("nested\n", encoding="utf-8")
 
 
+def _dirs(tmp_path: Path) -> tuple[Path, Path]:
+    tmpl = tmp_path / "template"
+    out = tmp_path / "output"
+    tmpl.mkdir()
+    out.mkdir()
+    return tmpl, out
+
+
 # ---------------------------------------------------------------------------
-# RPA — pure Python, no subprocess needed
+# RPA — pure Python
 # ---------------------------------------------------------------------------
 
 
 class TestCreateRpa:
     def test_creates_rpa_file(self, tmp_path):
-        c, tmpl, out = make_creator(tmp_path)
+        tmpl, out = _dirs(tmp_path)
         make_template(tmpl)
-        c.create_rpa()
+        RpaFormat(out, tmpl).create()
         assert (out / "test_archive.rpa").exists()
 
     def test_starts_with_magic_bytes(self, tmp_path):
-        c, tmpl, out = make_creator(tmp_path)
+        tmpl, out = _dirs(tmp_path)
         make_template(tmpl)
-        c.create_rpa()
+        RpaFormat(out, tmpl).create()
         assert (out / "test_archive.rpa").read_bytes()[:8] == b"RPA-3.0 "
 
     def test_header_is_34_bytes(self, tmp_path):
-        c, tmpl, out = make_creator(tmp_path)
+        tmpl, out = _dirs(tmp_path)
         make_template(tmpl)
-        c.create_rpa()
+        RpaFormat(out, tmpl).create()
         header = (out / "test_archive.rpa").read_bytes()[:34].decode("ascii")
         assert len(header) == 34 and header.endswith("\n")
 
     def test_index_is_parseable(self, tmp_path):
-        c, tmpl, out = make_creator(tmp_path)
+        tmpl, out = _dirs(tmp_path)
         make_template(tmpl)
-        c.create_rpa()
+        RpaFormat(out, tmpl).create()
         data = (out / "test_archive.rpa").read_bytes()
         parts = data[:34].decode("ascii").strip().split()
         index_offset = int(parts[1], 16)
-        int(parts[2], 16)
-        # Safe: data was written by create_rpa() moments ago in the same test process.
+        # Safe: data written by create() moments ago in the same test process.
         raw = pickle.loads(zlib.decompress(data[index_offset:]))
         assert isinstance(raw, dict) and len(raw) > 0
 
     def test_skips_when_file_already_exists(self, tmp_path):
-        c, tmpl, out = make_creator(tmp_path)
+        tmpl, out = _dirs(tmp_path)
         make_template(tmpl)
         sentinel = b"EXISTING_RPA"
         existing = out / "test_archive.rpa"
         existing.write_bytes(sentinel)
-        c.create_rpa()
+        RpaFormat(out, tmpl).create()
         assert existing.read_bytes() == sentinel
 
-    def test_no_subprocess_calls_made(self, tmp_path):
-        runner = FakeSubprocessRunner()
-        c, tmpl, out = make_creator(tmp_path, runner=runner)
+    def test_name_is_rpa(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        assert RpaFormat(out, tmpl).name == "rpa"
+
+
+# ---------------------------------------------------------------------------
+# ZIP — pure Python
+# ---------------------------------------------------------------------------
+
+
+class TestCreateZip:
+    def test_creates_zip_file(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
         make_template(tmpl)
-        c.create_rpa()
-        assert runner.call_count == 0
+        ZipFormat(out, tmpl).create()
+        assert (out / "test_archive.zip").exists()
+
+    def test_zip_contains_template_files(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        make_template(tmpl)
+        ZipFormat(out, tmpl).create()
+        with zipfile.ZipFile(out / "test_archive.zip") as zf:
+            names = zf.namelist()
+        assert any("file_000.txt" in n for n in names)
+        assert any("nested.txt" in n for n in names)
+
+    def test_skips_when_file_already_exists(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        sentinel = b"EXISTING_ZIP"
+        existing = out / "test_archive.zip"
+        existing.write_bytes(sentinel)
+        ZipFormat(out, tmpl).create()
+        assert existing.read_bytes() == sentinel
+
+    def test_name_is_zip(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        assert ZipFormat(out, tmpl).name == "zip"
 
 
 # ---------------------------------------------------------------------------
-# 7z archives — subprocess mocked
+# TAR — pure Python
 # ---------------------------------------------------------------------------
 
 
-class TestCreate7zip:
-    def _run(self, tmp_path):
+class TestCreateTar:
+    def test_creates_tar_file(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        make_template(tmpl)
+        TarFormat(out, tmpl).create()
+        assert (out / "test_archive.tar").exists()
+
+    def test_tar_contains_template_files(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        make_template(tmpl)
+        TarFormat(out, tmpl).create()
+        with tarfile.open(out / "test_archive.tar") as tf:
+            names = tf.getnames()
+        assert any("file_000.txt" in n for n in names)
+
+    def test_skips_when_file_already_exists(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        sentinel = b"EXISTING_TAR"
+        existing = out / "test_archive.tar"
+        existing.write_bytes(sentinel)
+        TarFormat(out, tmpl).create()
+        assert existing.read_bytes() == sentinel
+
+    def test_name_is_tar(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        assert TarFormat(out, tmpl).name == "tar"
+
+
+# ---------------------------------------------------------------------------
+# TAR.GZ — pure Python
+# ---------------------------------------------------------------------------
+
+
+class TestCreateTarGz:
+    def test_creates_tar_gz_file(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        make_template(tmpl)
+        TarGzFormat(out, tmpl).create()
+        assert (out / "test_archive.tar.gz").exists()
+
+    def test_tar_gz_is_valid_gzip(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        make_template(tmpl)
+        TarGzFormat(out, tmpl).create()
+        with tarfile.open(out / "test_archive.tar.gz", "r:gz") as tf:
+            names = tf.getnames()
+        assert any("file_000.txt" in n for n in names)
+
+    def test_skips_when_file_already_exists(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        sentinel = b"EXISTING_TARGZ"
+        existing = out / "test_archive.tar.gz"
+        existing.write_bytes(sentinel)
+        TarGzFormat(out, tmpl).create()
+        assert existing.read_bytes() == sentinel
+
+    def test_name_is_tar_gz(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        assert TarGzFormat(out, tmpl).name == "tar.gz"
+
+
+# ---------------------------------------------------------------------------
+# 7z — subprocess, self-handles unavailability
+# ---------------------------------------------------------------------------
+
+
+class TestCreate7z:
+    def _make_runner_creating_file(self, out: Path) -> FakeSubprocessRunner:
         runner = FakeSubprocessRunner()
-        c, tmpl, out = make_creator(tmp_path, runner=runner)
 
         def side_effect(cmd, **kwargs):
             runner.calls.append(list(cmd))
             for arg in cmd:
                 p = Path(arg)
-                if p.parent == out and p.name.startswith("test_archive."):
-                    p.write_bytes(b"FAKE")
+                if p.parent == out and p.name == "test_archive.7z":
+                    p.write_bytes(b"FAKE_7Z")
                     break
-            from fake_subprocess import FakeResult
-
             return FakeResult(returncode=0)
 
         runner.run = side_effect
-        c.create_7zip()
-        return out, runner
+        return runner
 
-    def test_calls_subprocess_four_times(self, tmp_path):
-        _, runner = self._run(tmp_path)
-        assert runner.call_count == 4
+    def test_calls_subprocess_once(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        runner = self._make_runner_creating_file(out)
+        SevenZipFormat(out, tmpl, runner, FAKE_7Z).create()
+        assert runner.call_count == 1
 
     def test_uses_configured_7z_binary(self, tmp_path):
-        _, runner = self._run(tmp_path)
-        for cmd in runner.calls:
-            assert cmd[0] == FAKE_7Z
+        tmpl, out = _dirs(tmp_path)
+        runner = self._make_runner_creating_file(out)
+        SevenZipFormat(out, tmpl, runner, FAKE_7Z).create()
+        assert runner.calls[0][0] == FAKE_7Z
 
-    def test_zip_uses_tzip_flag(self, tmp_path):
-        _, runner = self._run(tmp_path)
-        zip_cmd = next((c for c in runner.calls if "test_archive.zip" in " ".join(c)), None)
-        assert zip_cmd and "-tzip" in zip_cmd
+    def test_uses_t7z_flag(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        runner = self._make_runner_creating_file(out)
+        SevenZipFormat(out, tmpl, runner, FAKE_7Z).create()
+        assert "-t7z" in runner.calls[0]
 
-    def test_7z_uses_t7z_flag(self, tmp_path):
-        _, runner = self._run(tmp_path)
-        sevenz_cmd = next((c for c in runner.calls if "test_archive.7z" in " ".join(c)), None)
-        assert sevenz_cmd and "-t7z" in sevenz_cmd
-
-    def test_tar_gz_uses_ttar_and_mx9(self, tmp_path):
-        _, runner = self._run(tmp_path)
-        tar_cmd = next((c for c in runner.calls if "test_archive.tar.gz" in " ".join(c)), None)
-        assert tar_cmd and "-ttar" in tar_cmd and "-mx=9" in tar_cmd
-
-    def test_skips_existing_archives(self, tmp_path):
+    def test_skips_existing_archive(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
         runner = FakeSubprocessRunner()
-        c, tmpl, out = make_creator(tmp_path, runner=runner)
-        for ext in ["zip", "7z", "tar", "tar.gz"]:
-            (out / f"test_archive.{ext}").write_bytes(b"EXISTING")
-        runner.calls.clear()
-        c.create_7zip()
+        (out / "test_archive.7z").write_bytes(b"EXISTING")
+        SevenZipFormat(out, tmpl, runner, FAKE_7Z).create()
         assert runner.call_count == 0
+
+    def test_returns_none_when_7z_not_found(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        runner = FakeSubprocessRunner()
+
+        def raise_not_found(cmd, **kwargs):
+            raise FileNotFoundError("7z not found")
+
+        runner.run = raise_not_found
+        result = SevenZipFormat(out, tmpl, runner, FAKE_7Z).create()
+        assert result is None
+
+    def test_returns_none_on_subprocess_error(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        runner = FakeSubprocessRunner()
+
+        def raise_error(cmd, **kwargs):
+            raise subprocess.CalledProcessError(1, cmd, stderr="error")
+
+        runner.run = raise_error
+        result = SevenZipFormat(out, tmpl, runner, FAKE_7Z).create()
+        assert result is None
+
+    def test_name_is_7z(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        assert SevenZipFormat(out, tmpl, FakeSubprocessRunner(), FAKE_7Z).name == "7z"
 
 
 # ---------------------------------------------------------------------------
-# RAR via Docker — subprocess mocked
+# RAR via Docker — subprocess, self-handles unavailability
 # ---------------------------------------------------------------------------
 
 
 class TestCreateRarDocker:
-    def _run(self, tmp_path):
+    def _setup(self, tmp_path: Path) -> tuple[Path, Path, Path]:
+        tmpl, out = _dirs(tmp_path)
+        dockerfile_dir = tmp_path / "docker"
+        dockerfile_dir.mkdir()
+        (dockerfile_dir / "rar.Dockerfile").write_text("FROM ubuntu\n")
+        return tmpl, out, dockerfile_dir
+
+    def _make_runner_creating_rar(self, out: Path) -> FakeSubprocessRunner:
         runner = FakeSubprocessRunner()
-        c, tmpl, out = make_creator(tmp_path, runner=runner)
-        (tmp_path / "docker").mkdir(exist_ok=True)
-        (tmp_path / "docker" / "rar.Dockerfile").write_text("FROM ubuntu\n")
 
         def side_effect(cmd, **kwargs):
             runner.calls.append(list(cmd))
-            if "run" in cmd and "docker" in cmd[0]:
+            if "run" in cmd and cmd[0] == "docker":
                 (out / "test_archive.rar").write_bytes(b"FAKE_RAR")
-            from fake_subprocess import FakeResult
-
             return FakeResult(returncode=0)
 
         runner.run = side_effect
-        c.create_rar_docker()
-        return out, runner
+        return runner
 
     def test_calls_docker_build(self, tmp_path):
-        _, runner = self._run(tmp_path)
+        tmpl, out, ddir = self._setup(tmp_path)
+        runner = self._make_runner_creating_rar(out)
+        RarDockerFormat(out, tmpl, runner, ddir).create()
         assert runner.called_with("docker", "build")
 
     def test_calls_docker_run(self, tmp_path):
-        _, runner = self._run(tmp_path)
+        tmpl, out, ddir = self._setup(tmp_path)
+        runner = self._make_runner_creating_rar(out)
+        RarDockerFormat(out, tmpl, runner, ddir).create()
         assert runner.called_with("docker", "run")
 
     def test_docker_run_uses_rm_flag(self, tmp_path):
-        _, runner = self._run(tmp_path)
-        run_calls = [c for c in runner.calls if "run" in c and "docker" in c[0]]
+        tmpl, out, ddir = self._setup(tmp_path)
+        runner = self._make_runner_creating_rar(out)
+        RarDockerFormat(out, tmpl, runner, ddir).create()
+        run_calls = [c for c in runner.calls if "run" in c and c[0] == "docker"]
         assert any("--rm" in c for c in run_calls)
 
     def test_docker_run_uses_volume_mounts(self, tmp_path):
-        _, runner = self._run(tmp_path)
-        run_calls = [c for c in runner.calls if "run" in c and "docker" in c[0]]
+        tmpl, out, ddir = self._setup(tmp_path)
+        runner = self._make_runner_creating_rar(out)
+        RarDockerFormat(out, tmpl, runner, ddir).create()
+        run_calls = [c for c in runner.calls if "run" in c and c[0] == "docker"]
         assert any("-v" in c for c in run_calls)
 
     def test_skips_existing_rar(self, tmp_path):
+        tmpl, out, ddir = self._setup(tmp_path)
         runner = FakeSubprocessRunner()
-        c, _, out = make_creator(tmp_path, runner=runner)
         (out / "test_archive.rar").write_bytes(b"EXISTING")
-        c.create_rar_docker()
+        RarDockerFormat(out, tmpl, runner, ddir).create()
         assert runner.call_count == 0
 
     def test_returns_none_on_build_failure(self, tmp_path):
+        tmpl, out, ddir = self._setup(tmp_path)
         runner = FakeSubprocessRunner()
-        c, tmpl, out = make_creator(tmp_path, runner=runner)
-        (tmp_path / "docker").mkdir(exist_ok=True)
-        (tmp_path / "docker" / "rar.Dockerfile").write_text("FROM ubuntu\n")
 
         def fail_build(cmd, **kwargs):
             runner.calls.append(list(cmd))
             if "build" in cmd:
-                raise subprocess.CalledProcessError(1, cmd, "Build failed")
-            from fake_subprocess import FakeResult
-
+                raise subprocess.CalledProcessError(1, cmd, stderr="Build failed")
             return FakeResult(returncode=0)
 
-        import subprocess
-
         runner.run = fail_build
-        result = c.create_rar_docker()
+        result = RarDockerFormat(out, tmpl, runner, ddir).create()
         assert result is None
 
     def test_does_not_run_docker_when_build_fails(self, tmp_path):
-        import subprocess
-
+        tmpl, out, ddir = self._setup(tmp_path)
         runner = FakeSubprocessRunner()
-        c, _, out = make_creator(tmp_path, runner=runner)
-        (tmp_path / "docker").mkdir(exist_ok=True)
-        (tmp_path / "docker" / "rar.Dockerfile").write_text("FROM ubuntu\n")
 
         def fail_build(cmd, **kwargs):
             runner.calls.append(list(cmd))
             if "build" in cmd:
                 raise subprocess.CalledProcessError(1, cmd)
-            from fake_subprocess import FakeResult
-
             return FakeResult(returncode=0)
 
         runner.run = fail_build
-        c.create_rar_docker()
+        RarDockerFormat(out, tmpl, runner, ddir).create()
         run_calls = [c for c in runner.calls if "run" in c]
         assert len(run_calls) == 0
 
+    def test_returns_none_when_docker_not_found(self, tmp_path):
+        tmpl, out, ddir = self._setup(tmp_path)
+        runner = FakeSubprocessRunner()
+
+        def raise_not_found(cmd, **kwargs):
+            raise FileNotFoundError("docker not found")
+
+        runner.run = raise_not_found
+        result = RarDockerFormat(out, tmpl, runner, ddir).create()
+        assert result is None
+
+    def test_name_is_rar(self, tmp_path):
+        tmpl, out, ddir = self._setup(tmp_path)
+        assert RarDockerFormat(out, tmpl, FakeSubprocessRunner(), ddir).name == "rar"
+
 
 # ---------------------------------------------------------------------------
-# create_all orchestration
+# ArchiveCreator orchestrator
 # ---------------------------------------------------------------------------
+
+
+class _StubFormat(ArchiveFormat):
+    """Minimal ArchiveFormat stub for orchestrator tests."""
+
+    def __init__(self, output_dir: Path, template_dir: Path, fmt_name: str, result: Optional[Path] = None) -> None:
+        super().__init__(output_dir, template_dir)
+        self._name = fmt_name
+        self._result = result
+        self.called = False
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def create(self) -> Optional[Path]:
+        self.called = True
+        return self._result
 
 
 class TestCreateAll:
-    def test_rpa_only_skips_subprocess(self, tmp_path):
-        runner = FakeSubprocessRunner()
-        c, tmpl, out = make_creator(tmp_path, runner=runner)
-        (tmpl / "file.txt").write_text("x")
-        c.create_all(rpa_only=True)
-        assert runner.call_count == 0
+    def test_calls_create_on_each_format(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        fmt1 = _StubFormat(out, tmpl, "fmt1")
+        fmt2 = _StubFormat(out, tmpl, "fmt2")
+        ArchiveCreator([fmt1, fmt2]).create_all()
+        assert fmt1.called and fmt2.called
 
-    def test_creates_output_dir_when_missing(self, tmp_path):
-        runner = FakeSubprocessRunner()
-        out = tmp_path / "new_output"
-        tmpl = tmp_path / "template"
-        tmpl.mkdir()
-        (tmpl / "file.txt").write_text("x")
-        c = ArchiveCreator(runner, out, tmpl, FAKE_7Z)
-        c.create_all(rpa_only=True)
-        assert out.is_dir()
+    def test_result_keys_match_format_names(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        results = ArchiveCreator(
+            [
+                _StubFormat(out, tmpl, "fmt1"),
+                _StubFormat(out, tmpl, "fmt2"),
+            ]
+        ).create_all()
+        assert set(results.keys()) == {"fmt1", "fmt2"}
 
-    def test_rpa_present_in_results(self, tmp_path):
-        runner = FakeSubprocessRunner()
-        c, tmpl, out = make_creator(tmp_path, runner=runner)
-        (tmpl / "file.txt").write_text("x")
-        results = c.create_all(rpa_only=True)
-        assert "rpa" in results and results["rpa"] is not None
+    def test_result_includes_none_for_unavailable_format(self, tmp_path):
+        tmpl, out = _dirs(tmp_path)
+        results = ArchiveCreator(
+            [
+                _StubFormat(out, tmpl, "ok", out / "file.zip"),
+                _StubFormat(out, tmpl, "skip", None),
+            ]
+        ).create_all()
+        assert results["ok"] is not None
+        assert results["skip"] is None

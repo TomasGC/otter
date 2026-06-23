@@ -4,6 +4,28 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ---
 
+2026-06-23 - [#44] Rework CI/CD Pipeline
+- Fixed OWASP NVD: condor's kotlin-nvd-refresh.yml converted to workflow_call; nvd-refresh.yml (weekly schedule) added to otter
+- Fixed PR-CI noise: check-pr job added before condor call — skips heavy pipeline if no PR for branch
+- Fixed instrumented test archive path: device-archives-path /sdcard/otter → /sdcard/otter-test-archives
+- Fixed adb push: directory push → file-by-file loop (prevents nesting when destination dir pre-exists)
+tags: #ci-cd #owasp #nvd #instrumented-tests #adb
+Ref: https://github.com/TomasGC/otter/issues/44
+Commit: e145549
+
+---
+
+2026-06-21 - [#43] Complete ArchiveCreator OOP Refactor and Stabilize CI
+- Refactored create_test_archives.py to ArchiveCreator class with SubprocessRunner DI
+- Updated CreateAction and TestScriptsAction to use new ArchiveCreator API
+- Removed coverage flags from pytest.ini addopts (run separately via manage.py test coverage)
+- Updated integration and unit tests for new OOP API
+tags: #python #oop #dependency-injection #refactoring #ci-cd
+Ref: https://github.com/TomasGC/otter/issues/43
+Commit: 69e1155
+
+---
+
 2026-06-14 - [#39] Python Scripts - OOP Refactor, 4-Tier Test Suite, Actions CLI
 - Full OOP refactor: AdbManager, GradleRunner, VersionManager, ArchiveCreator, DeviceConnector, ArchiveTemplateGenerator, FilePusher — all accept SubprocessRunner via constructor DI (FakeSubprocessRunner for tests)
 - Added actions CLI layer: AdbAction, BuildAction, TestAction, CreateAction, TestScriptsAction — dispatched by manage.py (5 verbs); removed legacy shims, manage.py is sole entry point

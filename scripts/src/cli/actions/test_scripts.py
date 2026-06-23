@@ -28,11 +28,18 @@ class TestScriptsAction:
         cmd = [sys.executable, "-m", "pytest", str(self._tests_dir)]
 
         if "coverage" in suites:
-            cmd += [f"--cov={self._src_dir}", "--cov-report=term-missing"]
+            cmd += [
+                f"--cov={self._src_dir}",
+                "--cov-branch",
+                "--cov-report=term-missing",
+                "--cov-report=html:htmlcov",
+                "--cov-report=xml:coverage.xml",
+                "--cov-fail-under=80",
+            ]
         elif suites:
             marks = " or ".join(_MARK_MAP[s] for s in suites if s in _MARK_MAP)
             if marks:
                 cmd += ["-m", marks]
 
-        result = self._runner.run(cmd)
+        result = self._runner.run(cmd, cwd=str(_SCRIPTS_ROOT))
         return result.returncode

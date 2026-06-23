@@ -9,193 +9,26 @@ concurrency:
   group: pr-ci-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
-  check-pr-exists:
-    name: Check Open PR
+  check-pr:
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success'
     outputs:
-      has_pr: ${{ steps.find-pr.outputs.has_pr }}
-      pr_number: ${{ steps.find-pr.outputs.pr_number }}
-      pr_title: ${{ steps.find-pr.outputs.pr_title }}
+      has_pr: ${{ steps.check.outputs.has_pr }}
     steps:
-      - name: Find open PR for branch
-        id: find-pr
+      - id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH="${{ github.event.workflow_run.head_branch }}"
-          REPO="${{ github.repository }}"
-          echo "Looking for open PR targeting main from branch: $BRANCH"
+          count=$(gh pr list --head "${{ github.event.workflow_run.head_branch }}" \
+            --repo "${{ github.repository }}" --json number --jq 'length')
+          echo "has_pr=$([[ "$count" -gt 0 ]] && echo true || echo false)" >> $GITHUB_OUTPUT
 
-          PR=$(gh pr list --repo "$REPO" --head "$BRANCH" --base main --state open --json number,title --jq '.[0]')
-
-          if [ -z "$PR" ] || [ "$PR" = "null" ]; then
-            echo "No open PR found for branch $BRANCH - skipping PR-CI"
-            echo "has_pr=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          PR_NUMBER=$(echo "$PR" | jq -r '.number')
-          PR_TITLE=$(echo "$PR" | jq -r '.title')
-
-          echo "Found PR #$PR_NUMBER: $PR_TITLE"
-          echo "has_pr=true" >> $GITHUB_OUTPUT
-          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "pr_title=$PR_TITLE" >> $GITHUB_OUTPUT
-
-  pr-validation:
-    name: Validate PR Format
-    runs-on: ubuntu-latest
-    needs: check-pr-exists
-    if: needs.check-pr-exists.outputs.has_pr == 'true'
-    steps:
-      - name: Check PR title format
-        env:
-          PR_TITLE: ${{ needs.check-pr-exists.outputs.pr_title }}
-        run: |
-          if ! echo "$PR_TITLE" | grep -qE '^#[0-9]+: (feat|fix|refactor|test|docs|chore|style|perf):'; then
-            echo "ERROR: PR title must follow format: #123: type: description"
-            echo "Examples:"
-            echo "  #1: feat: add ZIP extraction"
-            echo "  #2: fix: resolve null pointer in extractor"
-            echo "  #3: refactor: extract repository pattern"
-            exit 1
-          fi
-          echo "SUCCESS: PR title format valid"
-
-  context-check:
-    name: Verify Context Files Updated
-    runs-on: ubuntu-latest
-    needs: check-pr-exists
-    if: needs.check-pr-exists.outputs.has_pr == 'true'
-    permissions:
-      contents: read
-    outputs:
-      needs_update: ${{ steps.context-check.outputs.needs_update }}
-      missing: ${{ steps.context-check.outputs.missing }}
-      warnings: ${{ steps.context-check.outputs.warnings }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_sha }}
-
-      - name: Check if contexts are updated
-        id: context-check
-        run: |
-          echo "Checking context files..."
-
-          CODE_CHANGES=$(git diff --name-only origin/main...HEAD | grep -E '^app/src/' || true)
-          KANBAN_UPDATED=$(git diff --name-only origin/main...HEAD | grep -E '^\.claude/contexts/kanban\.md$' || true)
-          ARCHITECTURE_UPDATED=$(git diff --name-only origin/main...HEAD | grep -E '^\.claude/contexts/architecture\.md$' || true)
-
-          MISSING_FILES=""
-          WARNINGS=""
-
-          # KANBAN.md is MANDATORY for all code changes
-          if [ -n "$CODE_CHANGES" ] && [ -z "$KANBAN_UPDATED" ]; then
-            echo "ERROR: KANBAN.md not updated (MANDATORY)"
-            MISSING_FILES="KANBAN.md"
-          fi
-
-          # ARCHITECTURE.md is required if architectural changes detected
-          if [ -n "$CODE_CHANGES" ]; then
-            # Check for architectural indicators
-            ARCH_CHANGES=$(git diff origin/main...HEAD -- app/src/ | grep -E '(class |interface |object |enum |data class |sealed |fun |@Inject|@Singleton|@HiltViewModel|Repository|UseCase|ViewModel)' || true)
-
-            if [ -n "$ARCH_CHANGES" ] && [ -z "$ARCHITECTURE_UPDATED" ]; then
-              echo "WARNING: ARCHITECTURE.md not updated (architectural changes detected)"
-              WARNINGS="ARCHITECTURE.md"
-            fi
-          fi
-
-          # Fail if KANBAN.md missing
-          if [ -n "$MISSING_FILES" ]; then
-            echo "needs_update=true" >> $GITHUB_OUTPUT
-            echo "missing=$MISSING_FILES" >> $GITHUB_OUTPUT
-            echo "warnings=$WARNINGS" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-
-          # Warn if ARCHITECTURE.md missing
-          if [ -n "$WARNINGS" ]; then
-            echo "needs_update=warning" >> $GITHUB_OUTPUT
-            echo "warnings=$WARNINGS" >> $GITHUB_OUTPUT
-            echo "WARNING: Consider updating ARCHITECTURE.md"
-          else
-            echo "needs_update=false" >> $GITHUB_OUTPUT
-            echo "SUCCESS: Context files updated"
-          fi
-
-  context-comment:
-    name: Comment on PR (Context Missing)
-    runs-on: ubuntu-latest
-    needs: [check-pr-exists, context-check]
-    if: always() && needs.check-pr-exists.outputs.has_pr == 'true' && needs.context-check.result == 'failure' && needs.context-check.outputs.needs_update == 'true'
-    permissions:
-      pull-requests: write
-    steps:
-      - name: Comment on PR if contexts need update
-        uses: actions/github-script@v7
-        env:
-          PR_NUMBER: ${{ needs.check-pr-exists.outputs.pr_number }}
-          MISSING: ${{ needs.context-check.outputs.missing }}
-          WARNINGS: ${{ needs.context-check.outputs.warnings }}
-        with:
-          script: |
-            const missing = process.env.MISSING || '';
-            const warnings = process.env.WARNINGS || '';
-            const prNumber = parseInt(process.env.PR_NUMBER, 10);
-
-            let body = `## Context Files Not Updated\n\n`;
-            body += `This PR modifies code but required context files are missing.\n\n`;
-
-            if (missing.includes('KANBAN.md')) {
-              body += `### KANBAN.md (MANDATORY)\n\n`;
-              body += `- Add entry for this PR/issue\n`;
-              body += `- Update task status\n`;
-              body += `- Document what was done\n\n`;
-            }
-
-            if (warnings.includes('ARCHITECTURE.md')) {
-              body += `### ARCHITECTURE.md (Recommended)\n\n`;
-              body += `Architectural changes detected (new classes, interfaces, DI changes).\n`;
-              body += `Consider updating ARCHITECTURE.md if:\n`;
-              body += `- New modules or layers added\n`;
-              body += `- Design patterns changed\n`;
-              body += `- Component responsibilities changed\n\n`;
-            }
-
-            body += `---\n`;
-            body += `**Why this matters**: Context files preserve project knowledge between sessions and make reviews easier.\n\n`;
-            body += `*Tip: Update the files and amend your commit.*`;
-
-            github.rest.issues.createComment({
-              issue_number: prNumber,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: body
-            });
-
-  security-checks:
-    name: Security Validation
-    needs: check-pr-exists
-    if: needs.check-pr-exists.outputs.has_pr == 'true'
-    uses: ./.github/workflows/reusable-security-checks.yml
-    permissions:
-      contents: read
-      pull-requests: write
+  pr-checks:
+    needs: check-pr
+    if: needs.check-pr.outputs.has_pr == 'true'
+    uses: TomasGC/condor/.github/workflows/common-pr-ci.yml@main
+    secrets: inherit
     with:
-      retention-days: 7
+      push-ci-conclusion: ${{ github.event.workflow_run.conclusion }}
+      head-branch: ${{ github.event.workflow_run.head_branch }}
       head-sha: ${{ github.event.workflow_run.head_sha }}
-
-  # Optional: Matrix testing across multiple API levels
-  # Uncomment to test on API 26 (min), 30 (stable), 34 (max)
-  # instrumented-tests-matrix:
-  #   uses: ./.github/workflows/reusable-instrumented-tests-matrix.yml
-  #   with:
-  #     retention-days: 7

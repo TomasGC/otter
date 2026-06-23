@@ -25,21 +25,25 @@ class CreateAction:
         ArchiveTemplateGenerator().generate(output_dir or self._output_dir or OUTPUT_DIR)
         return 0
 
-    def run_archives(self, rpa_only: bool = False, output_dir: Optional[Path] = None) -> int:
-        from cli.create_test_archives import _DEFAULT_7Z, PROJECT_ROOT, ArchiveCreator
+    def run_archives(self, output_dir: Optional[Path] = None) -> int:
+        from cli.create_test_archives import (
+            PROJECT_ROOT,
+            ArchiveCreator,
+            _default_formats,
+        )
         from common.file_utils import load_test_settings
 
         out = output_dir or self._output_dir
         if out is None:
             out = PROJECT_ROOT / load_test_settings()["test_archives"]["host_path"]
         template = self._template_dir or (PROJECT_ROOT / "archives" / "template")
-        ArchiveCreator(self._runner, out, template, _DEFAULT_7Z).create_all(rpa_only=rpa_only)
+        out.mkdir(parents=True, exist_ok=True)
+        ArchiveCreator(_default_formats(self._runner, out, template)).create_all()
         return 0
 
     def run(
         self,
         suites: list[str] | None = None,
-        rpa_only: bool = False,
         output_dir: Optional[Path] = None,
     ) -> int:
         suites = suites or []
@@ -52,7 +56,7 @@ class CreateAction:
                 return rc
 
         if run_archives:
-            rc = self.run_archives(rpa_only=rpa_only, output_dir=output_dir)
+            rc = self.run_archives(output_dir=output_dir)
             if rc != 0:
                 return rc
 

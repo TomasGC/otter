@@ -59,7 +59,6 @@ class Manager:
             metavar="SUITE",
             help=f"Suites to run: {', '.join(CREATE_SUITES)} (default: all)",
         )
-        cp.add_argument("--rpa-only", action="store_true")
         cp.add_argument("--output-dir", type=Path, default=None)
 
         # adb
@@ -90,7 +89,6 @@ class Manager:
         if args.command == "create":
             return CreateAction(self._runner).run(
                 suites=args.suites,
-                rpa_only=args.rpa_only,
                 output_dir=args.output_dir,
             )
 
