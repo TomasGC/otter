@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 import timber.log.Timber
 import java.io.BufferedInputStream
@@ -17,7 +18,7 @@ import javax.inject.Inject
 
 /**
  * Extractor for TAR archives.
- * Supports: .tar, .tar.gz, .tgz
+ * Supports: .tar, .tar.gz, .tgz, .tar.bz2, .tbz2
  *
  * Uses Apache Commons Compress library.
  * Uses InputStream directly (no temp file needed), avoiding asset packaging issues.
@@ -29,7 +30,7 @@ class TarExtractor @Inject constructor(
 ) : BaseArchiveExtractor(tempFileManager, sevenZipHelper, IndeterminateProgressCalculator()) {
 
     override fun supports(type: ArchiveType): Boolean {
-        return type == ArchiveType.TAR || type == ArchiveType.TAR_GZ
+        return type == ArchiveType.TAR || type == ArchiveType.TAR_GZ || type == ArchiveType.TAR_BZ2
     }
 
     override fun getTag(): String = "TAR"
@@ -47,6 +48,8 @@ class TarExtractor @Inject constructor(
         // Wrap with GZIP decompressor if needed
         val decompressedStream = if (archiveType == ArchiveType.TAR_GZ) {
             GzipCompressorInputStream(BufferedInputStream(inputStream))
+        } else if (archiveType == ArchiveType.TAR_BZ2) {
+            BZip2CompressorInputStream(BufferedInputStream(inputStream))
         } else {
             BufferedInputStream(inputStream)
         }
