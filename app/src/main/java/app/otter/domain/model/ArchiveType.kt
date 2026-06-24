@@ -6,6 +6,7 @@ enum class ArchiveType(val extensions: List<String>) {
     SEVEN_ZIP(listOf(".7z")),
     TAR(listOf(".tar")),
     TAR_GZ(listOf(".tar.gz", ".tgz")),
+    TAR_BZ2(listOf(".tar.bz2", ".tbz2")),
     GZIP(listOf(".gz", ".gzip")),
     RPA(listOf(".rpa"));
 

@@ -188,6 +188,36 @@ class ArchiveInspectorFactoryTest {
         }
     }
 
+    @Test
+    fun `create should detect GZIP by extension`() {
+        val gzFile = tempFolder.newFile("test.gz")
+        gzFile.writeBytes(byteArrayOf(0x1F, 0x8B.toByte(), 0x08, 0x00))
+        val factory = ArchiveInspectorFactory()
+
+        val result = factory.create(gzFile)
+
+        assertTrue(result.isFailure)
+        result.onFailure { exception ->
+            assertTrue(exception is UnsupportedOperationException)
+            assertTrue(exception.message?.contains("GZIP") == true)
+        }
+    }
+
+    @Test
+    fun `create should detect GZIP by magic bytes when no extension`() {
+        val gzFile = tempFolder.newFile("data.bin")
+        gzFile.writeBytes(byteArrayOf(0x1F, 0x8B.toByte(), 0x08, 0x00))
+        val factory = ArchiveInspectorFactory()
+
+        val result = factory.create(gzFile)
+
+        assertTrue(result.isFailure)
+        result.onFailure { exception ->
+            assertTrue(exception is UnsupportedOperationException)
+            assertTrue(exception.message?.contains("GZIP") == true)
+        }
+    }
+
     private fun createTestZip(filename: String): File {
         val zipFile = tempFolder.newFile(filename)
         ZipOutputStream(FileOutputStream(zipFile)).use { zip ->

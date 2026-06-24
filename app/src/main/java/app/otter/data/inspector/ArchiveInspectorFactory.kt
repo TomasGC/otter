@@ -14,6 +14,7 @@ class ArchiveInspectorFactory @Inject constructor() {
         private val ZIP_MAGIC = byteArrayOf(0x50, 0x4B, 0x03, 0x04)
         private val RAR_MAGIC = byteArrayOf(0x52, 0x61, 0x72, 0x21, 0x1A, 0x07)
         private val SEVEN_ZIP_MAGIC = byteArrayOf(0x37, 0x7A, 0xBC.toByte(), 0xAF.toByte(), 0x27, 0x1C)
+        private val GZIP_MAGIC = byteArrayOf(0x1F, 0x8B.toByte())
     }
 
     fun create(file: File): Result<ArchiveInspector> {
@@ -53,6 +54,7 @@ class ArchiveInspectorFactory @Inject constructor() {
             hasMatchingMagic(magicBytes, ZIP_MAGIC) -> ArchiveType.ZIP
             hasMatchingMagic(magicBytes, RAR_MAGIC) -> ArchiveType.RAR
             hasMatchingMagic(magicBytes, SEVEN_ZIP_MAGIC) -> ArchiveType.SEVEN_ZIP
+            hasMatchingMagic(magicBytes, GZIP_MAGIC) -> ArchiveType.GZIP
             else -> null
         }
     }
@@ -71,6 +73,7 @@ class ArchiveInspectorFactory @Inject constructor() {
             lowerName.endsWith(".7z") -> ArchiveType.SEVEN_ZIP
             lowerName.endsWith(".tar.gz") || lowerName.endsWith(".tgz") -> ArchiveType.TAR_GZ
             lowerName.endsWith(".tar.bz2") || lowerName.endsWith(".tbz2") -> ArchiveType.TAR_BZ2
+            lowerName.endsWith(".gz") || lowerName.endsWith(".gzip") -> ArchiveType.GZIP
             lowerName.endsWith(".tar") -> ArchiveType.TAR
             lowerName.endsWith(".rpa") -> ArchiveType.RPA
             else -> null

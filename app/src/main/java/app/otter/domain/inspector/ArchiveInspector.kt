@@ -79,5 +79,6 @@ enum class ArchiveType {
     TAR,
     TAR_GZ,
     TAR_BZ2,
+    GZIP,
     RPA
 }
