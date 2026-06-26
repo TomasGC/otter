@@ -1,6 +1,6 @@
 # Tests - Otter
 
-**Last Updated**: 2026-06-12
+**Last Updated**: 2026-06-26
 
 ---
 
@@ -10,11 +10,11 @@
 
 | Category | Tests | Runner | Description |
 |----------|-------|--------|-------------|
-| Unit (JVM) | 439 | JUnit + MockK | Pure JVM, no Android deps |
-| Integration mock (JVM) | 94 | JUnit + MockK + real files | Real archives, mocked Android |
+| Unit (JVM) | 495 | JUnit + MockK | Pure JVM, no Android deps |
+| Integration mock (JVM) | 111 | JUnit + MockK + real files | Real archives, mocked Android |
 | Integration real (JVM) | 2 | JUnit, no mocks | Real archives, no mocks at all |
-| Instrumented (device) | 68 | AndroidJUnit4 + Hilt | Requires connected device |
-| **Total** | **603** | | |
+| Instrumented (device) | 90 | AndroidJUnit4 + Hilt | Requires connected device |
+| **Total** | **698** | | |
 
 ### Directory Structure
 
@@ -33,7 +33,7 @@ app/src/
 │   │   ├── data/
 │   │   │   ├── browser/                  # ArchiveBrowser, FileSystemBrowser, pagination
 │   │   │   ├── extractor/               # BaseArchiveExtractor, RPA creation/parsing/hex
-│   │   │   ├── inspector/               # ZipInspector, ZipInspectorPath, RpaInspector, ArchiveInspectorFactory
+│   │   │   ├── inspector/               # ZipInspector, ZipInspectorPath, RpaInspector, TarInspector, GzipInspector, SevenZipBasedInspector, ArchiveInspectorFactory
 │   │   │   ├── repository/              # ArchiveBrowserRepositoryImpl, ArchiveRepositoryImpl, ItemBrowserRepositoryImpl
 │   │   │   └── util/                    # ResourcePathConverter, RpaPickleParser
 │   │   ├── domain/
@@ -49,7 +49,7 @@ app/src/
 │   │   └── util/                        # ArchiveFileFactory, ExtractionDestinationResolver,
 │   │                                    # FileFormatters, FileLoggingTree, PathValidator
 │   │
-│   ├── integration/                     # 94 tests — real files + mocks, no Android runtime
+│   ├── integration/                     # 111 tests — real files + mocks, no Android runtime
 │   │   ├── data/extractor/              # ZIP (mock ZipFileReader), RAR, TAR, 7z, RPA
 │   │   │   ├── ZipExtractorIntegrationTest.kt     # 27 tests via FakeZipFileReader
 │   │   │   ├── ZipExtractorIntegrationTestBase.kt # shared base
@@ -57,6 +57,7 @@ app/src/
 │   │   │   ├── TarExtractorTest.kt
 │   │   │   ├── SevenZipExtractorTest.kt
 │   │   │   └── RpaExtractorTest.kt
+│   │   ├── data/inspector/              # GzipInspectorIntegrationTest (8), TarInspectorIntegrationTest (9)
 │   │   ├── domain/usecase/              # ExtractSelectedItemsIntegrationTest (10 tests)
 │   │   ├── service/                     # ExtractionSelectedItemsIntegrationTest (5 tests)
 │   │   │                                #   verifies selectedItems propagation via intent slot
@@ -68,10 +69,13 @@ app/src/
 │       └── data/extractor/
 │           └── ZipExtractorRealIntegrationTest.kt  # 29 scenarios on actual ZIP files
 │
-└── androidTest/java/app/otter/          # 68 tests — instrumented, requires device
+└── androidTest/java/app/otter/          # 90 tests — instrumented, requires device
     ├── e2e/                             # End-to-end on real device
     │   ├── ExtractionActivityTest.kt    # Activity intent handling
     │   ├── ZipExtractorInstrumentedTest.kt
+    │   ├── GzipInspectorInstrumentedTest.kt    # 7 tests
+    │   ├── SevenZipBasedInspectorInstrumentedTest.kt  # 8 tests
+    │   ├── TarInspectorInstrumentedTest.kt     # 7 tests
     │   └── domain/usecase/              # ZIP extract all, extraction, navigation workflows
     ├── helpers/                         # Shared infrastructure
     │   ├── HiltTestRunner.kt

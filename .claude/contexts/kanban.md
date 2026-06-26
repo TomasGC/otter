@@ -4,6 +4,19 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ---
 
+2026-06-26 - [#46] Other Archive Inspectors
+- Added GzipInspector, TarInspector (TAR/TAR_GZ/TAR_BZ2), SevenZipBasedInspector (RAR/7z) for archive browsing
+- Extended TarExtractor to support TAR_BZ2 extraction with BZip2CompressorInputStream
+- Fixed RPA SETITEMS parser bug: real Ren'Py games use batch SETITEMS opcode; off-by-one in markIndex slice returned 0 entries
+- Fixed FileBrowserViewModel loading state flash: moved Loading assignment before coroutine launch
+- Fixed RAR Dockerfile missing -ep1 flag: archives stored absolute /workspace/template/ paths instead of relative paths
+- Fixed CI: PYTHONPATH missing in send-test-archives.gradle.kts; exhaustive when for TAR_BZ2 in ArchiveExtractionTestHelper
+tags: #inspectors #tar-bz2 #rpa #viewmodel #rar #ci-cd
+Ref: https://github.com/TomasGC/otter/issues/46
+Commits: 37ac1ab, 48331de, 44d99d4, f497bdd, 979610a, eb1ec71
+
+---
+
 2026-06-23 - [#44] Rework CI/CD Pipeline
 - Fixed OWASP NVD: condor's kotlin-nvd-refresh.yml converted to workflow_call; nvd-refresh.yml (weekly schedule) added to otter
 - Fixed PR-CI noise: check-pr job added before condor call — skips heavy pipeline if no PR for branch
