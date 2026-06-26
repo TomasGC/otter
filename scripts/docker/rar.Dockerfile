@@ -17,4 +17,4 @@ WORKDIR /workspace
 
 # Create RAR archive from source directory
 # Usage: docker run --rm -v "$(pwd)/archives:/workspace" rar-builder test_archive.rar template/
-ENTRYPOINT ["/usr/local/bin/rar", "a", "-r", "-m5"]
+ENTRYPOINT ["/usr/local/bin/rar", "a", "-r", "-m5", "-ep1"]

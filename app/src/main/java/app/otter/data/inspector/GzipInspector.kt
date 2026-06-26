@@ -22,7 +22,7 @@ class GzipInspector(private val file: File) : ArchiveInspector {
             ArchiveEntry(
                 path = innerFileName,
                 isDirectory = false,
-                sizeBytes = 0L,
+                sizeBytes = 0L, // uncompressed size not reliably available in GZIP header
                 compressedSize = file.length(),
                 lastModified = file.lastModified()
             )

@@ -1,5 +1,6 @@
 package app.otter.data.inspector
 
+import app.otter.data.extractor.ArchiveLibraryManager
 import app.otter.domain.inspector.ArchiveInspector
 import app.otter.domain.inspector.ArchiveType
 import java.io.File
@@ -8,7 +9,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class ArchiveInspectorFactory @Inject constructor() {
+class ArchiveInspectorFactory @Inject constructor(
+    private val libraryManager: ArchiveLibraryManager
+) {
 
     companion object {
         private val ZIP_MAGIC = byteArrayOf(0x50, 0x4B, 0x03, 0x04)
@@ -25,11 +28,17 @@ class ArchiveInspectorFactory @Inject constructor() {
         }
     }
 
-    private fun createInspectorForType(archiveType: ArchiveType, file: File): ArchiveInspector = when (archiveType) {
-        ArchiveType.ZIP -> ZipInspector(file)
-        ArchiveType.RPA -> RpaInspector(file)
-        else -> throw UnsupportedOperationException("${archiveType.name} format is not yet supported for inspection")
-    }
+    private fun createInspectorForType(archiveType: ArchiveType, file: File): ArchiveInspector =
+        when (archiveType) {
+            ArchiveType.ZIP -> ZipInspector(file)
+            ArchiveType.RPA -> RpaInspector(file)
+            ArchiveType.TAR,
+            ArchiveType.TAR_GZ,
+            ArchiveType.TAR_BZ2 -> TarInspector(file, archiveType)
+            ArchiveType.GZIP -> GzipInspector(file)
+            ArchiveType.RAR,
+            ArchiveType.SEVEN_ZIP -> SevenZipBasedInspector(file, archiveType, libraryManager)
+        }
 
     private fun detectFormat(file: File): ArchiveType {
         val typeByExtension = detectByExtension(file.name)
@@ -43,6 +52,8 @@ class ArchiveInspectorFactory @Inject constructor() {
             detectByMagicBytes(file)?.let { return it }
         }
 
+        // Non-ZIP formats trust extension detection; magic bytes only used as fallback when
+        // no extension matches. Misnamed files will error at parse time in the inspector.
         return typeByExtension ?: throw IllegalArgumentException(
             "Could not detect archive format for file: ${file.name}"
         )
@@ -62,9 +73,6 @@ class ArchiveInspectorFactory @Inject constructor() {
     private fun hasMatchingMagic(bytes: ByteArray, magic: ByteArray): Boolean =
         bytes.size >= magic.size && bytes.copyOfRange(0, magic.size).contentEquals(magic)
 
-    /**
-     * Detects archive format by file extension.
-     */
     private fun detectByExtension(fileName: String): ArchiveType? {
         val lowerName = fileName.lowercase()
         return when {
@@ -80,18 +88,11 @@ class ArchiveInspectorFactory @Inject constructor() {
         }
     }
 
-    /**
-     * Reads the first N bytes from a file.
-     */
     private fun readMagicBytes(file: File, count: Int): ByteArray {
         return FileInputStream(file).use { input ->
             val buffer = ByteArray(count)
             val bytesRead = input.read(buffer)
-            if (bytesRead < count) {
-                buffer.copyOfRange(0, bytesRead)
-            } else {
-                buffer
-            }
+            if (bytesRead < count) buffer.copyOfRange(0, bytesRead) else buffer
         }
     }
 }

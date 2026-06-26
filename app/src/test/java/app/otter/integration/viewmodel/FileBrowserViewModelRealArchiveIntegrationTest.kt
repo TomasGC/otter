@@ -1,6 +1,7 @@
 package app.otter.integration.viewmodel
 
 import app.otter.data.browser.ArchiveBrowser
+import app.otter.data.extractor.ArchiveLibraryManager
 import app.otter.data.inspector.ArchiveInspectorFactory
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
@@ -104,7 +105,7 @@ class FileBrowserViewModelRealArchiveIntegrationTest {
      * This validates the entire archive reading pipeline independently of coroutines.
      */
     private fun readRealArchiveItems(zip: File): List<BrowsableItem> {
-        val factory = ArchiveInspectorFactory()
+        val factory = ArchiveInspectorFactory(mockk<ArchiveLibraryManager>(relaxed = true))
         val inspector = factory.create(zip).getOrThrow()
         val browser = ArchiveBrowser(inspector, zip.absolutePath)
         // ArchiveBrowser.browse is suspend — run it synchronously via runBlocking
@@ -257,7 +258,7 @@ class FileBrowserViewModelRealArchiveIntegrationTest {
             }
         }
 
-        val factory = ArchiveInspectorFactory()
+        val factory = ArchiveInspectorFactory(mockk<ArchiveLibraryManager>(relaxed = true))
         val inspector = factory.create(numericZip).getOrThrow()
         val browser = ArchiveBrowser(inspector, numericZip.absolutePath)
         val numericItems = kotlinx.coroutines.runBlocking {
