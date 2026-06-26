@@ -7,6 +7,7 @@ import io.mockk.mockk
 import net.sf.sevenzipjbinding.IInArchive
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorOutputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -190,6 +191,48 @@ class ArchiveInspectorFactoryTest {
     }
 
     @Test
+    fun `create should detect TAR_BZ2 by tar dot bz2 extension`() {
+        val tarBz2File = createTestTarBz2("test.tar.bz2")
+        val factory = ArchiveInspectorFactory(mockLibraryManager)
+
+        val result = factory.create(tarBz2File)
+
+        assertTrue(result.isSuccess)
+        result.onSuccess { inspector ->
+            assertEquals(ArchiveType.TAR_BZ2, inspector.getArchiveType())
+            inspector.close()
+        }
+    }
+
+    @Test
+    fun `create should detect TAR_BZ2 by tbz2 extension`() {
+        val tarBz2File = createTestTarBz2("archive.tbz2")
+        val factory = ArchiveInspectorFactory(mockLibraryManager)
+
+        val result = factory.create(tarBz2File)
+
+        assertTrue(result.isSuccess)
+        result.onSuccess { inspector ->
+            assertEquals(ArchiveType.TAR_BZ2, inspector.getArchiveType())
+            inspector.close()
+        }
+    }
+
+    @Test
+    fun `create should detect TAR_GZ by tgz extension`() {
+        val tgzFile = createTestTarGz("archive.tgz")
+        val factory = ArchiveInspectorFactory(mockLibraryManager)
+
+        val result = factory.create(tgzFile)
+
+        assertTrue(result.isSuccess)
+        result.onSuccess { inspector ->
+            assertEquals(ArchiveType.TAR_GZ, inspector.getArchiveType())
+            inspector.close()
+        }
+    }
+
+    @Test
     fun `create should return new inspector instance each time`() {
         val zipFile = createTestZip("test.zip")
         val factory = ArchiveInspectorFactory(mockLibraryManager)
@@ -233,6 +276,18 @@ class ArchiveInspectorFactoryTest {
     private fun createTestTarGz(filename: String): File {
         val file = tempFolder.newFile(filename)
         TarArchiveOutputStream(GzipCompressorOutputStream(FileOutputStream(file))).use { tar ->
+            val entry = TarArchiveEntry("test.txt")
+            entry.size = 4L
+            tar.putArchiveEntry(entry)
+            tar.write("test".toByteArray())
+            tar.closeArchiveEntry()
+        }
+        return file
+    }
+
+    private fun createTestTarBz2(filename: String): File {
+        val file = tempFolder.newFile(filename)
+        TarArchiveOutputStream(BZip2CompressorOutputStream(FileOutputStream(file))).use { tar ->
             val entry = TarArchiveEntry("test.txt")
             entry.size = 4L
             tar.putArchiveEntry(entry)

@@ -97,16 +97,51 @@ class TarInspectorTest {
     }
 
     @Test
-    fun `countEntries throws after close`() {
+    fun `countEntries throws after close`() = runTest {
         val file = createTar("test.tar", listOf("a.txt" to "x"))
         val inspector = TarInspector(file, ArchiveType.TAR)
         inspector.close()
 
-        assertThrows(IllegalStateException::class.java) {
-            runTest {
-                inspector.countEntries()
-            }
+        var exceptionThrown = false
+        try {
+            inspector.countEntries()
+        } catch (e: IllegalStateException) {
+            exceptionThrown = true
         }
+        assertTrue(exceptionThrown)
+    }
+
+    @Test
+    fun `entries preserves nested path`() {
+        val file = createTar("test.tar", listOf("dir/sub/file.txt" to "content"))
+        val inspector = TarInspector(file, ArchiveType.TAR)
+
+        val entries = inspector.entries().toList()
+
+        assertEquals("dir/sub/file.txt", entries[0].path)
+        inspector.close()
+    }
+
+    @Test
+    fun `entries returns correct sizeBytes for file`() {
+        val file = createTar("test.tar", listOf("a.txt" to "hello"))
+        val inspector = TarInspector(file, ArchiveType.TAR)
+
+        val entries = inspector.entries().toList()
+
+        assertEquals(5L, entries[0].sizeBytes)
+        inspector.close()
+    }
+
+    @Test
+    fun `entries returns sizeBytes zero for directory`() {
+        val file = createTar("test.tar", listOf("dir/" to null))
+        val inspector = TarInspector(file, ArchiveType.TAR)
+
+        val entries = inspector.entries().toList()
+
+        assertEquals(0L, entries[0].sizeBytes)
+        inspector.close()
     }
 
     // --- TAR_GZ ---
@@ -129,6 +164,24 @@ class TarInspectorTest {
         inspector.close()
     }
 
+    @Test
+    fun `countEntries returns zero for empty TAR_GZ`() = runTest {
+        val file = createTarGz("empty.tar.gz", emptyList())
+        val inspector = TarInspector(file, ArchiveType.TAR_GZ)
+
+        assertEquals(0, inspector.countEntries())
+        inspector.close()
+    }
+
+    @Test
+    fun `isEncrypted always returns false for TAR_GZ`() {
+        val file = createTarGz("test.tar.gz", listOf("a.txt" to "x"))
+        val inspector = TarInspector(file, ArchiveType.TAR_GZ)
+
+        assertFalse(inspector.isEncrypted())
+        inspector.close()
+    }
+
     // --- TAR_BZ2 ---
 
     @Test
@@ -146,6 +199,40 @@ class TarInspectorTest {
         val inspector = TarInspector(file, ArchiveType.TAR_BZ2)
 
         assertEquals(ArchiveType.TAR_BZ2, inspector.getArchiveType())
+        inspector.close()
+    }
+
+    @Test
+    fun `countEntries returns zero for empty TAR_BZ2`() = runTest {
+        val file = createTarBz2("empty.tar.bz2", emptyList())
+        val inspector = TarInspector(file, ArchiveType.TAR_BZ2)
+
+        assertEquals(0, inspector.countEntries())
+        inspector.close()
+    }
+
+    @Test
+    fun `entries returns correct entries for TAR_BZ2`() {
+        val file = createTarBz2("test.tar.bz2", listOf("readme.txt" to "bzip2 content", "dir/" to null))
+        val inspector = TarInspector(file, ArchiveType.TAR_BZ2)
+
+        val entries = inspector.entries().toList()
+
+        assertEquals(2, entries.size)
+        assertEquals("readme.txt", entries[0].path)
+        assertFalse(entries[0].isDirectory)
+        assertEquals(13L, entries[0].sizeBytes)
+        assertEquals("dir/", entries[1].path)
+        assertTrue(entries[1].isDirectory)
+        inspector.close()
+    }
+
+    @Test
+    fun `isEncrypted always returns false for TAR_BZ2`() {
+        val file = createTarBz2("test.tar.bz2", listOf("a.txt" to "x"))
+        val inspector = TarInspector(file, ArchiveType.TAR_BZ2)
+
+        assertFalse(inspector.isEncrypted())
         inspector.close()
     }
 

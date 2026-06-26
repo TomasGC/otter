@@ -180,15 +180,63 @@ class SevenZipBasedInspectorTest {
     }
 
     @Test
-    fun `countEntries throws after close`() {
+    fun `countEntries throws after close`() = runTest {
+        val file = makeFile()
+        val inspector = SevenZipBasedInspector(file, ArchiveType.SEVEN_ZIP, mockLibraryManager)
+        inspector.close()
+
+        var exceptionThrown = false
+        try {
+            inspector.countEntries()
+        } catch (e: IllegalStateException) {
+            exceptionThrown = true
+        }
+        assertTrue(exceptionThrown)
+    }
+
+    @Test
+    fun `isEncrypted returns false when archive property is false`() {
+        val file = makeFile()
+        every { mockLibraryManager.openArchive(file) } returns mockArchive
+        every { mockArchive.getArchiveProperty(PropID.ENCRYPTED) } returns false
+        val inspector = SevenZipBasedInspector(file, ArchiveType.SEVEN_ZIP, mockLibraryManager)
+
+        assertFalse(inspector.isEncrypted())
+        inspector.close()
+    }
+
+    @Test
+    fun `countEntries returns zero for empty archive`() = runTest {
+        val file = makeFile()
+        every { mockLibraryManager.openArchive(file) } returns mockArchive
+        every { mockArchive.numberOfItems } returns 0
+        val inspector = SevenZipBasedInspector(file, ArchiveType.SEVEN_ZIP, mockLibraryManager)
+
+        assertEquals(0, inspector.countEntries())
+        inspector.close()
+    }
+
+    @Test
+    fun `entries returns empty sequence for empty archive`() {
+        val file = makeFile()
+        every { mockLibraryManager.openArchive(file) } returns mockArchive
+        every { mockArchive.numberOfItems } returns 0
+        val inspector = SevenZipBasedInspector(file, ArchiveType.SEVEN_ZIP, mockLibraryManager)
+
+        val entries = inspector.entries().toList()
+
+        assertTrue(entries.isEmpty())
+        inspector.close()
+    }
+
+    @Test
+    fun `isEncrypted throws after close`() {
         val file = makeFile()
         val inspector = SevenZipBasedInspector(file, ArchiveType.SEVEN_ZIP, mockLibraryManager)
         inspector.close()
 
         assertThrows(IllegalStateException::class.java) {
-            runTest {
-                inspector.countEntries()
-            }
+            inspector.isEncrypted()
         }
     }
 }

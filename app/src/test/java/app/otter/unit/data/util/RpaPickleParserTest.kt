@@ -1,5 +1,6 @@
 package app.otter.data.util
 
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.File
 import java.util.zip.InflaterInputStream
@@ -62,4 +63,49 @@ class RpaPickleParserTest {
     }
 
     private data class RpaHeader(val indexOffset: Long, val key: Long)
+
+    @Test
+    fun `parseIndex extracts entries from SETITEMS batch dict construction`() {
+        // Pickle pattern used by real Ren'Py games: EMPTY_DICT + MARK + (key, [(offset, size)], ...) + SETITEMS
+        // key=0 so XOR is identity
+        val pickle = byteArrayOf(
+            0x80.toByte(), 0x02,                          // PROTO 2
+            '}'.code.toByte(),                             // EMPTY_DICT
+            0x94.toByte(),                                 // MEMOIZE
+            '('.code.toByte(),                             // MARK
+
+            // Entry 1: "name1" -> [(100, 200)]
+            0x8C.toByte(), 0x05,                           // SHORT_BINUNICODE length=5
+            'n'.code.toByte(), 'a'.code.toByte(), 'm'.code.toByte(), 'e'.code.toByte(), '1'.code.toByte(),
+            ']'.code.toByte(),                             // EMPTY_LIST
+            0x94.toByte(),                                 // MEMOIZE
+            'J'.code.toByte(), 100, 0, 0, 0,              // BININT 100
+            'J'.code.toByte(), 200.toByte(), 0, 0, 0,     // BININT 200
+            0x86.toByte(),                                 // TUPLE2
+            'a'.code.toByte(),                             // APPEND
+
+            // Entry 2: "name2" -> [(1000, 150)]
+            0x8C.toByte(), 0x05,                           // SHORT_BINUNICODE length=5
+            'n'.code.toByte(), 'a'.code.toByte(), 'm'.code.toByte(), 'e'.code.toByte(), '2'.code.toByte(),
+            ']'.code.toByte(),                             // EMPTY_LIST
+            0x94.toByte(),                                 // MEMOIZE
+            'J'.code.toByte(), 0xE8.toByte(), 0x03, 0, 0, // BININT 1000
+            'J'.code.toByte(), 0x96.toByte(), 0, 0, 0,    // BININT 150
+            0x86.toByte(),                                 // TUPLE2
+            'a'.code.toByte(),                             // APPEND
+
+            'u'.code.toByte(),                             // SETITEMS
+            '.'.code.toByte()                              // STOP
+        )
+
+        val entries = RpaPickleParser.parseIndex(pickle, key = 0L)
+
+        assertEquals(2, entries.size)
+        val e1 = entries.first { it.name == "name1" }
+        assertEquals(100L, e1.offset)
+        assertEquals(200L, e1.size)
+        val e2 = entries.first { it.name == "name2" }
+        assertEquals(1000L, e2.offset)
+        assertEquals(150L, e2.size)
+    }
 }

@@ -127,6 +127,40 @@ class GzipInspectorTest {
         assertTrue(exceptionThrown)
     }
 
+    @Test
+    fun `entries lastModified equals file lastModified`() {
+        val file = createGzipFile("archive.gz", "content")
+        val expectedLastModified = file.lastModified()
+        val inspector = GzipInspector(file)
+
+        val entries = inspector.entries().toList()
+
+        assertEquals(expectedLastModified, entries[0].lastModified)
+        inspector.close()
+    }
+
+    @Test
+    fun `entries handles uppercase GZ extension`() {
+        val file = createGzipFile("ARCHIVE.GZ", "content")
+        val inspector = GzipInspector(file)
+
+        val entries = inspector.entries().toList()
+
+        assertEquals("ARCHIVE", entries[0].path)
+        inspector.close()
+    }
+
+    @Test
+    fun `entries sizeBytes is zero`() {
+        val file = createGzipFile("data.gz", "some content here")
+        val inspector = GzipInspector(file)
+
+        val entries = inspector.entries().toList()
+
+        assertEquals(0L, entries[0].sizeBytes)
+        inspector.close()
+    }
+
     private fun createGzipFile(name: String, content: String): java.io.File {
         val file = tempFolder.newFile(name)
         GzipCompressorOutputStream(FileOutputStream(file)).use { gz ->
