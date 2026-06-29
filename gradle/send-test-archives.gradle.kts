@@ -55,6 +55,9 @@ tasks.register("sendTestArchivesToDevice") {
         val process = ProcessBuilder("python", pythonScript.absolutePath, "--ci")
             .directory(project.rootDir)
             .redirectErrorStream(true)
+            .apply {
+                environment()["PYTHONPATH"] = File(project.rootDir, "scripts/src").absolutePath
+            }
             .start()
 
         val output = process.inputStream.bufferedReader().readText()

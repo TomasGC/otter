@@ -253,8 +253,8 @@ object RpaPickleParser {
         }
 
         private fun handleSetitems() {
-            if (markIndex >= 0 && stack.size > markIndex + 1) {
-                val items = stack.subList(markIndex + 1, stack.size).toList()
+            if (markIndex >= 0 && stack.size > markIndex) {
+                val items = stack.subList(markIndex, stack.size).toList()
                 repeat(items.size) { stack.removeAt(stack.size - 1) }
                 Timber.tag(TAG).d("SETITEMS: processing ${items.size} items")
                 for (i in 0 until items.size step 2) {

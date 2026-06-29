@@ -453,8 +453,8 @@ class FileBrowserViewModel @Inject constructor(
     }
 
     private fun browseDirectory(path: ResourcePath) {
+        _uiState.value = FileBrowserUiState.Loading
         viewModelScope.launch {
-            _uiState.value = FileBrowserUiState.Loading
 
             // Reset cache
             cachedItems.clear()

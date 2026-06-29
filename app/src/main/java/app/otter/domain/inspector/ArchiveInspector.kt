@@ -59,9 +59,8 @@ interface ArchiveInspector : Closeable {
     fun getArchiveType(): ArchiveType
 
     /**
-     * Releases underlying resources.
+     * Releases underlying resources (streams, native handles, cached data).
      *
-     * Closes the input stream and any native handles.
      * Safe to call multiple times (idempotent).
      *
      * After calling close(), all other methods will throw [IllegalStateException].
@@ -79,5 +78,6 @@ enum class ArchiveType {
     TAR,
     TAR_GZ,
     TAR_BZ2,
+    GZIP,
     RPA
 }

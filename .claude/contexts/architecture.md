@@ -20,13 +20,13 @@
 | **Async** | Kotlin Coroutines | Asynchronous programming |
 | **Reactive** | Flow | Reactive data streams |
 | **Build** | Gradle (KTS) + Python scripts (manage.py) | Kotlin DSL + cross-platform build/test/ADB automation via OOP DI scripts |
-| **Testing** | JUnit + MockK + Coroutines Test | 603 tests (439 unit + 94 integ-mock + 2 integ-real + 68 instrumented) |
+| **Testing** | JUnit + MockK + Coroutines Test | 698 tests (495 unit + 111 integ-mock + 2 integ-real + 90 instrumented) |
 | **ZIP Extraction** | java.util.zip + IZipFileReader | Native ZIP (testable via interface) |
 | **RAR Extraction** | 7-Zip-JBinding | RAR4/RAR5 support (.so libs) |
 | **7z Extraction** | 7-Zip-JBinding | 7-Zip format support (.so libs) |
 | **TAR/GZIP Extraction** | Apache Commons Compress | TAR, TAR.GZ, TGZ, GZIP support |
 | **RPA Extraction** | Custom (RpaPickleParser) | Ren'Py Archive (binary protocol 2) |
-| **Archive Inspection** | ZipInspector, RpaInspector | Lazy streaming entry enumeration |
+| **Archive Inspection** | ZipInspector, RpaInspector, TarInspector, GzipInspector, SevenZipBasedInspector | Lazy streaming entry enumeration for all supported formats |
 | **Background Work** | Foreground Service + ExtractionQueue | Progress notifications, FIFO queue |
 
 
@@ -62,6 +62,9 @@ graph TB
             InspectorFactory[ArchiveInspectorFactory]
             ZipInsp[ZipInspector<br/>lazy streaming]
             RpaInsp[RpaInspector<br/>RpaPickleParser]
+            TarInsp[TarInspector<br/>TAR/TAR_GZ/TAR_BZ2]
+            GzipInsp[GzipInspector<br/>GZIP single-file]
+            SevenZipInsp[SevenZipBasedInspector<br/>RAR/7z via 7-Zip-JBinding]
         end
         
         subgraph "Browsers"
@@ -97,6 +100,9 @@ graph TB
     ArchBrowser --> InspectorFactory
     InspectorFactory --> ZipInsp
     InspectorFactory --> RpaInsp
+    InspectorFactory --> TarInsp
+    InspectorFactory --> GzipInsp
+    InspectorFactory --> SevenZipInsp
     RepoInterface -.implements.-> RepoImpl
     RepoImpl --> BaseExtractor
     BaseExtractor --> ZipExt
@@ -315,6 +321,9 @@ graph TD
             Factory2[ArchiveInspectorFactory]
             ZipI[ZipInspector]
             RpaI[RpaInspector]
+            TarI[TarInspector]
+            GzipI[GzipInspector]
+            SevenZipI[SevenZipBasedInspector]
         end
         
         subgraph "Browsers"
@@ -368,6 +377,9 @@ graph TD
     AB --> Factory2
     Factory2 --> ZipI
     Factory2 --> RpaI
+    Factory2 --> TarI
+    Factory2 --> GzipI
+    Factory2 --> SevenZipI
     Hilt -.provides.-> RepoImpl2
     Hilt -.provides.-> BrowseRepoImpl2
     
@@ -1301,8 +1313,8 @@ The project uses GitHub Actions with workflows grouped by language prefix (GitHu
 3. Both require `PYTHONPATH=scripts/src` for cross-module imports
 
 **Coverage**: ≥80% threshold enforced
-**Test Count**: 603 Kotlin tests + ~377 Python script tests
-- Kotlin unit (JVM): 439 | integration mock: 94 | integration real: 2 | instrumented: 68
+**Test Count**: 698 Kotlin tests + ~377 Python script tests
+- Kotlin unit (JVM): 495 | integration mock: 111 | integration real: 2 | instrumented: 90
 - Python unit: ~290 | integration mock: 39 | integration real: 23 | e2e: 0
 **Success Rate**: 95-100% (improved with Gradle Managed Devices)
 

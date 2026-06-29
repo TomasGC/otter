@@ -24,6 +24,7 @@ class SimpleTempFileManager : ITempFileManager {
             ArchiveType.SEVEN_ZIP -> "7z"
             ArchiveType.TAR -> "tar"
             ArchiveType.TAR_GZ -> "tar.gz"
+            ArchiveType.TAR_BZ2 -> "tar.bz2"
             ArchiveType.GZIP -> "gz"
             ArchiveType.RPA -> "rpa"
         }
