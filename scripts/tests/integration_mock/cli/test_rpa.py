@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from cli.create_test_archives import RpaFormat
+from cli.archive_scenarios.perfect import RpaFormat
 
 pytestmark = pytest.mark.integration_mock
 

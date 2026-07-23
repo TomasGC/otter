@@ -45,19 +45,24 @@ class TestSuitesConstant:
     def test_contains_expected_suites(self):
         assert "unit" in SUITES
         assert "instrumented" in SUITES
-        assert "coverage" in SUITES
+        assert "integration-mocks" in SUITES
+        assert "integration-reals" in SUITES
+        assert "integrations" in SUITES
+        assert "coverage" not in SUITES
+        assert "all" not in SUITES
 
 
 class TestRunUnit:
-    def test_calls_unit_task(self, tmp_path):
+    def test_calls_three_stages(self, tmp_path):
         action, gradle, _, _, _ = make_action(tmp_path)
         action.run_unit()
-        gradle.run_task.assert_called_once_with("testDebugUnitTest")
-
-    def test_calls_coverage_task_when_flag_set(self, tmp_path):
-        action, gradle, _, _, _ = make_action(tmp_path)
-        action.run_unit(coverage=True)
-        gradle.run_task.assert_called_once_with("testDebugUnitTestCoverage")
+        assert gradle.run_task.call_count == 3
+        for call, expected_type in zip(
+            gradle.run_task.call_args_list,
+            ["unit-domain-service", "unit-data", "unit-ui"],
+        ):
+            assert call.args == ("testDebugUnitTest",)
+            assert call.kwargs["extra_args"] == [f"-DtestType={expected_type}"]
 
     def test_returns_true_on_success(self, tmp_path):
         action, _, _, _, _ = make_action(tmp_path)
@@ -69,6 +74,43 @@ class TestRunUnit:
         assert action.run_unit() is False
 
 
+class TestRunIntegrationMocks:
+    def test_calls_two_stages(self, tmp_path):
+        action, gradle, _, _, _ = make_action(tmp_path)
+        action.run_integration_mocks()
+        assert gradle.run_task.call_count == 2
+        types = [c.kwargs["extra_args"][0] for c in gradle.run_task.call_args_list]
+        assert types == [
+            "-DtestType=integration-mock-extractor",
+            "-DtestType=integration-mock-other",
+        ]
+
+    def test_returns_false_if_any_stage_fails(self, tmp_path):
+        action, gradle, _, _, _ = make_action(tmp_path)
+        gradle.run_task.side_effect = [False, True]
+        assert action.run_integration_mocks() is False
+
+    def test_returns_true_when_all_pass(self, tmp_path):
+        action, _, _, _, _ = make_action(tmp_path)
+        assert action.run_integration_mocks() is True
+
+
+class TestRunIntegrationReals:
+    def test_calls_single_stage(self, tmp_path):
+        action, gradle, _, _, _ = make_action(tmp_path)
+        action.run_integration_reals()
+        gradle.run_task.assert_called_once_with("testDebugUnitTest", extra_args=["-DtestType=integration-real"])
+
+    def test_returns_false_on_failure(self, tmp_path):
+        action, gradle, _, _, _ = make_action(tmp_path)
+        gradle.run_task.return_value = False
+        assert action.run_integration_reals() is False
+
+    def test_returns_true_on_success(self, tmp_path):
+        action, _, _, _, _ = make_action(tmp_path)
+        assert action.run_integration_reals() is True
+
+
 class TestSendArchives:
     def test_sends_existing_files(self, tmp_path):
         archives_dir = tmp_path / "archives"
@@ -76,7 +118,13 @@ class TestSendArchives:
         (archives_dir / "test.zip").write_bytes(b"PK")
         (archives_dir / "test.rpa").write_bytes(b"RPA")
 
-        settings = {**SETTINGS, "test_archives": {**SETTINGS["test_archives"], "host_path": str(archives_dir)}}
+        settings = {
+            **SETTINGS,
+            "test_archives": {
+                **SETTINGS["test_archives"],
+                "host_path": str(archives_dir),
+            },
+        }
         action, _, _, runner, _ = make_action(tmp_path, settings)
         runner.add_run(returncode=0)  # mkdir
         runner.add_run(returncode=0)  # push zip
@@ -89,7 +137,13 @@ class TestSendArchives:
         archives_dir = tmp_path / "archives"
         archives_dir.mkdir()
 
-        settings = {**SETTINGS, "test_archives": {**SETTINGS["test_archives"], "host_path": str(archives_dir)}}
+        settings = {
+            **SETTINGS,
+            "test_archives": {
+                **SETTINGS["test_archives"],
+                "host_path": str(archives_dir),
+            },
+        }
         action, _, _, runner, _ = make_action(tmp_path, settings)
         runner.add_run(returncode=0)  # mkdir
 
@@ -102,7 +156,11 @@ class TestSendArchives:
         (archives_dir / "test.zip").write_bytes(b"PK")
         settings = {
             **SETTINGS,
-            "test_archives": {**SETTINGS["test_archives"], "host_path": str(archives_dir), "files": ["test.zip"]},
+            "test_archives": {
+                **SETTINGS["test_archives"],
+                "host_path": str(archives_dir),
+                "files": ["test.zip"],
+            },
         }
         action, _, _, runner, _ = make_action(tmp_path, settings)
         runner.add_run(returncode=0)  # mkdir
@@ -115,55 +173,116 @@ class TestSendArchives:
 class TestRunInstrumented:
     def test_calls_connected_task(self, tmp_path):
         action, gradle, _, runner, _ = make_action(tmp_path)
+        action._grant_manage_external_storage = MagicMock(return_value=True)
         runner.add_run(returncode=0)  # mkdir in send_archives
         action.run_instrumented("192.168.1.1:5555")
-        gradle.run_task.assert_called_with("connectedDebugAndroidTest", timeout=600)
+        assert gradle.run_task.call_count == 2
+        main_call, isolated_call = gradle.run_task.call_args_list
+        assert main_call.args == ("connectedDebugAndroidTest",)
+        assert main_call.kwargs["timeout"] == 600
+        assert "notClass=" in main_call.kwargs["extra_args"][0]
+        assert isolated_call.args == ("connectedDebugAndroidTest",)
+        assert "class=" in isolated_call.kwargs["extra_args"][0]
 
     def test_returns_gradle_result(self, tmp_path):
         action, gradle, _, runner, _ = make_action(tmp_path)
+        action._grant_manage_external_storage = MagicMock(return_value=True)
         runner.add_run(returncode=0)
         gradle.run_task.return_value = False
         assert action.run_instrumented("192.168.1.1:5555") is False
 
+    def test_returns_false_when_grant_fails(self, tmp_path):
+        action, gradle, _, _, _ = make_action(tmp_path)
+        action._grant_manage_external_storage = MagicMock(return_value=False)
+        assert action.run_instrumented("192.168.1.1:5555") is False
+        gradle.run_task.assert_not_called()
+
+
+class TestRunPermissionIsolatedTest:
+    def test_brackets_gradle_run_with_revoke_and_grant(self, tmp_path):
+        action, gradle, _, runner, _ = make_action(tmp_path)
+        runner.add_run(returncode=0)  # pm revoke
+        runner.add_run(returncode=0)  # pm grant
+        result = action.run_permission_isolated_test("192.168.1.1:5555", 600)
+
+        assert result is True
+        revoke_call, grant_call = runner.calls
+        assert revoke_call[:4] == ["adb", "-s", "192.168.1.1:5555", "shell"]
+        assert "revoke" in revoke_call
+        assert grant_call[:4] == ["adb", "-s", "192.168.1.1:5555", "shell"]
+        assert "grant" in grant_call
+
+    def test_grant_still_runs_when_gradle_task_fails(self, tmp_path):
+        action, gradle, _, runner, _ = make_action(tmp_path)
+        runner.add_run(returncode=0)  # pm revoke
+        runner.add_run(returncode=0)  # pm grant
+        gradle.run_task.return_value = False
+
+        result = action.run_permission_isolated_test("192.168.1.1:5555", 600)
+
+        assert result is False
+        assert len(runner.calls) == 2  # revoke and grant both still ran
+
 
 class TestTestActionRun:
-    def test_no_suites_runs_both(self, tmp_path):
+    def test_no_suites_runs_all(self, tmp_path):
         action, gradle, _, runner, _ = make_action(tmp_path)
+        action._grant_manage_external_storage = MagicMock(return_value=True)
         runner.add_run(returncode=0)
         action.run()
-        assert gradle.run_task.call_count == 2
+        # 3 unit + 2 integ-mock + 1 integ-real + 2 instrumented
+        assert gradle.run_task.call_count == 8
+
+    def test_no_args_runs_all(self, tmp_path):
+        action, gradle, _, runner, _ = make_action(tmp_path)
+        action._grant_manage_external_storage = MagicMock(return_value=True)
+        runner.add_run(returncode=0)
+        action.run()
+        assert gradle.run_task.call_count == 8
 
     def test_unit_suite_runs_only_unit(self, tmp_path):
         action, gradle, adb, _, _ = make_action(tmp_path)
         action.run(suites=["unit"])
-        gradle.run_task.assert_called_once_with("testDebugUnitTest")
+        assert gradle.run_task.call_count == 3
+        for call, expected_type in zip(
+            gradle.run_task.call_args_list,
+            ["unit-domain-service", "unit-data", "unit-ui"],
+        ):
+            assert call.args == ("testDebugUnitTest",)
+            assert call.kwargs["extra_args"] == [f"-DtestType={expected_type}"]
         adb.get_connected.assert_not_called()
 
     def test_instrumented_suite_runs_only_instrumented(self, tmp_path):
         action, gradle, _, runner, _ = make_action(tmp_path)
+        action._grant_manage_external_storage = MagicMock(return_value=True)
         runner.add_run(returncode=0)
         action.run(suites=["instrumented"])
-        gradle.run_task.assert_called_with("connectedDebugAndroidTest", timeout=600)
+        assert gradle.run_task.call_count == 2
+        for call in gradle.run_task.call_args_list:
+            assert call.args == ("connectedDebugAndroidTest",)
+            assert call.kwargs["timeout"] == 600
 
-    def test_coverage_overrides_other_suites(self, tmp_path):
+    def test_integrations_suite_runs_mocks_and_reals(self, tmp_path):
         action, gradle, adb, _, _ = make_action(tmp_path)
-        action.run(suites=["unit", "instrumented", "coverage"])
-        gradle.run_task.assert_called_once_with("testDebugUnitTestCoverage")
+        action.run(suites=["integrations"])
+        assert gradle.run_task.call_count == 3  # 2 mock + 1 real
         adb.get_connected.assert_not_called()
 
-    def test_coverage_alone_runs_coverage_task(self, tmp_path):
-        action, gradle, _, _, _ = make_action(tmp_path)
-        rc = action.run(suites=["coverage"])
-        gradle.run_task.assert_called_once_with("testDebugUnitTestCoverage")
-        assert rc == 0
+    def test_integration_mocks_suite_runs_only_mocks(self, tmp_path):
+        action, gradle, adb, _, _ = make_action(tmp_path)
+        action.run(suites=["integration-mocks"])
+        assert gradle.run_task.call_count == 2
+        adb.get_connected.assert_not_called()
 
-    def test_coverage_returns_1_on_failure(self, tmp_path):
-        action, gradle, _, _, _ = make_action(tmp_path)
-        gradle.run_task.return_value = False
-        assert action.run(suites=["coverage"]) == 1
+    def test_integration_reals_suite_runs_only_reals(self, tmp_path):
+        action, gradle, adb, _, _ = make_action(tmp_path)
+        action.run(suites=["integration-reals"])
+        assert gradle.run_task.call_count == 1
+        adb.get_connected.assert_not_called()
 
     def test_returns_0_on_full_success(self, tmp_path):
         action, gradle, _, runner, _ = make_action(tmp_path)
+        action._grant_manage_external_storage = MagicMock(return_value=True)
         runner.add_run(returncode=0)
         assert action.run() == 0
 
@@ -180,6 +299,7 @@ class TestTestActionRun:
 
     def test_auto_connects_when_no_device(self, tmp_path):
         action, gradle, adb, runner, connector = make_action(tmp_path)
+        action._grant_manage_external_storage = MagicMock(return_value=True)
         adb.get_connected.side_effect = [[], ["192.168.1.1:5555"]]
         runner.add_run(returncode=0)
         action.run(suites=["instrumented"])
@@ -190,12 +310,6 @@ class TestTestActionRun:
         adb.get_connected.side_effect = [[], []]
         connector.auto_connect.return_value = "192.168.1.1:5555"
         assert action.run(suites=["instrumented"]) == 1
-
-    def test_empty_suites_same_as_no_suites(self, tmp_path):
-        action, gradle, _, runner, _ = make_action(tmp_path)
-        runner.add_run(returncode=0)
-        action.run(suites=[])
-        assert gradle.run_task.call_count == 2
 
 
 class TestLazyCreation:
@@ -222,6 +336,55 @@ class TestLazyCreation:
 class TestInstrumentedFailure:
     def test_returns_1_when_instrumented_fails_with_device_present(self, tmp_path):
         action, gradle, _, runner, _ = make_action(tmp_path)
+        action._grant_manage_external_storage = MagicMock(return_value=True)
         runner.add_run(returncode=0)  # send_archives mkdir
-        gradle.run_task.side_effect = [True, False]  # unit OK, instrumented fails
+        # 3 unit + 2 integ-mock + 1 integ-real all OK; instrumented main fails, isolated OK
+        gradle.run_task.side_effect = [True, True, True, True, True, True, False, True]
         assert action.run() == 1
+
+
+class TestGrantManageExternalStorage:
+    def _make_apks(self, tmp_path) -> None:
+        for rel in (
+            "app/build/outputs/apk/debug/app-debug.apk",
+            "app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk",
+        ):
+            p = tmp_path / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(b"fake")
+
+    def test_grants_appop_after_successful_install(self, tmp_path):
+        action, gradle, adb, runner, _ = make_action(tmp_path)
+        self._make_apks(tmp_path)
+        gradle.run_task.return_value = True
+        adb.install_apk.return_value = True
+        runner.add_run(returncode=0)  # appops set
+        result = action._grant_manage_external_storage("emulator-5554")
+        assert result is True
+        assert gradle.run_task.call_count == 2  # assembleDebug + assembleDebugAndroidTest
+        assert adb.install_apk.call_count == 2  # main + test APK
+
+    def test_returns_false_when_build_apk_fails(self, tmp_path):
+        action, gradle, _, _, _ = make_action(tmp_path)
+        gradle.run_task.return_value = False
+        assert action._grant_manage_external_storage("emulator-5554") is False
+
+    def test_returns_false_when_build_test_apk_fails(self, tmp_path):
+        action, gradle, _, _, _ = make_action(tmp_path)
+        gradle.run_task.side_effect = [True, False]
+        assert action._grant_manage_external_storage("emulator-5554") is False
+
+    def test_returns_false_when_main_apk_install_fails(self, tmp_path):
+        action, gradle, adb, _, _ = make_action(tmp_path)
+        self._make_apks(tmp_path)
+        gradle.run_task.return_value = True
+        adb.install_apk.return_value = False
+        assert action._grant_manage_external_storage("emulator-5554") is False
+
+    def test_returns_false_when_appops_command_fails(self, tmp_path):
+        action, gradle, adb, runner, _ = make_action(tmp_path)
+        self._make_apks(tmp_path)
+        gradle.run_task.return_value = True
+        adb.install_apk.return_value = True
+        runner.add_run(returncode=1)  # appops set fails
+        assert action._grant_manage_external_storage("emulator-5554") is False

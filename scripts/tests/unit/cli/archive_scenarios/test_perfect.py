@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for archive format classes and ArchiveCreator orchestrator."""
+"""Unit tests for the Perfect (happy-path) archive format classes."""
 
 import pickle
 import subprocess
@@ -7,16 +7,15 @@ import tarfile
 import zipfile
 import zlib
 from pathlib import Path
-from typing import Optional
 
 from fake_subprocess import FakeResult, FakeSubprocessRunner
 
-from cli.create_test_archives import (
-    ArchiveCreator,
-    ArchiveFormat,
+from cli.archive_scenarios.perfect import (
+    GzipSingleFileFormat,
     RarDockerFormat,
     RpaFormat,
     SevenZipFormat,
+    TarBz2Format,
     TarFormat,
     TarGzFormat,
     ZipFormat,
@@ -280,6 +279,7 @@ class TestCreateRarDocker:
         dockerfile_dir = tmp_path / "docker"
         dockerfile_dir.mkdir()
         (dockerfile_dir / "rar.Dockerfile").write_text("FROM ubuntu\n")
+        (tmpl / "file.txt").write_text("content", encoding="utf-8")
         return tmpl, out, dockerfile_dir
 
     def _make_runner_creating_rar(self, out: Path) -> FakeSubprocessRunner:
@@ -371,55 +371,97 @@ class TestCreateRarDocker:
         tmpl, out, ddir = self._setup(tmp_path)
         assert RarDockerFormat(out, tmpl, FakeSubprocessRunner(), ddir).name == "rar"
 
+    def test_returns_none_when_template_has_no_files(self, tmp_path):
+        # The rar CLI refuses to create an archive from zero files (exit 10,
+        # "WARNING: No files") -- discovered by actually running the real pipeline
+        # against an empty template dir. Must short-circuit before invoking Docker,
+        # same pattern as GzipSingleFileFormat's "nothing to compress" check.
+        tmpl, out = _dirs(tmp_path)
+        runner = FakeSubprocessRunner()
+        result = RarDockerFormat(out, tmpl, runner, tmp_path / "docker").create()
+        assert result is None
+        assert runner.call_count == 0
+
 
 # ---------------------------------------------------------------------------
-# ArchiveCreator orchestrator
+# TarBz2Format
 # ---------------------------------------------------------------------------
 
 
-class _StubFormat(ArchiveFormat):
-    """Minimal ArchiveFormat stub for orchestrator tests."""
+def test_tar_bz2_format_creates_archive(tmp_path):
+    template_dir = tmp_path / "template"
+    template_dir.mkdir()
+    (template_dir / "hello.txt").write_text("hello")
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
 
-    def __init__(self, output_dir: Path, template_dir: Path, fmt_name: str, result: Optional[Path] = None) -> None:
-        super().__init__(output_dir, template_dir)
-        self._name = fmt_name
-        self._result = result
-        self.called = False
+    fmt = TarBz2Format(output_dir, template_dir)
+    result = fmt.create()
 
-    @property
-    def name(self) -> str:
-        return self._name
-
-    def create(self) -> Optional[Path]:
-        self.called = True
-        return self._result
+    assert result is not None
+    assert result.exists()
+    assert result.name == "test_archive.tar.bz2"
 
 
-class TestCreateAll:
-    def test_calls_create_on_each_format(self, tmp_path):
-        tmpl, out = _dirs(tmp_path)
-        fmt1 = _StubFormat(out, tmpl, "fmt1")
-        fmt2 = _StubFormat(out, tmpl, "fmt2")
-        ArchiveCreator([fmt1, fmt2]).create_all()
-        assert fmt1.called and fmt2.called
+def test_tar_bz2_format_skips_if_exists(tmp_path):
+    template_dir = tmp_path / "template"
+    template_dir.mkdir()
+    (template_dir / "f.txt").write_text("x")
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    existing = output_dir / "test_archive.tar.bz2"
+    existing.write_bytes(b"existing")
 
-    def test_result_keys_match_format_names(self, tmp_path):
-        tmpl, out = _dirs(tmp_path)
-        results = ArchiveCreator(
-            [
-                _StubFormat(out, tmpl, "fmt1"),
-                _StubFormat(out, tmpl, "fmt2"),
-            ]
-        ).create_all()
-        assert set(results.keys()) == {"fmt1", "fmt2"}
+    fmt = TarBz2Format(output_dir, template_dir)
+    result = fmt.create()
 
-    def test_result_includes_none_for_unavailable_format(self, tmp_path):
-        tmpl, out = _dirs(tmp_path)
-        results = ArchiveCreator(
-            [
-                _StubFormat(out, tmpl, "ok", out / "file.zip"),
-                _StubFormat(out, tmpl, "skip", None),
-            ]
-        ).create_all()
-        assert results["ok"] is not None
-        assert results["skip"] is None
+    assert result == existing
+    assert existing.read_bytes() == b"existing"
+
+
+# ---------------------------------------------------------------------------
+# GzipSingleFileFormat
+# ---------------------------------------------------------------------------
+
+
+def test_gzip_format_creates_archive(tmp_path):
+    template_dir = tmp_path / "template"
+    template_dir.mkdir()
+    (template_dir / "hello.txt").write_text("hello world")
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    fmt = GzipSingleFileFormat(output_dir, template_dir)
+    result = fmt.create()
+
+    assert result is not None
+    assert result.exists()
+    assert result.name == "test_archive.gz"
+
+
+def test_gzip_format_skips_when_no_files(tmp_path):
+    template_dir = tmp_path / "template"
+    template_dir.mkdir()
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    fmt = GzipSingleFileFormat(output_dir, template_dir)
+    result = fmt.create()
+
+    assert result is None
+
+
+def test_gzip_format_skips_if_exists(tmp_path):
+    template_dir = tmp_path / "template"
+    template_dir.mkdir()
+    (template_dir / "f.txt").write_text("x")
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    existing = output_dir / "test_archive.gz"
+    existing.write_bytes(b"existing")
+
+    fmt = GzipSingleFileFormat(output_dir, template_dir)
+    result = fmt.create()
+
+    assert result == existing
+    assert existing.read_bytes() == b"existing"

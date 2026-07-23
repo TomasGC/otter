@@ -26,11 +26,8 @@ class CreateAction:
         return 0
 
     def run_archives(self, output_dir: Optional[Path] = None) -> int:
-        from cli.create_test_archives import (
-            PROJECT_ROOT,
-            ArchiveCreator,
-            _default_formats,
-        )
+        from cli.archive_scenarios.orchestrator import create_all_fixture_archives
+        from cli.archive_scenarios.perfect import PROJECT_ROOT
         from common.file_utils import load_test_settings
 
         out = output_dir or self._output_dir
@@ -38,7 +35,7 @@ class CreateAction:
             out = PROJECT_ROOT / load_test_settings()["test_archives"]["host_path"]
         template = self._template_dir or (PROJECT_ROOT / "archives" / "template")
         out.mkdir(parents=True, exist_ok=True)
-        ArchiveCreator(_default_formats(self._runner, out, template)).create_all()
+        create_all_fixture_archives(self._runner, out, template)
         return 0
 
     def run(

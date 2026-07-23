@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Integration tests for archive creation — uses format classes with real filesystem."""
+"""Integration tests for Perfect archive creation — format classes with real filesystem."""
 
 import pickle
 import subprocess
@@ -11,9 +11,7 @@ from pathlib import Path
 import pytest
 from fake_subprocess import FakeResult, FakeSubprocessRunner
 
-from cli.create_test_archives import (
-    ArchiveCreator,
-    ArchiveFormat,
+from cli.archive_scenarios.perfect import (
     RarDockerFormat,
     RpaFormat,
     SevenZipFormat,
@@ -355,6 +353,7 @@ class TestCreateRarArchiveDocker:
         dockerfile_dir = tmp_path / "docker"
         dockerfile_dir.mkdir()
         (dockerfile_dir / "rar.Dockerfile").write_text("FROM ubuntu\n")
+        (tmpl / "file.txt").write_text("content", encoding="utf-8")
         return tmpl, out, dockerfile_dir
 
     def _make_runner_creating_rar(self, out: Path) -> FakeSubprocessRunner:
@@ -457,64 +456,3 @@ class TestToDockerPath:
         with patch("sys.platform", "linux"):
             result = RarDockerFormat._to_docker_path(path)
         assert result == str(path)
-
-
-# ---------------------------------------------------------------------------
-# TestCreateAll — orchestrator with stub formats
-# ---------------------------------------------------------------------------
-
-
-class _StubFormat(ArchiveFormat):
-    def __init__(self, output_dir: Path, template_dir: Path, fmt_name: str, result=None) -> None:
-        super().__init__(output_dir, template_dir)
-        self._name = fmt_name
-        self._result = result
-        self.called = False
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    def create(self):
-        self.called = True
-        return self._result
-
-
-class TestCreateAll:
-    def test_calls_create_on_each_format(self, tmp_path):
-        tmpl, out = _dirs(tmp_path)
-        fmt1 = _StubFormat(out, tmpl, "rpa", out / "rpa")
-        fmt2 = _StubFormat(out, tmpl, "zip", out / "zip")
-        ArchiveCreator([fmt1, fmt2]).create_all()
-        assert fmt1.called and fmt2.called
-
-    def test_result_keys_match_format_names(self, tmp_path):
-        tmpl, out = _dirs(tmp_path)
-        results = ArchiveCreator(
-            [
-                _StubFormat(out, tmpl, "rpa"),
-                _StubFormat(out, tmpl, "zip"),
-            ]
-        ).create_all()
-        assert set(results.keys()) == {"rpa", "zip"}
-
-    def test_creates_output_dir_via_main_then_all_formats_called(self, tmp_path):
-        tmpl = tmp_path / "template"
-        out = tmp_path / "output"
-        tmpl.mkdir()
-        out.mkdir()
-        (tmpl / "file.txt").write_text("x")
-        fmt = _StubFormat(out, tmpl, "rpa")
-        ArchiveCreator([fmt]).create_all()
-        assert fmt.called
-
-    def test_result_includes_none_for_unavailable_format(self, tmp_path):
-        tmpl, out = _dirs(tmp_path)
-        results = ArchiveCreator(
-            [
-                _StubFormat(out, tmpl, "ok", out / "file"),
-                _StubFormat(out, tmpl, "skip", None),
-            ]
-        ).create_all()
-        assert results["ok"] is not None
-        assert results["skip"] is None

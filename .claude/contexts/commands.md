@@ -15,17 +15,26 @@ python scripts/manage.py build
 # Build without installing on device
 python scripts/manage.py build --no-install
 
+# Run all tests (unit + integration-mocks + integration-reals + instrumented)
+python scripts/manage.py test
+
 # Run unit tests only (JVM, fast)
 python scripts/manage.py test unit
 
-# Run instrumented tests (requires connected device)
+# Run integration mock tests (real archives, mock Android runtime)
+python scripts/manage.py test integration-mocks
+
+# Run integration real tests (real archives, no mocks)
+python scripts/manage.py test integration-reals
+
+# Run both integration tiers
+python scripts/manage.py test integrations
+
+# Run instrumented tests only (requires connected device)
 python scripts/manage.py test instrumented
 
-# Run all tests (unit + instrumented)
-python scripts/manage.py test
-
 # Run unit tests with Kover coverage report
-python scripts/manage.py test coverage
+python scripts/manage.py coverage
 ```
 
 ## Python Script Tests (manage.py)
@@ -88,7 +97,11 @@ python scripts/manage.py create template
 python scripts/manage.py create archives --output-dir /path/to/output
 ```
 
-## Direct Gradle Commands (alternative)
+## Direct Gradle Commands (CI only — do not use locally)
+
+**Never run these directly** — they skip `MANAGE_EXTERNAL_STORAGE` grant, archive push,
+and `OTTER_ARCHIVES_PUSHED` env setup, causing false EACCES failures on RAR/7z tests.
+Listed for CI workflow reference only.
 
 ```bash
 ./gradlew assembleDebug
@@ -98,7 +111,10 @@ python scripts/manage.py create archives --output-dir /path/to/output
 ./gradlew testDebugUnitTestCoverage
 ```
 
-## Direct pytest (alternative, from scripts/)
+## Direct pytest (CI only — do not use locally)
+
+**Never run directly** — use `python scripts/manage.py test-scripts` instead.
+Listed for CI workflow reference only.
 
 ```bash
 cd scripts

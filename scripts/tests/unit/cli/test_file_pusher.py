@@ -115,6 +115,22 @@ class TestPushFile:
 
         assert result is False
 
+    def test_closes_stdout_after_push(self, tmp_path):
+        # ResourceWarning otherwise -- only surfaces with a real Popen at scale
+        # (pytest.ini's filterwarnings=error turns it into a hard failure).
+        f = tmp_path / "archive.zip"
+        f.write_bytes(b"PK\x03\x04")
+
+        runner = FakeSubprocessRunner()
+        runner.add_run(returncode=0, stdout="missing")  # check
+        runner.add_run(returncode=0)  # mkdir
+        runner.set_popen(["100% /sdcard/otter/archive.zip\n"], returncode=0)
+
+        pusher = FilePusher(runner)
+        pusher.push_file(f, "/sdcard/otter")
+
+        assert runner.last_popen.stdout.closed is True
+
     def test_push_with_empty_output_lines(self, tmp_path):
         f = tmp_path / "archive.zip"
         f.write_bytes(b"PK\x03\x04")

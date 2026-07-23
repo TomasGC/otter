@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create test archives in multiple formats (RPA, ZIP, RAR, 7z, TAR, TAR.GZ)."""
+"""Perfect (happy-path) archive fixtures in multiple formats (RPA, ZIP, RAR, 7z, TAR, TAR.GZ)."""
 
 import pickle
 import subprocess
@@ -7,46 +7,17 @@ import sys
 import tarfile
 import zipfile
 import zlib
-from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
 
-from common.file_utils import get_project_root, load_test_settings
-from common.subprocess_runner import RealSubprocessRunner, SubprocessRunner
+from cli.archive_scenarios.base import ArchiveFormat, ArchiveFormatScenario
+from common.file_utils import get_project_root
+from common.subprocess_runner import SubprocessRunner
 
 PROJECT_ROOT = get_project_root()
 RPA_KEY = 0xDEADBEEF
 
 _DEFAULT_7Z = r"C:\Program Files\7-Zip\7z.exe" if sys.platform == "win32" else "7z"
-
-
-# ---------------------------------------------------------------------------
-# Base class
-# ---------------------------------------------------------------------------
-
-
-class ArchiveFormat(ABC):
-    """Base for all archive format creators. Each subclass owns one format."""
-
-    def __init__(self, output_dir: Path, template_dir: Path) -> None:
-        self._output_dir = output_dir
-        self._template_dir = template_dir
-
-    @property
-    @abstractmethod
-    def name(self) -> str: ...
-
-    @abstractmethod
-    def create(self) -> Optional[Path]: ...
-
-    def _output_path(self, ext: str) -> Path:
-        return self._output_dir / f"test_archive.{ext}"
-
-    def _skip_if_exists(self, path: Path) -> Optional[Path]:
-        if path.exists():
-            print(f"  [SKIP] {path.name} already exists")
-            return path
-        return None
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +100,8 @@ class TarFormat(ArchiveFormat):
 
         print("\n=== Creating TAR archive ===")
         with tarfile.open(out, "w") as tf:
-            tf.add(self._template_dir, arcname=".")
+            for child in sorted(self._template_dir.iterdir()):
+                tf.add(child, arcname=child.name)
 
         size_mb = out.stat().st_size / (1024 * 1024)
         print(f"  TAR archive created: {out.name} ({size_mb:.2f} MB)")
@@ -148,10 +120,61 @@ class TarGzFormat(ArchiveFormat):
 
         print("\n=== Creating TAR.GZ archive ===")
         with tarfile.open(out, "w:gz") as tf:
-            tf.add(self._template_dir, arcname=".")
+            for child in sorted(self._template_dir.iterdir()):
+                tf.add(child, arcname=child.name)
 
         size_mb = out.stat().st_size / (1024 * 1024)
         print(f"  TAR.GZ archive created: {out.name} ({size_mb:.2f} MB)")
+        return out
+
+
+class TarBz2Format(ArchiveFormat):
+    @property
+    def name(self) -> str:
+        return "tar.bz2"
+
+    def create(self) -> Optional[Path]:
+        out = self._output_path("tar.bz2")
+        if (skip := self._skip_if_exists(out)) is not None:
+            return skip
+
+        print("\n=== Creating TAR.BZ2 archive ===")
+        with tarfile.open(out, "w:bz2") as tf:
+            for child in sorted(self._template_dir.iterdir()):
+                tf.add(child, arcname=child.name)
+
+        size_mb = out.stat().st_size / (1024 * 1024)
+        print(f"  TAR.BZ2 archive created: {out.name} ({size_mb:.2f} MB)")
+        return out
+
+
+class GzipSingleFileFormat(ArchiveFormat):
+    """Creates a .gz archive from the first file found in the template directory."""
+
+    @property
+    def name(self) -> str:
+        return "gz"
+
+    def create(self) -> Optional[Path]:
+        import gzip as gzip_module
+
+        out = self._output_path("gz")
+        if (skip := self._skip_if_exists(out)) is not None:
+            return skip
+
+        files = [p for p in self._template_dir.rglob("*") if p.is_file()]
+        if not files:
+            print("  [SKIP] No files in template directory for GZIP")
+            return None
+
+        source_file = files[0]
+        print(f"\n=== Creating GZIP archive from {source_file.name} ===")
+        with source_file.open("rb") as f_in:
+            with gzip_module.open(out, "wb") as f_out:
+                f_out.write(f_in.read())
+
+        size_mb = out.stat().st_size / (1024 * 1024)
+        print(f"  GZIP archive created: {out.name} ({size_mb:.2f} MB)")
         return out
 
 
@@ -167,8 +190,9 @@ class SevenZipFormat(ArchiveFormat):
         template_dir: Path,
         runner: SubprocessRunner,
         seven_zip_path: str = _DEFAULT_7Z,
+        file_prefix: str = "test_archive",
     ) -> None:
-        super().__init__(output_dir, template_dir)
+        super().__init__(output_dir, template_dir, file_prefix)
         self._runner = runner
         self._seven_zip = seven_zip_path
 
@@ -204,8 +228,9 @@ class RarDockerFormat(ArchiveFormat):
         template_dir: Path,
         runner: SubprocessRunner,
         dockerfile_dir: Optional[Path] = None,
+        file_prefix: str = "test_archive",
     ) -> None:
-        super().__init__(output_dir, template_dir)
+        super().__init__(output_dir, template_dir, file_prefix)
         self._runner = runner
         self._dockerfile_dir = dockerfile_dir or (PROJECT_ROOT / "scripts" / "docker")
 
@@ -217,6 +242,10 @@ class RarDockerFormat(ArchiveFormat):
         out = self._output_path("rar")
         if (skip := self._skip_if_exists(out)) is not None:
             return skip
+
+        if not any(p.is_file() for p in self._template_dir.rglob("*")):
+            print("  [SKIP] No files in template directory for RAR")
+            return None
 
         print("\n=== Creating RAR archive (Docker) ===")
         dockerfile = self._dockerfile_dir / "rar.Dockerfile"
@@ -251,7 +280,7 @@ class RarDockerFormat(ArchiveFormat):
                     "-v",
                     f"{output_docker}:/workspace/output",
                     "rar-builder",
-                    "/workspace/output/test_archive.rar",
+                    f"/workspace/output/{self._file_prefix}.rar",
                     "/workspace/template/",
                 ],
                 check=True,
@@ -276,48 +305,30 @@ class RarDockerFormat(ArchiveFormat):
 
 
 # ---------------------------------------------------------------------------
-# Orchestrator
+# Scenario
 # ---------------------------------------------------------------------------
 
 
-class ArchiveCreator:
-    """Calls create() on each ArchiveFormat in order."""
-
-    def __init__(self, formats: list[ArchiveFormat]) -> None:
-        self._formats = formats
-
-    def create_all(self) -> dict[str, Optional[Path]]:
-        return {fmt.name: fmt.create() for fmt in self._formats}
-
-
-def _default_formats(
+def default_formats(
     runner: SubprocessRunner,
     output_dir: Path,
     template_dir: Path,
+    file_prefix: str = "test_archive",
 ) -> list[ArchiveFormat]:
     return [
-        RpaFormat(output_dir, template_dir),
-        ZipFormat(output_dir, template_dir),
-        TarFormat(output_dir, template_dir),
-        TarGzFormat(output_dir, template_dir),
-        SevenZipFormat(output_dir, template_dir, runner),
-        RarDockerFormat(output_dir, template_dir, runner),
+        RpaFormat(output_dir, template_dir, file_prefix),
+        ZipFormat(output_dir, template_dir, file_prefix),
+        TarFormat(output_dir, template_dir, file_prefix),
+        TarGzFormat(output_dir, template_dir, file_prefix),
+        TarBz2Format(output_dir, template_dir, file_prefix),
+        GzipSingleFileFormat(output_dir, template_dir, file_prefix),
+        SevenZipFormat(output_dir, template_dir, runner, file_prefix=file_prefix),
+        RarDockerFormat(output_dir, template_dir, runner, file_prefix=file_prefix),
     ]
 
 
-def main(output_dir: Optional[Path] = None) -> None:
-    settings = load_test_settings()
-    template_dir = PROJECT_ROOT / "archives" / "template"
-    out = output_dir or (PROJECT_ROOT / settings["test_archives"]["host_path"])
-    out.mkdir(parents=True, exist_ok=True)
-    runner = RealSubprocessRunner()
-    ArchiveCreator(_default_formats(runner, out, template_dir)).create_all()
+class PerfectArchives(ArchiveFormatScenario):
+    """Happy-path archives: one valid archive per format, from the real template tree."""
 
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Create test archives")
-    parser.add_argument("--output-dir", type=Path, default=None)
-    args = parser.parse_args()
-    main(output_dir=args.output_dir)
+    def __init__(self, runner: SubprocessRunner, output_dir: Path, template_dir: Path) -> None:
+        super().__init__(default_formats(runner, output_dir, template_dir))

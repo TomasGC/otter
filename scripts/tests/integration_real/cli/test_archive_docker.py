@@ -1,30 +1,14 @@
 #!/usr/bin/env python3
 """Integration-real tests for archive creation via Docker (real tools, real subprocess)."""
 
-import shutil
 import subprocess
 import sys
-import uuid
 import zipfile
 from pathlib import Path
 
 import pytest
 
 DOCKERFILE = Path(__file__).parent.parent / "docker" / "archive-tools.Dockerfile"
-_TEMP_ROOT = Path(__file__).parents[4] / "temp" / "docker-tests"
-
-
-@pytest.fixture
-def docker_tmp():
-    """Workspace under repo temp/ instead of pytest tmp_path.
-
-    pytest creates tmp_path with private ACLs on Windows, which the Docker
-    daemon cannot mount as a volume ("Access is denied").
-    """
-    workspace = _TEMP_ROOT / uuid.uuid4().hex
-    workspace.mkdir(parents=True)
-    yield workspace
-    shutil.rmtree(workspace, ignore_errors=True)
 
 
 def _create_minimal_template(template_dir: Path, num_files: int = 5) -> list:

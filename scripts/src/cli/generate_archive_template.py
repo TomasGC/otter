@@ -568,6 +568,21 @@ class ArchiveTemplateGenerator:
         self.create_files(output_dir, n_root, prefix="")
         return output_dir
 
+    def generate_deep_nested(self, output_dir: Path, depth: int, files_per_level: int = 1) -> Path:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        current = output_dir
+        for level in range(1, depth + 1):
+            current = current / f"level_{level}"
+            self.create_files(current, files_per_level, prefix=f"level_{level}_")
+        return output_dir
+
+    def generate_long_filename(self, output_dir: Path, max_length: int, extension: str = ".txt") -> Path:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        stem_length = max(1, max_length - len(extension))
+        name = ("a" * stem_length) + extension
+        self.write_file(output_dir / name, extension)
+        return output_dir
+
 
 # ---------------------------------------------------------------------------
 # Module-level shims (backward compat)
