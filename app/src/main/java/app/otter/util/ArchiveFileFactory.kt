@@ -79,6 +79,11 @@ class ArchiveFileFactory @Inject constructor(
         )
     }
 
+    companion object {
+        /** Sentinel stored in [ArchiveFile.sizeBytes] when the content:// provider did not supply a size. */
+        const val UNKNOWN_SIZE = -1L
+    }
+
     private fun createFromContentUri(path: ResourcePath, uri: Uri, fileName: String): ArchiveFile? {
         val cursor = context.contentResolver.query(uri, null, null, null, null)
             ?: return null
@@ -87,7 +92,7 @@ class ArchiveFileFactory @Inject constructor(
             if (!it.moveToFirst()) return null
 
             val sizeIndex = it.getColumnIndex(OpenableColumns.SIZE)
-            val size = if (sizeIndex != -1) it.getLong(sizeIndex) else 0L
+            val size = if (sizeIndex != -1) it.getLong(sizeIndex) else UNKNOWN_SIZE
 
             val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
             val archiveType = ArchiveType.fromFileName(fileName) ?: return null

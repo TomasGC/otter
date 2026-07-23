@@ -20,9 +20,7 @@ class RealZipFileReader(
     }
 
     override fun countFiles(): Int {
-        return zipFile.use { zip ->
-            zip.entries().asSequence().count { !it.isDirectory }
-        }
+        return zipFile.entries().asSequence().count { !it.isDirectory }
     }
 
     override fun getInputStream(entry: ZipEntry): InputStream {

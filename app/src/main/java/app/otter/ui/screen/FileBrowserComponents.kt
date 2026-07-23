@@ -32,6 +32,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.otter.domain.model.BrowsableItem
@@ -240,7 +241,10 @@ private fun FileList(
             .collect { index: Int -> onScrollPositionChanged(index) }
     }
 
-    LazyColumn(state = listState) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.testTag("fileBrowserList")
+    ) {
         items(
             items = files,
             key = { file -> file.path.toString() }

@@ -100,7 +100,7 @@ abstract class BaseArchiveExtractor(
      * Helper class to throttle progress notifications to avoid performance overhead.
      * Only notifies if sufficient time has passed since last notification.
      */
-    protected class ProgressThrottler(
+    internal class ProgressThrottler(
         private val throttleMs: Long = DEFAULT_THROTTLE_MS
     ) {
         private var lastNotificationTime = 0L
@@ -123,7 +123,7 @@ abstract class BaseArchiveExtractor(
     /**
      * Helper to notify progress with throttling and strategy-based progress calculation.
      */
-    protected fun notifyProgress(
+    internal fun notifyProgress(
         extractedCount: Int,
         totalCount: Int,
         currentFile: String,
@@ -147,11 +147,8 @@ abstract class BaseArchiveExtractor(
      * Checks if an archive entry should be extracted under selective extraction.
      * Null selectedPaths = extract all. Exact match or directory prefix match = include.
      */
-    protected fun isEntrySelected(entryName: String, selectedPaths: Set<String>?): Boolean {
-        if (selectedPaths == null) return true
-        if (selectedPaths.contains(entryName)) return true
-        return selectedPaths.any { path -> path.endsWith("/") && entryName.startsWith(path) }
-    }
+    protected fun isEntrySelected(entryName: String, selectedPaths: Set<String>?): Boolean =
+        matchesSelectionFilter(entryName, selectedPaths)
 
     companion object {
         // Shared buffer and throttle constants

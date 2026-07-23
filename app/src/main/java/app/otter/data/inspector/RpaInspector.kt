@@ -24,7 +24,10 @@ import java.util.zip.InflaterInputStream
  * Security note: We parse the pickle binary format manually without executing Python code.
  * This is safe for untrusted RPA archives - no arbitrary code execution risk.
  */
-class RpaInspector(private val rpaFile: File) : ArchiveInspector {
+class RpaInspector(private val source: RpaFileSource) : ArchiveInspector {
+
+    // Secondary constructor for backward compatibility with tests
+    constructor(rpaFile: File) : this(FileRpaSource(rpaFile))
 
     private var closed = false
     private var cachedEntries: List<ArchiveEntry>? = null
@@ -136,7 +139,7 @@ class RpaInspector(private val rpaFile: File) : ArchiveInspector {
      * RPA-3.0 XXXXXXXXXXXXXXXX YYYYYYYY\n
      */
     private fun parseRpaHeader(): RpaHeader {
-        rpaFile.inputStream().use { input ->
+        source.openInputStream().use { input ->
             val headerBytes = ByteArray(HEADER_SIZE)
             val bytesRead = input.read(headerBytes)
             require(bytesRead >= HEADER_SIZE) { "Invalid RPA header: file too small" }
@@ -162,7 +165,7 @@ class RpaInspector(private val rpaFile: File) : ArchiveInspector {
      * Read and decompress the RPA index at the specified offset.
      */
     private fun readRpaIndex(header: RpaHeader): List<RpaPickleParser.RpaFileEntry> {
-        rpaFile.inputStream().use { input ->
+        source.openInputStream().use { input ->
             // Seek to index offset
             input.skip(header.indexOffset)
 
@@ -178,9 +181,11 @@ class RpaInspector(private val rpaFile: File) : ArchiveInspector {
     // Data classes
     private data class RpaHeader(val indexOffset: Long, val key: Long)
 
-    // Constants
+    // Constants and factory
     companion object {
         private const val MAGIC_RPA3 = "RPA-3.0 "
         private const val HEADER_SIZE = 34
+
+        fun from(file: File): RpaInspector = RpaInspector(FileRpaSource(file))
     }
 }

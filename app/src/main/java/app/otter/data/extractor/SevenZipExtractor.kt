@@ -4,15 +4,18 @@ import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
 import app.otter.util.PathValidator
+import kotlinx.coroutines.isActive
 import java.io.File
 import java.io.InputStream
 import javax.inject.Inject
+import kotlin.coroutines.coroutineContext
 
 class SevenZipExtractor @Inject constructor(
     private val pathValidator: PathValidator,
     private val archiveLibraryManager: ArchiveLibraryManager,
     tempFileManager: ITempFileManager,
-    sevenZipHelper: SevenZipExtractorHelper
+    sevenZipHelper: SevenZipExtractorHelper,
+    private val sizeGuardFactory: () -> ArchiveSizeGuard = { ArchiveSizeGuard() }
 ) : BaseArchiveExtractor(tempFileManager, sevenZipHelper) {
 
     override fun supports(type: ArchiveType): Boolean = type == ArchiveType.SEVEN_ZIP
@@ -27,9 +30,15 @@ class SevenZipExtractor @Inject constructor(
         selectedItems: List<String>?,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult {
+        val activeContext = coroutineContext
         return extractWithTempFile(inputStream, archiveType) { tempFile ->
             val inArchive = archiveLibraryManager.openArchive(tempFile)
-            sevenZipHelper.extract(inArchive, destinationPath, pathValidator, onProgress, logger)
+            sevenZipHelper.extract(
+                inArchive, destinationPath, pathValidator, selectedItems?.toSet(),
+                SevenZipExtractorHelper.ExtractionSession(
+                    onProgress, logger, sizeGuardFactory, isActiveCheck = { activeContext.isActive }
+                )
+            )
         }
     }
 }

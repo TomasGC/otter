@@ -33,7 +33,8 @@ import javax.inject.Inject
 class RpaExtractor @Inject constructor(
     private val pathValidator: PathValidator,
     tempFileManager: ITempFileManager,
-    sevenZipHelper: SevenZipExtractorHelper
+    sevenZipHelper: SevenZipExtractorHelper,
+    private val sizeGuardFactory: () -> ArchiveSizeGuard = { ArchiveSizeGuard() }
 ) : BaseArchiveExtractor(tempFileManager, sevenZipHelper) {
 
     override fun supports(type: ArchiveType): Boolean = type == ArchiveType.RPA
@@ -57,7 +58,7 @@ class RpaExtractor @Inject constructor(
             Timber.tag(getTag()).d("Created temp file: ${tempFile.absolutePath}")
 
             // Use RpaInspector to get file index (avoids duplicating pickle parsing)
-            val inspector = RpaInspector(tempFile)
+            val inspector = RpaInspector.from(tempFile)
             val index = inspector.getRawFileEntries()
             inspector.close()
             Timber.tag(getTag()).d("Total files in archive: ${index.size}")
@@ -68,17 +69,24 @@ class RpaExtractor @Inject constructor(
             // Progress throttler from base class
             val throttler = ProgressThrottler()
 
+            // Guards against zip-bomb entries (decompressed size far exceeding declared/expected size)
+            val sizeGuard = sizeGuardFactory()
+
             // Extract each file
+            val selectedPaths = selectedItems?.toSet()
+
             tempFile.inputStream().use {
                 index.forEach { entry ->
                     if (!isActive) return@forEach
+                    if (!isEntrySelected(entry.name, selectedPaths)) return@forEach
                     Timber.tag(getTag()).d("Extracting: ${entry.name} (offset=${entry.offset}, size=${entry.size})")
                     val outputFile = pathValidator.createSafeOutputFile(destinationPath, entry.name)
+                    sizeGuard.startEntry()
                     extractEntryData(
-                        tempFile, buffer,
+                        tempFile,
                         EntryExtractCtx(entry.name, entry.offset, entry.size, extractedCount, index.size, outputFile),
-                        throttler, onProgress
-                    ) { isActive }
+                        ExtractionSession(buffer, throttler, onProgress, sizeGuard) { isActive }
+                    )
                     if (!isActive) return@forEach
                     extractedCount++
                     notifyProgress(extractedCount, index.size, entry.name, throttler, onProgress)
@@ -121,39 +129,37 @@ class RpaExtractor @Inject constructor(
         val outputFile: File
     )
 
-    private fun extractEntryData(
-        tempFile: File,
-        buffer: ByteArray,
-        ctx: EntryExtractCtx,
-        throttler: ProgressThrottler,
-        onProgress: (ExtractionProgress) -> Unit,
-        isActiveCheck: () -> Boolean
-    ) {
+    // Bundles the per-extraction (not per-entry) collaborators shared across every entry's
+    // read/write loop. Plain class, not data class: buffer/onProgress/isActiveCheck have no
+    // meaningful value-equality, so auto-generated equals()/hashCode() would be misleading.
+    private class ExtractionSession(
+        val buffer: ByteArray,
+        val throttler: ProgressThrottler,
+        val onProgress: (ExtractionProgress) -> Unit,
+        val sizeGuard: ArchiveSizeGuard,
+        val isActiveCheck: () -> Boolean
+    )
+
+    private fun extractEntryData(tempFile: File, ctx: EntryExtractCtx, session: ExtractionSession) {
         tempFile.inputStream().use { fileStream ->
             fileStream.skip(ctx.offset)
-            writeEntryToFile(fileStream, buffer, ctx, throttler, onProgress, isActiveCheck)
+            writeEntryToFile(fileStream, ctx, session)
         }
     }
 
-    private fun writeEntryToFile(
-        fileStream: java.io.InputStream,
-        buffer: ByteArray,
-        ctx: EntryExtractCtx,
-        throttler: ProgressThrottler,
-        onProgress: (ExtractionProgress) -> Unit,
-        isActiveCheck: () -> Boolean
-    ) {
+    private fun writeEntryToFile(fileStream: java.io.InputStream, ctx: EntryExtractCtx, session: ExtractionSession) {
         ctx.outputFile.outputStream().buffered(BUFFER_SIZE_BYTES).use { output ->
             var remaining = ctx.size
             var bytesExtracted = 0L
-            while (remaining > 0 && isActiveCheck()) {
-                val toRead = minOf(remaining, buffer.size.toLong()).toInt()
-                val bytesRead = fileStream.read(buffer, 0, toRead)
+            while (remaining > 0 && session.isActiveCheck()) {
+                val toRead = minOf(remaining, session.buffer.size.toLong()).toInt()
+                val bytesRead = fileStream.read(session.buffer, 0, toRead)
                 if (bytesRead == -1) break
-                output.write(buffer, 0, bytesRead)
+                session.sizeGuard.track(bytesRead)
+                output.write(session.buffer, 0, bytesRead)
                 remaining -= bytesRead
                 bytesExtracted += bytesRead
-                if (throttler.shouldNotify()) notifyChunkProgress(ctx, bytesExtracted, onProgress)
+                if (session.throttler.shouldNotify()) notifyChunkProgress(ctx, bytesExtracted, session.onProgress)
             }
         }
     }

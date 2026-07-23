@@ -6,6 +6,7 @@ import app.otter.data.extractor.GzipExtractor
 import app.otter.data.extractor.TarExtractor
 import app.otter.data.extractor.ArchiveExtractor
 import app.otter.data.extractor.ArchiveLibraryManager
+import app.otter.data.extractor.ArchiveSizeGuard
 import app.otter.data.extractor.ExtractionLogger
 import app.otter.data.extractor.ITempFileManager
 import app.otter.data.extractor.IZipFileReaderFactory
@@ -19,13 +20,10 @@ import app.otter.data.extractor.TempFileManager
 import app.otter.data.extractor.ZipExtractor
 import app.otter.data.browser.FileSystemBrowser
 import app.otter.data.inspector.ArchiveInspectorFactory
-import app.otter.data.repository.ArchiveBrowserRepositoryImpl
 import app.otter.data.repository.ArchiveRepositoryImpl
 import app.otter.data.repository.ItemBrowserRepositoryImpl
-import app.otter.domain.repository.ArchiveBrowserRepository
 import app.otter.domain.repository.ArchiveRepository
 import app.otter.domain.repository.ItemBrowserRepository
-import app.otter.domain.usecase.BrowseArchiveUseCase
 import app.otter.domain.usecase.BrowseItemsUseCase
 import app.otter.domain.usecase.ExtractArchiveUseCase
 import app.otter.util.PathValidator
@@ -59,19 +57,24 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideArchiveSizeGuardFactory(): () -> ArchiveSizeGuard = { ArchiveSizeGuard() }
+
+    @Provides
+    @Singleton
     fun provideExtractors(
         pathValidator: PathValidator,
         archiveLibraryManager: ArchiveLibraryManager,
         tempFileManager: ITempFileManager,
         sevenZipHelper: SevenZipExtractorHelper,
-        zipFileReaderFactory: IZipFileReaderFactory
+        zipFileReaderFactory: IZipFileReaderFactory,
+        sizeGuardFactory: () -> ArchiveSizeGuard
     ): List<ArchiveExtractor> = listOf(
-        ZipExtractor(pathValidator, tempFileManager, sevenZipHelper, zipFileReaderFactory),
-        RarExtractor(pathValidator, archiveLibraryManager, tempFileManager, sevenZipHelper),
-        SevenZipExtractor(pathValidator, archiveLibraryManager, tempFileManager, sevenZipHelper),
-        TarExtractor(pathValidator, tempFileManager, sevenZipHelper),
-        GzipExtractor(tempFileManager, sevenZipHelper),
-        RpaExtractor(pathValidator, tempFileManager, sevenZipHelper)
+        ZipExtractor(pathValidator, tempFileManager, sevenZipHelper, zipFileReaderFactory, sizeGuardFactory),
+        RarExtractor(pathValidator, archiveLibraryManager, tempFileManager, sevenZipHelper, sizeGuardFactory),
+        SevenZipExtractor(pathValidator, archiveLibraryManager, tempFileManager, sevenZipHelper, sizeGuardFactory),
+        TarExtractor(pathValidator, tempFileManager, sevenZipHelper, sizeGuardFactory),
+        GzipExtractor(tempFileManager, sevenZipHelper, sizeGuardFactory),
+        RpaExtractor(pathValidator, tempFileManager, sevenZipHelper, sizeGuardFactory)
     )
 
     @Provides
@@ -82,21 +85,9 @@ object AppModule {
     ): ArchiveRepository = ArchiveRepositoryImpl(context, extractors)
 
     @Provides
-    @Singleton
-    fun provideArchiveBrowserRepository(
-        context: Context,
-        pathValidator: PathValidator
-    ): ArchiveBrowserRepository = ArchiveBrowserRepositoryImpl(context, pathValidator)
-
-    @Provides
     fun provideExtractArchiveUseCase(
         repository: ArchiveRepository
     ): ExtractArchiveUseCase = ExtractArchiveUseCase(repository)
-
-    @Provides
-    fun provideBrowseArchiveUseCase(
-        repository: ArchiveBrowserRepository
-    ): BrowseArchiveUseCase = BrowseArchiveUseCase(repository)
 
     @Provides
     @Singleton

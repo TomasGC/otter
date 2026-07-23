@@ -4,4 +4,8 @@
     <external-files-path
         name="extracted"
         path="extracted/" />
+    <!-- Cache directory for content:// URI temp copies -->
+    <cache-path
+        name="cache"
+        path="." />
 </paths>

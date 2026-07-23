@@ -7,7 +7,13 @@ import javax.inject.Singleton
 class MimeTypeUtil @Inject constructor() {
 
     fun getMimeType(filename: String): String {
-        val extension = filename.substringAfterLast('.', "").lowercase()
+        val baseName = filename.substringAfterLast('/')
+        val parts = baseName.split('.')
+        if (parts.size >= 3) {
+            val twoPartExt = "${parts[parts.size - 2]}.${parts[parts.size - 1]}".lowercase()
+            MIME_TYPES[twoPartExt]?.let { return it }
+        }
+        val extension = baseName.substringAfterLast('.', "").lowercase()
         return MIME_TYPES[extension] ?: DEFAULT_MIME_TYPE
     }
 
@@ -26,8 +32,11 @@ class MimeTypeUtil @Inject constructor() {
             "bzip2" to "application/x-bzip2",
             "xz" to "application/x-xz",
             "tgz" to "application/x-compressed-tar",
+            "tar.gz" to "application/x-compressed-tar",
             "tbz2" to "application/x-bzip-compressed-tar",
+            "tar.bz2" to "application/x-bzip-compressed-tar",
             "txz" to "application/x-xz-compressed-tar",
+            "tar.xz" to "application/x-xz-compressed-tar",
             "rpa" to "application/x-rpa",
             // Common file types
             "txt" to "text/plain",
