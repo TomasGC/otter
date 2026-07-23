@@ -24,6 +24,12 @@ object ArchiveExtractionTestHelper {
     private val context: Context
         get() = InstrumentationRegistry.getInstrumentation().targetContext
 
+    // System.currentTimeMillis() alone can collide when multiple output dirs are requested
+    // within the same millisecond (e.g. several coroutines launched back-to-back), which let
+    // one test's early cleanup delete a directory another concurrent extraction was still
+    // writing into. The counter guarantees a unique name per call regardless of timing.
+    private val outputDirCounter = java.util.concurrent.atomic.AtomicLong(0)
+
     // Create extractor dependencies
     private val pathValidator = PathValidator()
     private val tempFileManager = TempFileManager()
@@ -48,7 +54,8 @@ object ArchiveExtractionTestHelper {
         // Use external cache (SD card partition) to avoid filling internal data partition
         // with 264K-file extractions across multiple tests
         val baseDir = context.externalCacheDir ?: context.cacheDir
-        return File(baseDir, "test_extraction_${System.currentTimeMillis()}").apply {
+        val unique = "${System.currentTimeMillis()}_${outputDirCounter.incrementAndGet()}"
+        return File(baseDir, "test_extraction_$unique").apply {
             mkdirs()
         }
     }
@@ -67,7 +74,7 @@ object ArchiveExtractionTestHelper {
             ArchiveType.ZIP -> ZipExtractor(pathValidator, tempFileManager, sevenZipHelper)
             ArchiveType.RAR -> RarExtractor(pathValidator, archiveLibraryManager, tempFileManager, sevenZipHelper)
             ArchiveType.TAR -> TarExtractor(pathValidator, tempFileManager, sevenZipHelper)
-            ArchiveType.TAR_GZ -> GzipExtractor(tempFileManager, sevenZipHelper)
+            ArchiveType.TAR_GZ -> TarExtractor(pathValidator, tempFileManager, sevenZipHelper)
             ArchiveType.GZIP -> GzipExtractor(tempFileManager, sevenZipHelper)
             ArchiveType.TAR_BZ2 -> TarExtractor(pathValidator, tempFileManager, sevenZipHelper)
             ArchiveType.SEVEN_ZIP -> SevenZipExtractor(pathValidator, archiveLibraryManager, tempFileManager, sevenZipHelper)

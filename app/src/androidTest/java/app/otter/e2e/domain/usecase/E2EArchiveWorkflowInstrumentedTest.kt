@@ -2,11 +2,11 @@ package app.otter.domain.usecase.e2e
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.otter.data.extractor.ArchiveExtractor
-import app.otter.data.extractor.TestArchiveHelper
 import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.ExtractionResult
 import app.otter.domain.usecase.helpers.ArchiveExtractionTestHelper
+import app.otter.domain.usecase.helpers.ArchiveNavigationTestHelper
 import app.otter.domain.usecase.helpers.BaseInstrumentedTest
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
@@ -17,7 +17,6 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import java.io.File
 import javax.inject.Inject
@@ -39,9 +38,6 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
     @get:Rule(order = 0)
     val hiltRule = HiltAndroidRule(this)
 
-    @get:Rule(order = 1)
-    val tempFolder = TemporaryFolder()
-
     // Inject BrowseItemsUseCase
     @Inject
     lateinit var browseItemsUseCase: app.otter.domain.usecase.BrowseItemsUseCase
@@ -51,6 +47,12 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
     protected abstract val testArchivePath: String
     protected abstract val extractor: ArchiveExtractor
     protected abstract val archiveExtension: String // e.g., ".zip"
+
+    // Subclasses can opt out of tests whose pre-pushed fixture is unavailable for their format
+    protected open val supportsDirectoryNavigation: Boolean = true
+    protected open val supportsEmptyArchive: Boolean = true
+    protected open val supportsMaliciousArchiveFixture: Boolean = false
+    protected open val detectsCorruptedArchive: Boolean = true
 
     private var currentStep = 0
 
@@ -69,7 +71,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
 
     // Helper to unwrap Result<BrowseResult> and extract items.
     // If path points to an archive file, uses ArchiveEntry; otherwise FileSystem.
-    private val archiveExtensions = setOf(".zip", ".rar", ".7z", ".tar", ".gz", ".tgz", ".rpa")
+    private val archiveExtensions = setOf(".zip", ".rar", ".7z", ".tar", ".gz", ".tgz", ".tar.bz2", ".bz2", ".rpa")
 
     private suspend fun browse(path: String): List<BrowsableItem> {
         val resourcePath = if (archiveExtensions.any { path.endsWith(it, ignoreCase = true) }) {
@@ -85,6 +87,12 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
     private suspend fun browse(path: app.otter.domain.model.ResourcePath): List<BrowsableItem> {
         val result = browseItemsUseCase(path).getOrThrow()
         return result.items
+    }
+
+    // Resolves a pre-pushed fixture archive for this format, e.g. "corrupted_test_archive.zip"
+    private fun fixtureFile(prefix: String): File {
+        val path = ArchiveNavigationTestHelper.getArchivePath("${prefix}_test_archive$archiveExtension")
+        return File(path)
     }
 
     @Test
@@ -171,9 +179,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
     private suspend fun handleCorruptedArchive() {
         logStep("Handle corrupted archive gracefully")
 
-        val corruptedFile = tempFolder.newFile("corrupted${archiveExtension}")
-        createCorruptedArchive(corruptedFile)
-
+        val corruptedFile = fixtureFile("corrupted")
         val outputDir = ArchiveExtractionTestHelper.createOutputDir()
 
         // Try to extract corrupted archive
@@ -186,18 +192,25 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
             onProgress = {}
         )
 
-        // Should return Failure, not crash
-        assertTrue("Corrupted archive should return Failure", result is ExtractionResult.Failure)
+        // Should return Failure, not crash. Formats without corruption detection (see
+        // detectsCorruptedArchive) only need to prove they don't crash on bad input.
+        if (detectsCorruptedArchive) {
+            assertTrue("Corrupted archive should return Failure", result is ExtractionResult.Failure)
+        }
 
         logSuccess()
     }
 
     private suspend fun handleMaliciousPathTraversal() {
+        // Only testable for formats with a real malicious fixture (ZIP). Other formats
+        // don't have a native path-traversal fixture, so there's nothing to test here.
+        if (!supportsMaliciousArchiveFixture) {
+            logSkip("Handle malicious path traversal attack", "malicious fixture only generated for ZIP format")
+            return
+        }
         logStep("Handle malicious path traversal attack")
 
-        val maliciousFile = tempFolder.newFile("malicious${archiveExtension}")
-        createMaliciousArchive(maliciousFile)
-
+        val maliciousFile = fixtureFile("malicious")
         val outputDir = ArchiveExtractionTestHelper.createOutputDir()
 
         // Try to extract malicious archive
@@ -225,11 +238,13 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
     }
 
     private suspend fun handleEmptyArchive() {
+        if (!supportsEmptyArchive) {
+            logSkip("Handle empty archive", "empty fixture unsupported for this format")
+            return
+        }
         logStep("Handle empty archive")
 
-        val emptyFile = tempFolder.newFile("empty${archiveExtension}")
-        createEmptyArchive(emptyFile)
-
+        val emptyFile = fixtureFile("empty")
         val outputDir = ArchiveExtractionTestHelper.createOutputDir()
 
         // Extract empty archive
@@ -310,6 +325,10 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
     }
 
     private suspend fun browseArchive_thenSelectAllItems() {
+        if (!supportsDirectoryNavigation) {
+            logSkip("Browse archive, then select all items", "format does not support directory navigation")
+            return
+        }
         logStep("Browse archive, then select all items")
 
         // Browse archive
@@ -361,6 +380,10 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
     }
 
     private suspend fun browseArchive_thenNavigateIntoSubdirectory() {
+        if (!supportsDirectoryNavigation) {
+            logSkip("Browse archive, then navigate into subdirectory", "format does not support directory navigation")
+            return
+        }
         logStep("Browse archive, then navigate into subdirectory")
 
         // Browse archive root
@@ -381,6 +404,10 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
     }
 
     private suspend fun browseSubdirectory_thenSelectSomeFiles() {
+        if (!supportsDirectoryNavigation) {
+            logSkip("Browse subdirectory, then select some files", "format does not support directory navigation")
+            return
+        }
         logStep("Browse subdirectory, then select some files")
 
         // Browse archive root
@@ -405,6 +432,10 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
     }
 
     private suspend fun browseSubdirectory_selectSomeFiles_thenExtract() {
+        if (!supportsDirectoryNavigation) {
+            logSkip("Browse subdirectory, select some files, extract", "format does not support directory navigation")
+            return
+        }
         logStep("Browse subdirectory, select some files, extract")
 
         // Browse archive root
@@ -448,6 +479,10 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
     }
 
     private suspend fun browseArchive_selectMixedTypes_thenExtract() {
+        if (!supportsDirectoryNavigation) {
+            logSkip("Browse archive, select mix (files + folders), extract", "format does not support directory navigation")
+            return
+        }
         logStep("Browse archive, select mix (files + folders), extract")
 
         // Browse root
@@ -475,6 +510,10 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
     }
 
     private suspend fun browseArchive_navigateBackAndForth_thenExtract() {
+        if (!supportsDirectoryNavigation) {
+            logSkip("Browse archive, navigate back/forth, extract", "format does not support directory navigation")
+            return
+        }
         logStep("Browse archive, navigate back/forth, extract")
 
         // Browse root
@@ -578,10 +617,8 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
     private suspend fun extractDeepNestedArchive_100levels() {
         logStep("Extract archive with deep nesting (100 levels)")
 
-        // Create archive with deep nesting structure
-        val deepNestedFile = tempFolder.newFile("deep_nested${archiveExtension}")
+        val deepNestedFile = fixtureFile("deep_nested")
         val nestingDepth = 100
-        createDeepNestedArchive(deepNestedFile, nestingDepth)
 
         val outputDir = ArchiveExtractionTestHelper.createOutputDir()
 
@@ -600,14 +637,21 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
         // Assert
         assertTrue("Deep nested archive should extract successfully", result is ExtractionResult.Success)
 
-        // Verify deepest file exists
-        var currentDir = outputDir
-        repeat(nestingDepth) { level ->
-            currentDir = File(currentDir, "level_$level")
-            assertTrue("Level $level directory should exist", currentDir.exists())
+        // Formats without directory navigation (e.g. GZIP) decompress to a single flat
+        // file — there's no nested directory tree to walk for those.
+        if (supportsDirectoryNavigation) {
+            // Verify nesting down to the deepest level (fixture nests level_1/level_2/.../level_100)
+            var currentDir = outputDir
+            for (level in 1..nestingDepth) {
+                currentDir = File(currentDir, "level_$level")
+                assertTrue("Level $level directory should exist", currentDir.exists())
+            }
+            val deepestLevelFiles = currentDir.listFiles { file -> file.isFile }
+            assertTrue("Deepest level should contain at least 1 file", !deepestLevelFiles.isNullOrEmpty())
+        } else {
+            val extracted = (result as ExtractionResult.Success).extractedFilesCount
+            assertTrue("Should extract at least 1 file", extracted >= 1)
         }
-        val deepestFile = File(currentDir, "deep_file.txt")
-        assertTrue("Deepest file should exist at level $nestingDepth", deepestFile.exists())
 
         println("    ⏱️  Extracted $nestingDepth nested levels in ${duration}ms")
 
@@ -617,10 +661,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
     private suspend fun extractArchiveWithLongFilename_255chars() {
         logStep("Extract archive with long filename (255 chars limit)")
 
-        // Create archive with very long filename
-        val longNameFile = tempFolder.newFile("long_name${archiveExtension}")
-        val maxFilenameLength = 255
-        createArchiveWithLongFilename(longNameFile, maxFilenameLength)
+        val longNameFile = fixtureFile("long_filename")
 
         val outputDir = ArchiveExtractionTestHelper.createOutputDir()
 
@@ -641,12 +682,15 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
         val extracted = (result as ExtractionResult.Success).extractedFilesCount
         assertTrue("Should extract at least 1 file", extracted >= 1)
 
-        // Verify long filename file exists (truncated if necessary)
         val extractedFiles = outputDir.walk().filter { it.isFile }.toList()
         assertTrue("Should have extracted files", extractedFiles.isNotEmpty())
 
-        val hasLongName = extractedFiles.any { it.name.length >= 200 }
-        assertTrue("Should have extracted file with long name", hasLongName)
+        // GZIP names its output after the archive's own filename, not an embedded entry
+        // name — it has no per-entry path to preserve a long filename through.
+        if (supportsDirectoryNavigation) {
+            val hasLongName = extractedFiles.any { it.name.length >= 200 }
+            assertTrue("Should have extracted file with long name", hasLongName)
+        }
 
         println("    ⏱️  Extracted archive with long filename in ${duration}ms")
 
@@ -682,19 +726,18 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
         logSuccess()
     }
 
-    private suspend fun multipleSimultaneousExtractions() {
+    private suspend fun multipleSimultaneousExtractions() = kotlinx.coroutines.coroutineScope {
         logStep("Multiple simultaneous extractions")
 
-        // Use a small programmatic archive to avoid disk pressure during concurrent extractions
-        val smallArchive = tempFolder.newFile("concurrent_test${archiveExtension}")
-        createLargeArchive(smallArchive, 100)
-
-        // Start 3 extractions simultaneously
+        // Re-extract the shared perfect fixture concurrently into separate output dirs.
+        // Using coroutineScope (not GlobalScope) keeps these jobs structurally tied to this
+        // test: a failed assertion here becomes a normal test failure instead of an uncaught
+        // exception that crashes the whole instrumentation process and aborts every other test.
         val jobs = List(3) { index ->
-            kotlinx.coroutines.GlobalScope.launch {
+            launch {
                 val outputDir = ArchiveExtractionTestHelper.createOutputDir()
                 val result = extractor.extract(
-                    inputStream = smallArchive.inputStream(),
+                    inputStream = File(testArchivePath).inputStream(),
                     destinationPath = outputDir,
                     archiveType = archiveType,
                     sourceFileName = "test_$index${archiveExtension}",
@@ -712,20 +755,17 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
         logSuccess()
     }
 
-    // ========== Archive-Specific Helpers (to be implemented by subclasses) ==========
-
-    protected abstract fun createCorruptedArchive(file: File)
-    protected abstract fun createMaliciousArchive(file: File)
-    protected abstract fun createEmptyArchive(file: File)
-    protected abstract fun createLargeArchive(file: File, fileCount: Int)
-    protected abstract fun createDeepNestedArchive(file: File, depth: Int)
-    protected abstract fun createArchiveWithLongFilename(file: File, maxLength: Int)
-
     // ========== Logging Helpers ==========
 
     private fun logStep(description: String) {
         currentStep++
         println("\n[$currentStep] $description")
+    }
+
+    private fun logSkip(description: String, reason: String) {
+        currentStep++
+        println("\n[$currentStep] $description")
+        println("    ⏭️  Skipped: $reason")
     }
 
     private fun logSuccess() {

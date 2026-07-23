@@ -20,7 +20,11 @@ object ArchiveNavigationTestHelper {
     const val TEST_ARCHIVE_RAR = "test_archive.rar"
     const val TEST_ARCHIVE_TAR = "test_archive.tar"
     const val TEST_ARCHIVE_TAR_GZ = "test_archive.tar.gz"
+    const val TEST_ARCHIVE_TAR_BZ2 = "test_archive.tar.bz2"
+    const val TEST_ARCHIVE_GZ = "test_archive.gz"
     const val TEST_ARCHIVE_7Z = "test_archive.7z"
+    const val CORRUPTED_ARCHIVE_RAR = "corrupted_test_archive.rar"
+    const val CORRUPTED_ARCHIVE_7Z = "corrupted_test_archive.7z"
 
     private val testArchivesDir: File
         get() = File(TestConstants.TestArchives.devicePath)
