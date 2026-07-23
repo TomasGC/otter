@@ -26,7 +26,6 @@ keystore/release.keystore
 # Local/temporary files (not committed)
 **/*.local.*
 **/.local/
-.claude/tmpclaude/
 .claude/sessions/
 
 # ============================================
@@ -43,6 +42,8 @@ test-run-final.txt
 # All temporary files go in temp/ directory
 temp/
 *archives/
+.kotlin/
+test-output.txt
 
 # ============================================
 # Python

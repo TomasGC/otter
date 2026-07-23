@@ -45,6 +45,12 @@ tasks.register("sendTestArchivesToDevice") {
             return@doLast
         }
 
+        // When launched via manage.py, archives are already pushed by send_archives()
+        if (System.getenv("OTTER_ARCHIVES_PUSHED") != null) {
+            println("📦 Archives already pushed by manage.py, skipping")
+            return@doLast
+        }
+
         println("📦 Sending test archives to device...")
 
         val pythonScript = File(project.rootDir, "scripts/src/cli/send_to_phone.py")
