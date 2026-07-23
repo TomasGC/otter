@@ -5,27 +5,16 @@ on:
     workflows: ["Push-CI"]
     types: [completed]
 
+permissions:
+  pull-requests: write
+  contents: read
+
 concurrency:
   group: pr-ci-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
 jobs:
-  check-pr:
-    runs-on: ubuntu-latest
-    outputs:
-      has_pr: ${{ steps.check.outputs.has_pr }}
-    steps:
-      - id: check
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          count=$(gh pr list --head "${{ github.event.workflow_run.head_branch }}" \
-            --repo "${{ github.repository }}" --json number --jq 'length')
-          echo "has_pr=$([[ "$count" -gt 0 ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-
   pr-checks:
-    needs: check-pr
-    if: needs.check-pr.outputs.has_pr == 'true'
     uses: TomasGC/condor/.github/workflows/common-pr-ci.yml@main
     secrets: inherit
     with:
