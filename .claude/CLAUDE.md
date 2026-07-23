@@ -9,6 +9,7 @@
 
 @contexts/kanban.md
 @contexts/architecture.md
+@contexts/design-patterns.md
 @contexts/commands.md
 @contexts/conventions.md
 @contexts/tests.md

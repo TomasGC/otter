@@ -74,6 +74,13 @@ class TestRunTask:
         captured = capsys.readouterr()
         assert "> Task" in captured.out or True  # output is printed; existence check sufficient
 
+    def test_closes_stdout_after_run(self, tmp_path):
+        # ResourceWarning otherwise -- only surfaces with a real Popen at scale
+        # (pytest.ini's filterwarnings=error turns it into a hard failure).
+        runner = FakeSubprocessRunner().set_popen(["BUILD SUCCESSFUL\n"], returncode=0)
+        GradleRunner(runner, tmp_path).run_task("assembleDebug")
+        assert runner.last_popen.stdout.closed is True
+
     def test_returns_false_on_unexpected_exception(self, tmp_path):
         runner = FakeSubprocessRunner()
         fake_popen = FakeSubprocessRunner().set_popen(["BUILD SUCCESSFUL\n"], 0).popen([])

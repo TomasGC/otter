@@ -239,4 +239,57 @@ class SevenZipBasedInspectorTest {
             inspector.isEncrypted()
         }
     }
+
+    @Test
+    fun `sequential entries then countEntries only opens the archive once`() = runTest {
+        val file = makeFile()
+        every { mockLibraryManager.openArchive(file) } returns mockArchive
+        every { mockArchive.numberOfItems } returns 0
+        val inspector = SevenZipBasedInspector(file, ArchiveType.SEVEN_ZIP, mockLibraryManager)
+
+        inspector.entries().toList()
+        inspector.countEntries()
+
+        verify(exactly = 1) { mockLibraryManager.openArchive(file) }
+        inspector.close()
+    }
+
+    @Test
+    fun `getArchiveType after close does not throw`() {
+        val file = makeFile()
+        val inspector = SevenZipBasedInspector(file, ArchiveType.SEVEN_ZIP, mockLibraryManager)
+        inspector.close()
+
+        // Unlike entries()/countEntries()/isEncrypted(), getArchiveType() returns the
+        // constructor-provided type directly without touching the archive handle.
+        assertEquals(ArchiveType.SEVEN_ZIP, inspector.getArchiveType())
+    }
+
+    @Test
+    fun `getOrOpenArchive is safe under concurrent calls`() {
+        val openCount = java.util.concurrent.atomic.AtomicInteger(0)
+        val latch = java.util.concurrent.CountDownLatch(1)
+
+        val fakeLibraryManager = mockk<ArchiveLibraryManager>()
+        every { fakeLibraryManager.openArchive(any()) } answers {
+            latch.await()
+            openCount.incrementAndGet()
+            mockArchive
+        }
+
+        val file = makeFile()
+        val inspector = SevenZipBasedInspector(file, ArchiveType.SEVEN_ZIP, fakeLibraryManager)
+
+        val thread1 = Thread { inspector.entries() }
+        val thread2 = Thread { inspector.entries() }
+        thread1.start()
+        thread2.start()
+        Thread.sleep(50)
+        latch.countDown()
+        thread1.join(1000)
+        thread2.join(1000)
+
+        assertEquals(1, openCount.get())
+        inspector.close()
+    }
 }

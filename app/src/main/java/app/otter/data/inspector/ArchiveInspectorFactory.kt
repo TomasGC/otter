@@ -31,7 +31,7 @@ class ArchiveInspectorFactory @Inject constructor(
     private fun createInspectorForType(archiveType: ArchiveType, file: File): ArchiveInspector =
         when (archiveType) {
             ArchiveType.ZIP -> ZipInspector(file)
-            ArchiveType.RPA -> RpaInspector(file)
+            ArchiveType.RPA -> RpaInspector.from(file)
             ArchiveType.TAR,
             ArchiveType.TAR_GZ,
             ArchiveType.TAR_BZ2 -> TarInspector(file, archiveType)
@@ -91,7 +91,9 @@ class ArchiveInspectorFactory @Inject constructor(
     private fun readMagicBytes(file: File, count: Int): ByteArray {
         return FileInputStream(file).use { input ->
             val buffer = ByteArray(count)
-            val bytesRead = input.read(buffer)
+            // read() returns -1 (not 0) at EOF for an empty file — must not flow into
+            // copyOfRange(0, -1), which throws IllegalArgumentException.
+            val bytesRead = input.read(buffer).coerceAtLeast(0)
             if (bytesRead < count) buffer.copyOfRange(0, bytesRead) else buffer
         }
     }

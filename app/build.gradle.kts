@@ -5,7 +5,6 @@ plugins {
     id("com.google.dagger.hilt.android")
     id("kotlin-kapt")
     id("org.jetbrains.kotlinx.kover")
-    id("org.owasp.dependencycheck") version "12.2.2"
     id("io.gitlab.arturbosch.detekt")
 }
 
@@ -17,8 +16,8 @@ android {
         applicationId = "app.otter"
         minSdk = 26
         targetSdk = 35
-        versionCode = 211
-        versionName = "0.0.211"
+        versionCode = 255
+        versionName = "0.0.255"
 
         testInstrumentationRunner = "app.otter.HiltTestRunner"
         vectorDrawables {
@@ -187,51 +186,60 @@ kapt {
 }
 
 // Kover configuration (coverage tool optimized for Kotlin + Robolectric)
+// NOTE: koverReport { filters {} } at root scope applies only to JVM/default variant.
+// For Android build variant tasks (koverXmlReportDebug), must use androidReports("debug").
 koverReport {
-    filters {
-        excludes {
-            classes(
-                "**/R.class",
-                "**/R$*.class",
-                "**/BuildConfig.*",
-                "**/Manifest*.*",
-                "**/*Test*.*",
-                "android.*",
-                "androidx.*",
-                "**/*_Hilt*",
-                "**/*_Factory",
-                "**/*_MembersInjector",
-                "**/Hilt_*",
-                // Android components (difficult to test, will add tests later)
-                "**/ExtractionService",
-                "**/ExtractionActivity",
-                "**/OtterApplication",
-                "**/NotificationHelper",
-                // Base class with protected logging methods (tested via concrete implementations)
-                "**/BaseArchiveExtractor",
-                "**/BaseArchiveExtractor$*"
-            )
+    androidReports("debug") {
+        filters {
+            excludes {
+                classes(
+                    // Generated boilerplate
+                    "**.R",
+                    "**.R$*",
+                    "**.BuildConfig",
+                    "**.Manifest*",
+                    "**.*Test*",
+                    // Android framework (not compiled into app JAR)
+                    "android.*",
+                    "androidx.*",
+                    // Hilt-generated: factories, injectors, instance holders
+                    "**.*_Hilt*",
+                    "**.*_Factory",
+                    "**.*_Factory$*",
+                    "**.*_MembersInjector",
+                    "**.Hilt_*",
+                    // Hilt DI modules — pure @Provides wiring, no testable logic
+                    "**.AppModule",
+                    "app.otter.di.AppModule_*",
+                    "**.CoroutineModule",
+                    "app.otter.di.CoroutineModule_*",
+                    // Hilt aggregated roots / generated injectors
+                    "dagger.hilt.internal.aggregatedroot.codegen.*",
+                    "hilt_aggregated_deps.*",
+                    // Android entry points: only testable via instrumented tests
+                    "**.ExtractionService",
+                    "**.ExtractionService$*",
+                    "**.ExtractionActivity",
+                    "**.ExtractionActivity$*",
+                    "**.BrowserActivity",
+                    "**.BrowserActivity$*",
+                    "**.OtterApplication",
+                    // Compose UI + theme: only testable via instrumented Compose tests
+                    "app.otter.ui.screen.*",
+                    "app.otter.ui.component.*",
+                    "app.otter.ui.theme.*",
+                    // Abstract base: no standalone instantiable bytecode
+                    "**.BaseArchiveExtractor",
+                    "**.BaseArchiveExtractor$*"
+                )
+            }
         }
-    }
 
-    verify {
-        rule {
-            minBound(80) // Minimum 80% coverage
+        verify {
+            rule {
+                minBound(80)
+            }
         }
-    }
-}
-
-// Dependency check configuration
-dependencyCheck {
-    analyzers.assemblyEnabled = false
-    analyzers.ossIndexEnabled = true
-    autoUpdate = false
-    failBuildOnCVSS = 7.0f
-    suppressionFile = file("dependency-check-suppressions.xml").absolutePath
-    nvd {
-        // Without a key the NVD API throttles to 5 requests/30s (slow but works).
-        apiKey = System.getenv("NVD_API_KEY") ?: ""
-        validForHours = 168
     }
 }
 
@@ -305,6 +313,7 @@ tasks.named("testDebugUnitTest", Test::class.java) {
         }
         // Integration mock - service, viewmodel, domain usecase
         "integration-mock-other" -> filter {
+            includeTestsMatching("app.otter.integration.data.browser.*")
             includeTestsMatching("app.otter.integration.service.*")
             includeTestsMatching("app.otter.integration.viewmodel.*")
             includeTestsMatching("app.otter.domain.usecase.ExtractSelectedItemsIntegrationTest")

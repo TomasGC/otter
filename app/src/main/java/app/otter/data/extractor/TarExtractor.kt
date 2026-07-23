@@ -26,7 +26,8 @@ import javax.inject.Inject
 class TarExtractor @Inject constructor(
     private val pathValidator: PathValidator,
     tempFileManager: ITempFileManager,
-    sevenZipHelper: SevenZipExtractorHelper
+    sevenZipHelper: SevenZipExtractorHelper,
+    private val sizeGuardFactory: () -> ArchiveSizeGuard = { ArchiveSizeGuard() }
 ) : BaseArchiveExtractor(tempFileManager, sevenZipHelper, IndeterminateProgressCalculator()) {
 
     override fun supports(type: ArchiveType): Boolean {
@@ -45,45 +46,35 @@ class TarExtractor @Inject constructor(
     ): ExtractionResult = withContext(Dispatchers.IO) {
         var extractedCount = 0
 
-        // Wrap with GZIP decompressor if needed
-        val decompressedStream = if (archiveType == ArchiveType.TAR_GZ) {
-            GzipCompressorInputStream(BufferedInputStream(inputStream))
-        } else if (archiveType == ArchiveType.TAR_BZ2) {
-            BZip2CompressorInputStream(BufferedInputStream(inputStream))
-        } else {
-            BufferedInputStream(inputStream)
-        }
+        val decompressedStream = decompressStream(inputStream, archiveType)
 
         // Count total entries first (requires re-opening stream for actual extraction)
         // For now, we'll use -1 as totalCount since we can't count without consuming the stream
         val totalCount = -1
+        val selectedPaths = selectedItems?.toSet()
 
         // Progress throttler from base class
         val throttler = ProgressThrottler()
 
+        // Guards against zip-bomb entries (decompressed size far exceeding declared/expected size)
+        val sizeGuard = sizeGuardFactory()
+        val buffer = ByteArray(BUFFER_SIZE_BYTES)
+
         // Extract all entries
         TarArchiveInputStream(decompressedStream).use { tarInput ->
             var entry = tarInput.nextTarEntry
-
             while (entry != null && isActive) {
-                if (!entry.isDirectory) {
-                    // Path traversal protection
-                    val outputFile = pathValidator.createSafeOutputFile(destinationPath, entry.name)
+                val currentEntry = entry
+                if (!currentEntry.isDirectory && isEntrySelected(currentEntry.name, selectedPaths)) {
+                    val outputFile = pathValidator.createSafeOutputFile(destinationPath, currentEntry.name)
+                    sizeGuard.startEntry()
+                    extractTarEntry(tarInput, outputFile, sizeGuard, buffer)
 
-                    // Extract entry
-                    outputFile.outputStream().buffered(BUFFER_SIZE_BYTES).use { output ->
-                        tarInput.copyTo(output, BUFFER_SIZE_BYTES)
+                    if (isActive) {
+                        extractedCount++
+                        notifyProgress(extractedCount, totalCount, currentEntry.name, throttler, onProgress)
                     }
-
-                    // Check if cancelled during file extraction
-                    if (!isActive) break
-
-                    extractedCount++
-
-                    // Use base class helper for throttled progress notifications
-                    notifyProgress(extractedCount, totalCount, entry.name, throttler, onProgress)
                 }
-
                 entry = tarInput.nextTarEntry
             }
         }
@@ -94,5 +85,28 @@ class TarExtractor @Inject constructor(
             outputPath = destinationPath.absolutePath,
             extractedFilesCount = extractedCount
         )
+    }
+
+    private fun decompressStream(inputStream: InputStream, archiveType: ArchiveType): InputStream =
+        when (archiveType) {
+            ArchiveType.TAR_GZ -> GzipCompressorInputStream(BufferedInputStream(inputStream))
+            ArchiveType.TAR_BZ2 -> BZip2CompressorInputStream(BufferedInputStream(inputStream))
+            else -> BufferedInputStream(inputStream)
+        }
+
+    private fun extractTarEntry(
+        tarInput: TarArchiveInputStream,
+        outputFile: File,
+        sizeGuard: ArchiveSizeGuard,
+        buffer: ByteArray
+    ) {
+        outputFile.outputStream().buffered(BUFFER_SIZE_BYTES).use { output ->
+            while (true) {
+                val bytesRead = tarInput.read(buffer)
+                if (bytesRead == -1) break
+                sizeGuard.track(bytesRead)
+                output.write(buffer, 0, bytesRead)
+            }
+        }
     }
 }

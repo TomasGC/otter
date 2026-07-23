@@ -6,6 +6,7 @@ import timber.log.Timber
 import app.otter.data.util.ResourcePathConverter
 import app.otter.domain.model.ResourcePath
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,7 +17,7 @@ import javax.inject.Singleton
 @Singleton
 class ExtractionQueue @Inject constructor() {
     private val queue = ConcurrentLinkedQueue<ExtractionTask>()
-    private var isExtracting = false
+    private val isExtracting = AtomicBoolean(false)
 
     data class ExtractionTask(
         val archiveUri: ResourcePath,
@@ -40,7 +41,7 @@ class ExtractionQueue @Inject constructor() {
      * Starts extraction of next archive in queue.
      */
     fun processNext(context: Context): Boolean {
-        if (isExtracting) {
+        if (!isExtracting.compareAndSet(false, true)) {
             Timber.tag(TAG).d("Already extracting, skipping")
             return false
         }
@@ -48,11 +49,11 @@ class ExtractionQueue @Inject constructor() {
         val task = queue.poll()
         if (task == null) {
             Timber.tag(TAG).d("Queue empty")
+            isExtracting.set(false)
             return false
         }
 
         Timber.tag(TAG).d("Processing: ${task.fileName}, remaining: ${queue.size}")
-        isExtracting = true
 
         val intent = ExtractionService.newIntent(
             context = context,
@@ -70,7 +71,7 @@ class ExtractionQueue @Inject constructor() {
      */
     fun markComplete() {
         Timber.tag(TAG).d("Marking current extraction as complete")
-        isExtracting = false
+        isExtracting.set(false)
     }
 
     /**
@@ -80,7 +81,7 @@ class ExtractionQueue @Inject constructor() {
         val task = queue.poll()
         if (task != null) {
             Timber.tag(TAG).d("Polled next task: ${task.fileName}, remaining: ${queue.size}")
-            isExtracting = true
+            isExtracting.set(true)
         } else {
             Timber.tag(TAG).d("Queue empty")
         }
@@ -92,7 +93,7 @@ class ExtractionQueue @Inject constructor() {
      */
     fun clear() {
         queue.clear()
-        isExtracting = false
+        isExtracting.set(false)
         Timber.tag(TAG).d("Queue cleared")
     }
 

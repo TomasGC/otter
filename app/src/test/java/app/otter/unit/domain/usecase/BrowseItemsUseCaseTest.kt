@@ -147,6 +147,23 @@ class BrowseItemsUseCaseTest {
         assertFalse(paginated.hasMore)
     }
 
+    @Test
+    fun `invoke uses default offset and limit when not specified`() = runTest {
+        // Arrange
+        val path = ResourcePath.FileSystem("file:///storage/downloads")
+        val items = listOf(createFileSystemFile("file.txt"))
+        coEvery {
+            repository.browse(path, 0, BrowseItemsUseCase.PAGINATION_THRESHOLD)
+        } returns Result.success(BrowseResult.Complete(items))
+
+        // Act — no explicit offset/limit → exercises Kotlin's $default synthetic method
+        val result = useCase(path)
+
+        // Assert
+        assertTrue(result.isSuccess)
+        assertEquals(1, result.getOrNull()!!.items.size)
+    }
+
     private fun createFileSystemFile(name: String) = BrowsableItem.FileSystemFile(
         path = ResourcePath.FileSystem("file:///storage/downloads/$name"),
         name = name,

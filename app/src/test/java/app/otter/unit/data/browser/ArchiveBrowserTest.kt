@@ -6,6 +6,10 @@ import app.otter.domain.model.BrowseResult
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -298,6 +302,114 @@ class ArchiveBrowserTest {
         assertTrue(result.items.any { it.name == "file4.txt" })
 
         inspector.close()
+    }
+
+    @Test
+    fun `browse deduplicates entries with identical paths`() = runTest {
+        // Two inspector entries with the same path must result in one BrowsableItem.
+        // ArchiveBrowser uses distinctBy { it.path } to prevent duplicates.
+        val inspector = mockk<ArchiveInspector>()
+        coEvery { inspector.countEntries() } returns 2
+        every { inspector.entries() } returns sequenceOf(
+            ArchiveEntry("duplicate.txt", false, 100, 50, 1000L),
+            ArchiveEntry("duplicate.txt", false, 200, 100, 2000L) // same path
+        )
+        val browser = ArchiveBrowser(inspector, "/path/to/archive.zip")
+
+        val result = browser.browse(entryPath = "", offset = 0, limit = 100)
+
+        assertTrue(result is BrowseResult.Complete)
+        val items = (result as BrowseResult.Complete).items
+        assertEquals("Duplicate entries must be collapsed to 1 item", 1, items.size)
+        assertEquals("duplicate.txt", items.first().name)
+    }
+
+    @Test
+    fun `browse deduplicates entries across explicit and implicit directories`() = runTest {
+        // An explicit dir entry + an implicit dir (inferred from file path) → one dir in result.
+        val inspector = mockk<ArchiveInspector>()
+        coEvery { inspector.countEntries() } returns 2
+        every { inspector.entries() } returns sequenceOf(
+            ArchiveEntry("subdir/", true, 0, 0, 0L),          // explicit dir
+            ArchiveEntry("subdir/file.txt", false, 100, 50, 1000L) // implicit parent is "subdir/"
+        )
+        val browser = ArchiveBrowser(inspector, "/path/to/archive.zip")
+
+        val result = browser.browse(entryPath = "", offset = 0, limit = 100)
+
+        assertTrue(result is BrowseResult.Complete)
+        val items = (result as BrowseResult.Complete).items
+        // Root contains: "subdir/" directory only (file.txt is inside subdir/)
+        val dirs = items.filterIsInstance<app.otter.domain.model.BrowsableItem.ArchiveDirectory>()
+        assertEquals("Explicit + implicit 'subdir/' must collapse to 1 directory", 1, dirs.size)
+    }
+
+    @Test
+    fun `browse same directory twice reuses cached entries instead of re-streaming the inspector`() = runTest {
+        // Arrange - Large archive; each browse() call would otherwise re-stream all entries
+        val inspector = mockk<ArchiveInspector>()
+        coEvery { inspector.countEntries() } returns 10_000
+        every { inspector.entries() } returns (0 until 10_000).asSequence().map {
+            ArchiveEntry("file${it.toString().padStart(5, '0')}.txt", false, 100, 50, 1000L)
+        }
+
+        val browser = ArchiveBrowser(inspector, "/path/to/archive.zip")
+
+        // Act - Two paginated calls into the SAME directory (simulates scrolling through it)
+        browser.browse(entryPath = "", offset = 0, limit = 100)
+        browser.browse(entryPath = "", offset = 100, limit = 100)
+
+        // Assert - The expensive entries() stream must only run once, not once per page
+        verify(exactly = 1) { inspector.entries() }
+    }
+
+    @Test
+    fun `browse different directories on the same browser each cache independently`() = runTest {
+        // Arrange
+        val inspector = mockk<ArchiveInspector>()
+        coEvery { inspector.countEntries() } returns 4
+        every { inspector.entries() } returns sequenceOf(
+            ArchiveEntry("dirA/file1.txt", false, 100, 50, 1000L),
+            ArchiveEntry("dirB/file2.txt", false, 200, 100, 2000L)
+        )
+
+        val browser = ArchiveBrowser(inspector, "/path/to/archive.zip")
+
+        // Act - Browse two different directories, then re-browse the first again
+        val firstA = browser.browse(entryPath = "dirA/", offset = 0, limit = 100)
+        browser.browse(entryPath = "dirB/", offset = 0, limit = 100)
+        val secondA = browser.browse(entryPath = "dirA/", offset = 0, limit = 100)
+
+        // Assert - Underlying stream still only read once across all three calls
+        verify(exactly = 1) { inspector.entries() }
+        assertEquals(1, firstA.items.size)
+        assertEquals("file1.txt", firstA.items.first().name)
+        assertEquals(secondA.items.map { it.name }, firstA.items.map { it.name })
+    }
+
+    @Test
+    fun `browse from many concurrent coroutines on the same instance does not duplicate the entries stream`() = runTest {
+        // ItemBrowserRepositoryImpl keeps one ArchiveBrowser alive per archive and can dispatch
+        // concurrent scroll-prefetch calls into it. directoryCache/cachedRawEntries must survive
+        // that without corrupting state or re-streaming the inspector per racing caller.
+        val inspector = mockk<ArchiveInspector>()
+        coEvery { inspector.countEntries() } returns 10_000
+        every { inspector.entries() } answers {
+            Thread.sleep(20) // widen the race window
+            (0 until 10_000).asSequence().map { ArchiveEntry("file$it.txt", false, 100, 50, 1000L) }
+        }
+
+        val browser = ArchiveBrowser(inspector, "/path/to/archive.zip")
+
+        coroutineScope {
+            repeat(20) { i ->
+                launch(Dispatchers.Default) {
+                    browser.browse(entryPath = "", offset = i * 10, limit = 10)
+                }
+            }
+        }
+
+        verify(exactly = 1) { inspector.entries() }
     }
 
     private fun createTestZip(files: Map<String, String>): File {

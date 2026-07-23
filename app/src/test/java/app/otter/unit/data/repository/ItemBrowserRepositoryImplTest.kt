@@ -11,6 +11,9 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -134,6 +137,122 @@ class ItemBrowserRepositoryImplTest {
         // Then
         assertTrue(result.isSuccess)
         verify(exactly = 1) { inspectorFactory.create(File("/storage/emulated/0/large.zip")) }
+    }
+
+    @Test
+    fun `browse reuses cached ArchiveBrowser across repeated calls to the same archive`() = runTest {
+        // Given - two browse() calls into the same archive, different entryPath/offset
+        // (simulates a scroll session: repository must not recreate the inspector every call)
+        val archivePath = "/storage/emulated/0/large.zip"
+        val mockInspector = mockk<ArchiveInspector>()
+
+        every { inspectorFactory.create(File(archivePath)) } returns Result.success(mockInspector)
+        coEvery { mockInspector.countEntries() } returns 20000
+        every { mockInspector.entries() } returns (0 until 100).asSequence().map {
+            app.otter.domain.inspector.ArchiveEntry(
+                path = "folder/file$it.txt",
+                isDirectory = false,
+                sizeBytes = 1024L,
+                compressedSize = 512L,
+                lastModified = 1234567890L
+            )
+        }
+
+        // When
+        val first = repository.browse(ResourcePath.ArchiveEntry(archivePath, "folder/"), offset = 0, limit = 50)
+        val second = repository.browse(ResourcePath.ArchiveEntry(archivePath, "folder/"), offset = 50, limit = 50)
+
+        // Then - inspector created once; entries() streamed once (ArchiveBrowser's own cache)
+        assertTrue(first.isSuccess)
+        assertTrue(second.isSuccess)
+        verify(exactly = 1) { inspectorFactory.create(File(archivePath)) }
+        verify(exactly = 1) { mockInspector.entries() }
+    }
+
+    @Test
+    fun `browse from many concurrent coroutines for a brand-new archive creates the inspector exactly once`() = runTest {
+        // ConcurrentHashMap.computeIfAbsent guarantees this, but nothing proved it before —
+        // many coroutines racing to browse the SAME never-seen archivePath must share one
+        // ArchiveBrowser/inspector instead of each creating their own.
+        val archivePath = "/storage/emulated/0/concurrent.zip"
+        val mockInspector = mockk<ArchiveInspector>()
+
+        every { inspectorFactory.create(File(archivePath)) } answers {
+            Thread.sleep(20) // widen the race window
+            Result.success(mockInspector)
+        }
+        coEvery { mockInspector.countEntries() } returns 5
+        every { mockInspector.entries() } returns emptyList<app.otter.domain.inspector.ArchiveEntry>().asSequence()
+
+        val path = ResourcePath.ArchiveEntry(archivePath, "")
+
+        coroutineScope {
+            repeat(20) {
+                launch(Dispatchers.Default) {
+                    repository.browse(path, offset = 0, limit = 100)
+                }
+            }
+        }
+
+        verify(exactly = 1) { inspectorFactory.create(File(archivePath)) }
+    }
+
+    @Test
+    fun `browserCache evicts the oldest archive once the bound is exceeded`() = runTest {
+        // browserCache is a Singleton-scoped, app-lifetime cache. Without a bound, browsing
+        // many distinct archives across a long session accumulates ArchiveBrowser instances
+        // (each holding a full raw-entries snapshot) forever.
+        val inspectors = (0..ItemBrowserRepositoryImpl.MAX_CACHED_ARCHIVES).map { i ->
+            val archivePath = "/storage/emulated/0/archive_$i.zip"
+            val mockInspector = mockk<ArchiveInspector>()
+            every { inspectorFactory.create(File(archivePath)) } returns Result.success(mockInspector)
+            coEvery { mockInspector.countEntries() } returns 5
+            every { mockInspector.entries() } returns emptyList<app.otter.domain.inspector.ArchiveEntry>().asSequence()
+            archivePath to mockInspector
+        }
+
+        // Browse one more archive than the bound allows — the first one must be evicted.
+        inspectors.forEach { (archivePath, _) ->
+            repository.browse(ResourcePath.ArchiveEntry(archivePath, ""), offset = 0, limit = 100)
+        }
+
+        // Re-browsing the first (now-evicted) archive must recreate its inspector.
+        val (firstPath, _) = inspectors.first()
+        repository.browse(ResourcePath.ArchiveEntry(firstPath, ""), offset = 0, limit = 100)
+
+        verify(exactly = 2) { inspectorFactory.create(File(firstPath)) }
+    }
+
+    @Test
+    fun `browse returns cached results for the same archivePath even if the underlying file changes`() = runTest {
+        // Documents the accepted tradeoff (see ArchiveBrowser and ItemBrowserRepositoryImpl
+        // KDoc): archives are assumed read-only for this repository's lifetime. If the file is
+        // replaced on disk mid-session, callers get the STALE cached listing, not the new
+        // content, until the process restarts. This locks that contract in as an explicit,
+        // intentional test rather than an undocumented gap.
+        val archivePath = "/storage/emulated/0/mutable.zip"
+        val originalInspector = mockk<ArchiveInspector>()
+        every { inspectorFactory.create(File(archivePath)) } returns Result.success(originalInspector)
+        coEvery { originalInspector.countEntries() } returns 1
+        every { originalInspector.entries() } returns listOf(
+            app.otter.domain.inspector.ArchiveEntry("original.txt", false, 10, 5, 0L)
+        ).asSequence()
+
+        val firstResult = repository.browse(ResourcePath.ArchiveEntry(archivePath, ""), offset = 0, limit = 100)
+        assertEquals("original.txt", firstResult.getOrNull()!!.items.first().name)
+
+        // Simulate the file being replaced: a fresh factory call would return different content.
+        val replacementInspector = mockk<ArchiveInspector>()
+        every { inspectorFactory.create(File(archivePath)) } returns Result.success(replacementInspector)
+        coEvery { replacementInspector.countEntries() } returns 1
+        every { replacementInspector.entries() } returns listOf(
+            app.otter.domain.inspector.ArchiveEntry("replaced.txt", false, 20, 10, 0L)
+        ).asSequence()
+
+        // ...but browsing the same archivePath again still returns the cached (stale) listing.
+        val secondResult = repository.browse(ResourcePath.ArchiveEntry(archivePath, ""), offset = 0, limit = 100)
+        assertEquals("original.txt", secondResult.getOrNull()!!.items.first().name)
+        verify(exactly = 1) { inspectorFactory.create(File(archivePath)) }
     }
 
     @Test

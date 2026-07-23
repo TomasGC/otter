@@ -9,6 +9,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -185,5 +186,69 @@ class FileSystemBrowserTest {
 
         // Then
         assertFalse(result)
+    }
+
+    @Test
+    fun `browse returns failure when path does not exist`() = runTest {
+        val path = ResourcePath.FileSystem("/nonexistent/path/to/nowhere")
+
+        val result = browser.browse(path)
+
+        assertTrue("Browse of nonexistent path must fail", result.isFailure)
+        val ex = result.exceptionOrNull()
+        assertNotNull(ex)
+        assertTrue(
+            "Error must mention 'does not exist'",
+            ex?.message?.contains("does not exist") == true ||
+                ex?.message?.contains("not exist") == true
+        )
+    }
+
+    @Test
+    fun `browse returns failure when path points to a regular file not a directory`() = runTest {
+        val file = tempFolder.newFile("regular_file.txt")
+        file.writeText("content")
+        val path = ResourcePath.FileSystem(file.absolutePath)
+
+        val result = browser.browse(path)
+
+        assertTrue("Browse of regular file must fail", result.isFailure)
+        val ex = result.exceptionOrNull()
+        assertNotNull(ex)
+        assertTrue(
+            "Error must mention 'not a directory'",
+            ex?.message?.contains("not a directory") == true ||
+                ex?.message?.contains("directory") == true
+        )
+    }
+
+    @Test
+    fun `browse returns empty Complete result for empty directory`() = runTest {
+        val dir = tempFolder.newFolder("empty-dir")
+        val path = ResourcePath.FileSystem(dir.absolutePath)
+
+        val result = browser.browse(path)
+
+        assertTrue(result.isSuccess)
+        val browseResult = result.getOrThrow()
+        assertTrue(browseResult is BrowseResult.Complete)
+        assertEquals(0, (browseResult as BrowseResult.Complete).items.size)
+    }
+
+    @Test
+    fun `browse returns failure when directory is unreadable (Linux only)`() = runTest {
+        val os = System.getProperty("os.name", "").lowercase()
+        org.junit.Assume.assumeTrue("Test only runs on Linux", os.contains("linux"))
+
+        val dir = tempFolder.newFolder("unreadable")
+        dir.setReadable(false)
+        val path = ResourcePath.FileSystem(dir.absolutePath)
+
+        try {
+            val result = browser.browse(path)
+            assertTrue("Unreadable directory must fail", result.isFailure)
+        } finally {
+            dir.setReadable(true) // restore so cleanup works
+        }
     }
 }

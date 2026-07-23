@@ -22,7 +22,6 @@ import java.util.zip.ZipInputStream
  * - IOException propagates to caller (no catch)
  * - lastModified = 0L if null (explicit default)
  * - Explicit close() required (implements Closeable)
- * - Single-use entries() sequence (stream exhausted after first iteration)
  *
  * @param zipFile The ZIP file to inspect
  * @throws IOException If the file is not a valid ZIP archive
@@ -35,11 +34,8 @@ class ZipInspector(private val zipFile: File) : ArchiveInspector {
     /**
      * Returns a lazy sequence of archive entries.
      *
-     * Implementation uses ZipInputStream for pure streaming (no buffering).
-     * Entries are yielded one-by-one as the stream is consumed.
-     *
-     * Important: The sequence is single-use. Attempting to iterate again
-     * will throw IllegalStateException (stream already operated upon).
+     * Implementation uses ZipFile for reliable iteration.
+     * Entries are yielded one-by-one as the entries are iterated.
      *
      * @return Lazy sequence of [ArchiveEntry]
      * @throws IllegalStateException If inspector is closed
@@ -47,13 +43,13 @@ class ZipInspector(private val zipFile: File) : ArchiveInspector {
      */
     override fun entries(): Sequence<ArchiveEntry> {
         checkNotClosed()
-
-        // Use ZipFile instead of ZipInputStream for reliable iteration
-        if (zipFileForCount == null) {
-            zipFileForCount = ZipFile(zipFile)
+        val zf = synchronized(this) {
+            if (zipFileForCount == null) {
+                zipFileForCount = ZipFile(zipFile)
+            }
+            zipFileForCount!!
         }
-
-        return zipFileForCount!!.entries().asSequence().map { zipEntry ->
+        return zf.entries().asSequence().map { zipEntry ->
             ArchiveEntry(
                 path = normalizePath(zipEntry.name),
                 isDirectory = zipEntry.isDirectory,
@@ -76,12 +72,12 @@ class ZipInspector(private val zipFile: File) : ArchiveInspector {
      */
     override suspend fun countEntries(): Int = withContext(Dispatchers.IO) {
         checkNotClosed()
-
-        if (zipFileForCount == null) {
-            zipFileForCount = ZipFile(zipFile)
+        synchronized(this@ZipInspector) {
+            if (zipFileForCount == null) {
+                zipFileForCount = ZipFile(zipFile)
+            }
+            zipFileForCount!!.size()
         }
-
-        zipFileForCount!!.size()
     }
 
     /**
@@ -96,14 +92,17 @@ class ZipInspector(private val zipFile: File) : ArchiveInspector {
     override fun isEncrypted(): Boolean {
         checkNotClosed()
 
-        if (zipFileForCount == null) {
-            zipFileForCount = ZipFile(zipFile)
-        }
-
-        return zipFileForCount!!.entries().asSequence().any { entry ->
-            // General purpose bit 0 indicates encryption
-            (entry.method == java.util.zip.ZipEntry.DEFLATED) &&
-            (entry.extra != null && entry.extra!!.isNotEmpty())
+        org.apache.commons.compress.archivers.zip.ZipFile(zipFile).use { czf ->
+            return try {
+                czf.entries.toList().any { entry ->
+                    entry.generalPurposeBit.usesEncryption()
+                }
+            } catch (e: org.apache.commons.compress.archivers.zip.UnsupportedZipFeatureException) {
+                // If we encounter an UnsupportedZipFeatureException while iterating entries,
+                // it's likely because the archive contains encrypted entries that Commons Compress
+                // cannot read. Treat this as an encrypted archive.
+                true
+            }
         }
     }
 

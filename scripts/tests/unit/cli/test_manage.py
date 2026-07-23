@@ -63,12 +63,12 @@ class TestManagerTest:
             mgr.dispatch(["test", "unit", "instrumented"])
         MockAction.return_value.run.assert_called_once_with(suites=["unit", "instrumented"])
 
-    def test_test_coverage_suite(self):
+    def test_test_integrations_suite(self):
         mgr, runner = make_manager()
         with patch("cli.manage.TestAction") as MockAction:
             MockAction.return_value.run.return_value = 0
-            mgr.dispatch(["test", "coverage"])
-        MockAction.return_value.run.assert_called_once_with(suites=["coverage"])
+            mgr.dispatch(["test", "integrations"])
+        MockAction.return_value.run.assert_called_once_with(suites=["integrations"])
 
 
 class TestManagerTestScripts:
@@ -146,6 +146,67 @@ class TestManagerCreate:
             mgr.dispatch(["create", "--output-dir", str(tmp_path)])
         call_kwargs = MockAction.return_value.run.call_args[1]
         assert call_kwargs["output_dir"] == tmp_path
+
+
+class TestManagerValidate:
+    def test_validate_dispatches_to_validate_action(self):
+        mgr, runner = make_manager()
+        with patch("cli.manage.ValidateAction") as MockAction:
+            MockAction.return_value.run.return_value = 0
+            rc = mgr.dispatch(["validate"])
+        MockAction.assert_called_once_with(runner)
+        MockAction.return_value.run.assert_called_once_with()
+        assert rc == 0
+
+    def test_validate_returns_action_exit_code(self):
+        mgr, runner = make_manager()
+        with patch("cli.manage.ValidateAction") as MockAction:
+            MockAction.return_value.run.return_value = 1
+            rc = mgr.dispatch(["validate"])
+        assert rc == 1
+
+
+class TestManagerLint:
+    def test_lint_kotlin_dispatches_to_lint_action(self):
+        mgr, runner = make_manager()
+        with patch("cli.manage.LintAction") as MockAction:
+            MockAction.return_value.run.return_value = 0
+            rc = mgr.dispatch(["lint", "kotlin"])
+        MockAction.assert_called_once_with(runner)
+        MockAction.return_value.run.assert_called_once_with(target="kotlin")
+        assert rc == 0
+
+    def test_lint_python_dispatches_to_lint_action(self):
+        mgr, runner = make_manager()
+        with patch("cli.manage.LintAction") as MockAction:
+            MockAction.return_value.run.return_value = 0
+            mgr.dispatch(["lint", "python"])
+        MockAction.return_value.run.assert_called_once_with(target="python")
+
+    def test_lint_returns_action_exit_code(self):
+        mgr, runner = make_manager()
+        with patch("cli.manage.LintAction") as MockAction:
+            MockAction.return_value.run.return_value = 1
+            rc = mgr.dispatch(["lint", "kotlin"])
+        assert rc == 1
+
+
+class TestManagerCoverage:
+    def test_coverage_dispatches_to_coverage_action(self):
+        mgr, runner = make_manager()
+        with patch("cli.manage.CoverageAction") as MockAction:
+            MockAction.return_value.run.return_value = 0
+            rc = mgr.dispatch(["coverage"])
+        MockAction.assert_called_once_with(runner)
+        MockAction.return_value.run.assert_called_once_with()
+        assert rc == 0
+
+    def test_coverage_returns_action_exit_code(self):
+        mgr, runner = make_manager()
+        with patch("cli.manage.CoverageAction") as MockAction:
+            MockAction.return_value.run.return_value = 1
+            rc = mgr.dispatch(["coverage"])
+        assert rc == 1
 
 
 class TestManagerAdb:

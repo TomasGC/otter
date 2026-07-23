@@ -17,7 +17,8 @@ class ZipExtractor @Inject constructor(
     private val pathValidator: PathValidator,
     tempFileManager: ITempFileManager,
     sevenZipHelper: SevenZipExtractorHelper,
-    private val zipFileReaderFactory: IZipFileReaderFactory = RealZipFileReaderFactory()
+    private val zipFileReaderFactory: IZipFileReaderFactory = RealZipFileReaderFactory(),
+    private val sizeGuardFactory: () -> ArchiveSizeGuard = { ArchiveSizeGuard() }
 ) : BaseArchiveExtractor(tempFileManager, sevenZipHelper) {
 
     override fun supports(type: ArchiveType): Boolean = type == ArchiveType.ZIP
@@ -51,30 +52,34 @@ class ZipExtractor @Inject constructor(
             // Progress throttler from base class
             val throttler = ProgressThrottler()
 
+            // Guards against zip-bomb entries (decompressed size far exceeding declared/expected size)
+            val sizeGuard = sizeGuardFactory()
+
             // Convert selectedItems to Set for O(1) lookup if provided
             val selectedPaths = selectedItems?.toSet()
 
             // Extract from temp file using ZipFileReader abstraction
             zipFileReaderFactory.create(tempFile).use { reader ->
                 for (entry in reader.getEntries().filter { isEntrySelected(it.name, selectedPaths) }) {
-                    if (!isActive) break
+                    if (!isActive) throw kotlinx.coroutines.CancellationException("ZIP extraction cancelled")
 
                     val outputFile = pathValidator.createSafeOutputFile(destinationPath, entry.name)
+                    sizeGuard.startEntry()
 
                     reader.getInputStream(entry).use { input ->
                         outputFile.outputStream().buffered(BUFFER_SIZE_BYTES).use { output ->
                             while (true) {
+                                if (!isActive) throw kotlinx.coroutines.CancellationException("ZIP extraction cancelled")
                                 val bytesRead = input.read(buffer)
-                                if (bytesRead == -1 || !isActive) break
+                                if (bytesRead == -1) break
+                                sizeGuard.track(bytesRead)
                                 output.write(buffer, 0, bytesRead)
                             }
                         }
                     }
 
-                    if (isActive) {
-                        extractedCount++
-                        notifyProgress(extractedCount, totalCount, entry.name, throttler, onProgress)
-                    }
+                    extractedCount++
+                    notifyProgress(extractedCount, totalCount, entry.name, throttler, onProgress)
                 }
             }
 

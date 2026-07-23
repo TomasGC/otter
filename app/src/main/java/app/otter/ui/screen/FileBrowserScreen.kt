@@ -1,9 +1,7 @@
 package app.otter.ui.screen
 
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import timber.log.Timber
 import app.otter.domain.model.ResourcePath
 import app.otter.service.ExtractionQueue
@@ -44,9 +42,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -56,10 +51,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.otter.domain.model.BrowsableItem
 import app.otter.service.ExtractionEventBus
-import app.otter.service.ExtractionService
 import app.otter.ui.component.ExtractionScreen
 import app.otter.ui.component.BrowsableItemRow
-import app.otter.ui.component.ExtractionConfirmDialog
 import app.otter.ui.viewmodel.FileBrowserUiState
 import app.otter.ui.viewmodel.FileBrowserViewModel
 import app.otter.ui.viewmodel.SortOrder
@@ -82,8 +75,6 @@ fun FileBrowserScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var showConfirmDialog by remember { mutableStateOf(false) }
-    var fileToExtract by remember { mutableStateOf<app.otter.domain.model.BrowsableItem.ArchiveFile?>(null) }
 
     // Navigate directly into archive when opened with "Open with Browser"
     LaunchedEffect(initialArchiveUri) {
@@ -238,40 +229,6 @@ fun FileBrowserScreen(
             app.otter.ui.component.VersionLabel(
                 modifier = Modifier.align(Alignment.BottomStart)
             )
-
-            // Confirmation dialog
-            if (showConfirmDialog && fileToExtract != null) {
-                ExtractionConfirmDialog(
-                    fileItem = fileToExtract!!,
-                    onConfirm = {
-                        fileToExtract?.let { file ->
-                            // Initialize UI to extracting state immediately
-                            viewModel.startExtraction(fileName = file.name)
-
-                            val intent = ExtractionService.newIntent(
-                                context = context,
-                                archiveUri = file.path,
-                                fileName = file.name
-                            )
-                            context.startService(intent)
-                        }
-                        showConfirmDialog = false
-                        fileToExtract = null
-                    },
-                    onDismiss = {
-                        showConfirmDialog = false
-                        fileToExtract = null
-                    }
-                )
-            }
         }
     }
-}
-
-/**
- * Tries to resolve a real file path from a content:// URI.
- * Returns null if the path cannot be resolved.
- */
-private fun getRealPathFromContentUri(context: Context, uri: Uri): String? {
-    return ResourcePathConverter.getRealPathFromContentUri(context, uri)
 }

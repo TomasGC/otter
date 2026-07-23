@@ -39,8 +39,18 @@ class BuildAction:
     def build_apk(self, variant: str = "debug") -> bool:
         return self._gradle.run_task(f"assemble{variant.capitalize()}")
 
+    def build_test_apk(self, variant: str = "debug") -> bool:
+        return self._gradle.run_task(f"assemble{variant.capitalize()}AndroidTest")
+
     def get_apk_path(self, variant: str = "debug") -> Optional[Path]:
         return self._version_mgr.get_apk_path(variant)
+
+    def get_test_apk_path(self, variant: str = "debug") -> Optional[Path]:
+        test_dir = self._project_root / "app" / "build" / "outputs" / "apk" / "androidTest" / variant
+        if not test_dir.exists():
+            return None
+        apks = list(test_dir.glob("*.apk"))
+        return apks[0] if apks else None
 
     def run(self, install: bool = True) -> int:
         try:

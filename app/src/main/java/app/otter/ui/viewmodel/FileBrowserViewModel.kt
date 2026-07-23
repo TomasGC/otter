@@ -35,7 +35,6 @@ class FileBrowserViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        const val VIEWPORT_SIZE = 50  // items shown at once from current scroll position
         const val HALF_WINDOW = 100   // items kept before and after current position
         const val LOAD_TRIGGER = 60   // load next/prev when within this many items of the cache edge
 
@@ -88,12 +87,16 @@ class FileBrowserViewModel @Inject constructor(
     private var currentWindowEnd = 0
     private var totalItemCount: Int? = null
 
+    // Maps displayed position -> raw absolute cache index for the last emitted list. Filtering
+    // and sorting reorder/shrink the displayed list relative to the raw cache, so a reported
+    // displayed position cannot be read as a raw offset without this.
+    private var lastDisplayedAbsoluteIndices: List<Int> = emptyList()
+
     // Pagination state
     private var isPaginated = false
     private var nextOffset = 0
     private var hasMore = true
     private var isLoadingPage = false
-    private var lastKnownAbsoluteIndex = 0
 
     init {
         navigationStack.push(currentPath)
@@ -292,8 +295,8 @@ class FileBrowserViewModel @Inject constructor(
     fun onScrollPositionChanged(firstVisibleItemIndex: Int) {
         if (!isPaginated) return
 
-        val absoluteIndex = currentWindowStart + firstVisibleItemIndex
-        lastKnownAbsoluteIndex = absoluteIndex
+        val absoluteIndex = lastDisplayedAbsoluteIndices.getOrNull(firstVisibleItemIndex)
+            ?: (currentWindowStart + firstVisibleItemIndex)
         val minCached = cachedItems.keys.minOrNull() ?: absoluteIndex
         val maxCached = cachedItems.keys.maxOrNull() ?: absoluteIndex
 
@@ -408,36 +411,37 @@ class FileBrowserViewModel @Inject constructor(
 
     private fun emitVisibleItems() {
         // Create immutable snapshot to avoid ConcurrentModificationException during iteration
-        val snapshot = cachedItems.toList()
-        val allSorted = snapshot
-            .sortedBy { (index, _) -> index }
-            .map { (_, item) -> item }
+        val allSortedPairs = cachedItems.toList().sortedBy { (index, _) -> index }
 
-        // Limit to VIEWPORT_SIZE items starting from current scroll position within the cache window.
-        // Clamp to the last available position when the scroll position exceeds cached range
-        // (e.g. fast-fling before next page loads).
-        val rawStart = (lastKnownAbsoluteIndex - currentWindowStart).coerceAtLeast(0)
-        val viewportStart = rawStart.coerceAtMost((allSorted.size - VIEWPORT_SIZE).coerceAtLeast(0))
-        val visibleItems = allSorted.drop(viewportStart).take(VIEWPORT_SIZE)
-
-        // Apply filtering and sorting to visible items
-        val filtered = if (filterArchivesOnly) {
-            visibleItems.filterIsInstance<BrowsableItem.ArchiveFile>()
+        // Expose the whole cached window (bounded independently by HALF_WINDOW eviction in
+        // cleanupCache) rather than re-slicing to a smaller sub-window on every scroll report.
+        // A reactive sub-slice previously caused a livelock: swapping to a new window changes
+        // which item is first, which changes Compose's key-based scroll anchor, which reports a
+        // new position that swaps the window again, forever. LazyColumn is already lazy — it
+        // only composes on-screen rows regardless of how many items are in the backing list — so
+        // exposing the full ~2*HALF_WINDOW window costs nothing extra.
+        val filteredPairs = if (filterArchivesOnly) {
+            allSortedPairs.filter { (_, item) -> item is BrowsableItem.ArchiveFile }
         } else {
-            visibleItems
+            allSortedPairs
         }
 
-        val sorted = when (sortOrder) {
-            SortOrder.ARCHIVES_FIRST -> filtered.sortedWith(
-                compareBy<BrowsableItem> { it !is BrowsableItem.ArchiveFile }
-                    .thenBy { !it.canNavigateInto }
-                    .thenComparator { a, b -> NATURAL_ORDER.compare(a.name, b.name) }
+        // Kept as (rawIndex, item) pairs through sorting so the displayed position can be
+        // mapped back to its raw cache index (see lastDisplayedAbsoluteIndices).
+        val sortedPairs = when (sortOrder) {
+            SortOrder.ARCHIVES_FIRST -> filteredPairs.sortedWith(
+                compareBy<Pair<Int, BrowsableItem>> { it.second !is BrowsableItem.ArchiveFile }
+                    .thenBy { !it.second.canNavigateInto }
+                    .thenComparator { a, b -> NATURAL_ORDER.compare(a.second.name, b.second.name) }
             )
-            SortOrder.NAME_ASC -> filtered.sortedWith(Comparator { a, b -> NATURAL_ORDER.compare(a.name, b.name) })
-            SortOrder.NAME_DESC -> filtered.sortedWith(Comparator { a, b -> NATURAL_ORDER.compare(b.name, a.name) })
-            SortOrder.SIZE_ASC -> filtered.sortedBy { it.sizeBytes }
-            SortOrder.SIZE_DESC -> filtered.sortedByDescending { it.sizeBytes }
+            SortOrder.NAME_ASC -> filteredPairs.sortedWith(Comparator { a, b -> NATURAL_ORDER.compare(a.second.name, b.second.name) })
+            SortOrder.NAME_DESC -> filteredPairs.sortedWith(Comparator { a, b -> NATURAL_ORDER.compare(b.second.name, a.second.name) })
+            SortOrder.SIZE_ASC -> filteredPairs.sortedBy { it.second.sizeBytes }
+            SortOrder.SIZE_DESC -> filteredPairs.sortedByDescending { it.second.sizeBytes }
         }
+
+        val sorted = sortedPairs.map { it.second }
+        lastDisplayedAbsoluteIndices = sortedPairs.map { it.first }
 
         val successState = FileBrowserUiState.Success(
             items = sorted,
@@ -461,10 +465,10 @@ class FileBrowserViewModel @Inject constructor(
             currentWindowStart = 0
             currentWindowEnd = 0
             totalItemCount = null
+            lastDisplayedAbsoluteIndices = emptyList()
             isPaginated = false
             nextOffset = 0
             hasMore = true
-            lastKnownAbsoluteIndex = 0
 
             browseItemsUseCase(path, offset = 0, limit = 100)
                 .onSuccess { result ->

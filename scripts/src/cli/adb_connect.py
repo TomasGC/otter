@@ -22,10 +22,12 @@ class DeviceConnector:
     """Discovers and connects to Android ADB devices via mDNS.
 
     Strategy (auto_connect):
-    1. Already connected → return immediately
-    2. Discover via mDNS → single device auto-selects, multiple prompts user
-    3. Saved preference reused on next run
-    4. Interactive pairing if connection fails
+    1. Explicit pairing credentials provided → pair and connect that device,
+       regardless of what else is already connected
+    2. Already connected → return immediately
+    3. Discover via mDNS → single device auto-selects, multiple prompts user
+    4. Saved preference reused on next run
+    5. Interactive pairing if connection fails
     """
 
     def __init__(
@@ -159,15 +161,17 @@ class DeviceConnector:
         pairing_code: Optional[str] = None,
         pairing_address: Optional[str] = None,
     ) -> Optional[str]:
-        # Step 1: already connected?
+        # Step 1: explicit pairing credentials always take priority — the caller is
+        # asking to connect this specific device, regardless of what else (e.g. an
+        # already-running emulator) happens to be connected right now.
+        if pairing_code and pairing_address:
+            return self._pair_and_connect(pairing_address, pairing_code)
+
+        # Step 2: already connected?
         connected = self.get_connected()
         if connected:
             print(f"Already connected: {connected[0]}")
             return connected[0]
-
-        # Step 2: first-time pairing with provided credentials
-        if pairing_code and pairing_address:
-            return self._pair_and_connect(pairing_address, pairing_code)
 
         # Step 3: discover via mDNS
         print("Discovering ADB devices via mDNS...")

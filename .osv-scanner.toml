@@ -1,0 +1,81 @@
+# OSV Scanner configuration
+# Build tool dependencies pulled in by Android Gradle Plugin (AGP) are excluded
+# because they are never shipped in the APK and only affect the build environment.
+
+[[PackageOverrides]]
+name = "com.google.protobuf:protobuf-java"
+ecosystem = "Maven"
+ignore = true
+reason = "AGP build tool dependency, not shipped in APK"
+
+[[PackageOverrides]]
+name = "commons-io:commons-io"
+ecosystem = "Maven"
+ignore = true
+reason = "AGP build tool dependency, not shipped in APK"
+
+[[PackageOverrides]]
+name = "io.netty:netty-codec"
+ecosystem = "Maven"
+ignore = true
+reason = "AGP internal networking stack (build daemon), not shipped in APK"
+
+[[PackageOverrides]]
+name = "io.netty:netty-codec-http"
+ecosystem = "Maven"
+ignore = true
+reason = "AGP internal networking stack (build daemon), not shipped in APK"
+
+[[PackageOverrides]]
+name = "io.netty:netty-codec-http2"
+ecosystem = "Maven"
+ignore = true
+reason = "AGP internal networking stack (build daemon), not shipped in APK"
+
+[[PackageOverrides]]
+name = "io.netty:netty-common"
+ecosystem = "Maven"
+ignore = true
+reason = "AGP internal networking stack (build daemon), not shipped in APK"
+
+[[PackageOverrides]]
+name = "io.netty:netty-handler"
+ecosystem = "Maven"
+ignore = true
+reason = "AGP internal networking stack (build daemon), not shipped in APK"
+
+[[PackageOverrides]]
+name = "io.netty:netty-handler-proxy"
+ecosystem = "Maven"
+ignore = true
+reason = "AGP internal networking stack (build daemon), not shipped in APK"
+
+[[PackageOverrides]]
+name = "org.apache.commons:commons-lang3"
+ecosystem = "Maven"
+ignore = true
+reason = "AGP build tool dependency, not shipped in APK"
+
+[[PackageOverrides]]
+name = "org.bitbucket.b_c:jose4j"
+ecosystem = "Maven"
+ignore = true
+reason = "AGP/Gradle daemon JWT library, not shipped in APK"
+
+[[PackageOverrides]]
+name = "org.bouncycastle:bcpkix-jdk18on"
+ecosystem = "Maven"
+ignore = true
+reason = "AGP/Gradle daemon SSL/TLS library, not shipped in APK"
+
+[[PackageOverrides]]
+name = "org.bouncycastle:bcprov-jdk18on"
+ecosystem = "Maven"
+ignore = true
+reason = "AGP/Gradle daemon cryptography library, not shipped in APK"
+
+[[PackageOverrides]]
+name = "org.jdom:jdom2"
+ecosystem = "Maven"
+ignore = true
+reason = "AGP/Gradle XML parsing library, not shipped in APK"

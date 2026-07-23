@@ -90,6 +90,23 @@ class SevenZipBasedInspectorInstrumentedTest {
         }
     }
 
+    @Test
+    fun corruptedRarDoesNotCrashOnOpenOrCountEntries() = runTest {
+        // Real 7-Zip-JBinding native library against a genuinely corrupted RAR — only
+        // previously proven via a mocked ArchiveLibraryManager, never the real native path.
+        val rarFile = deviceArchive("corrupted_test_archive.rar")
+        assumeTrue("Device corrupted RAR archive not present — skipping", rarFile.exists())
+
+        runCatching {
+            SevenZipBasedInspector(rarFile, ArchiveType.RAR, libraryManager).use { inspector ->
+                inspector.countEntries()
+            }
+        }
+        // No assertion on the outcome itself (open/count may throw or may tolerate corruption,
+        // same accepted native-library leniency as extraction) — the contract under test is
+        // that inspecting a corrupted archive never crashes the process.
+    }
+
     // endregion
 
     // region 7z
@@ -132,6 +149,22 @@ class SevenZipBasedInspectorInstrumentedTest {
         SevenZipBasedInspector(sevenZipFile, ArchiveType.SEVEN_ZIP, libraryManager).use { inspector ->
             assertFalse("Unencrypted 7z must return false for isEncrypted()", inspector.isEncrypted())
         }
+    }
+
+    @Test
+    fun corrupted7zDoesNotCrashOnOpenOrCountEntries() = runTest {
+        // Real 7-Zip-JBinding native library against a genuinely corrupted 7z — only
+        // previously proven via a mocked ArchiveLibraryManager, never the real native path.
+        val sevenZipFile = deviceArchive("corrupted_test_archive.7z")
+        assumeTrue("Device corrupted 7z archive not present — skipping", sevenZipFile.exists())
+
+        runCatching {
+            SevenZipBasedInspector(sevenZipFile, ArchiveType.SEVEN_ZIP, libraryManager).use { inspector ->
+                inspector.countEntries()
+            }
+        }
+        // No assertion on the outcome itself — the contract under test is that inspecting a
+        // corrupted archive never crashes the process, matching extraction's accepted leniency.
     }
 
     // endregion

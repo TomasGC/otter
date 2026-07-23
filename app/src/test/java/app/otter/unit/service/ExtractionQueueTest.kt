@@ -216,6 +216,39 @@ class ExtractionQueueTest {
     }
 
     @Test
+    fun `concurrent processNext calls do not both start extraction`() {
+        // isExtracting was a plain var with a check-then-set race: two threads could both read
+        // isExtracting=false before either set it true, both start extraction. Use a barrier to
+        // force many real threads to hit processNext at the same instant, deterministically.
+        val tasks = (1..20).map {
+            ExtractionQueue.ExtractionTask(ResourcePath.FileSystem("file:///archive$it.zip"), "archive$it.zip")
+        }
+        queue.enqueueAll(tasks)
+
+        val threadCount = 20
+        val barrier = java.util.concurrent.CyclicBarrier(threadCount)
+        val successCount = java.util.concurrent.atomic.AtomicInteger(0)
+        every { mockContext.startService(any()) } returns mockk()
+
+        val threads = (1..threadCount).map {
+            Thread {
+                barrier.await()
+                if (queue.processNext(mockContext)) {
+                    successCount.incrementAndGet()
+                }
+            }
+        }
+        threads.forEach { it.start() }
+        threads.forEach { it.join() }
+
+        assertEquals(
+            "Only one concurrent processNext call must succeed in starting extraction",
+            1,
+            successCount.get()
+        )
+    }
+
+    @Test
     fun `processNext passes selectedItems in service intent`() {
         val selectedItems = listOf("entry1.txt", "entry2.png")
         val task = ExtractionQueue.ExtractionTask(

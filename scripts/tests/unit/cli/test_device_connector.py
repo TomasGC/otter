@@ -311,7 +311,6 @@ class TestAutoConnectWithCredentials:
     def test_calls_pair_and_connect(self, tmp_path):
         runner = (
             FakeSubprocessRunner()
-            .add_run(stdout=ADB_DEVICES_EMPTY)  # get_connected
             .add_run(stdout="Successfully paired")  # pair
             .add_run(stdout=MDNS_ONE_DEVICE)  # discover after pair
             .add_run(stdout="connected to 192.168.1.10:39007")  # connect
@@ -322,11 +321,27 @@ class TestAutoConnectWithCredentials:
         assert result == "192.168.1.10:39007"
 
     def test_returns_none_when_pair_fails(self, tmp_path):
-        runner = FakeSubprocessRunner().add_run(stdout=ADB_DEVICES_EMPTY).add_run(stdout="Failed to pair")
+        runner = FakeSubprocessRunner().add_run(stdout="Failed to pair")
         result = make_connector(runner, tmp_path).auto_connect(
             pairing_code="000000", pairing_address="192.168.1.10:45678"
         )
         assert result is None
+
+    def test_pairs_new_device_even_when_another_device_is_already_connected(self, tmp_path):
+        # e.g. an emulator is already running — explicit pairing credentials for a
+        # different physical device must not be short-circuited by that unrelated
+        # already-connected device.
+        runner = (
+            FakeSubprocessRunner()
+            .add_run(stdout="Successfully paired")  # pair
+            .add_run(stdout=MDNS_ONE_DEVICE)  # discover after pair
+            .add_run(stdout="connected to 192.168.1.10:39007")  # connect
+        )
+        result = make_connector(runner, tmp_path).auto_connect(
+            pairing_code="123456", pairing_address="192.168.1.10:45678"
+        )
+        assert result == "192.168.1.10:39007"
+        assert not runner.called_with("devices")
 
 
 # ---------------------------------------------------------------------------

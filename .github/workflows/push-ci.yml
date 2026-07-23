@@ -18,6 +18,7 @@ jobs:
       pre-test-command: python scripts/manage.py create
       archives-local-dir: archives/
       device-archives-path: /sdcard/otter-test-archives
+      manage-external-storage-package: app.otter
       app-name: otter
 
   python-pipeline:

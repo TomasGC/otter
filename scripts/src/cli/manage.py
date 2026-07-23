@@ -5,12 +5,15 @@ from typing import Optional
 
 from cli.actions.adb import AdbAction
 from cli.actions.build import BuildAction
+from cli.actions.coverage import CoverageAction
 from cli.actions.create import SUITES as CREATE_SUITES
 from cli.actions.create import CreateAction
+from cli.actions.lint import LintAction
 from cli.actions.test import SUITES as TEST_SUITES
 from cli.actions.test import TestAction
 from cli.actions.test_scripts import SUITES as TEST_SCRIPTS_SUITES
 from cli.actions.test_scripts import TestScriptsAction
+from cli.actions.validate import ValidateAction
 from common.subprocess_runner import RealSubprocessRunner, SubprocessRunner
 
 
@@ -37,7 +40,7 @@ class Manager:
             nargs="*",
             choices=TEST_SUITES,
             metavar="SUITE",
-            help=f"Suites to run: {', '.join(TEST_SUITES)} (default: all; coverage overrides others)",
+            help=f"Suites to run: {', '.join(TEST_SUITES)} (default: all)",
         )
 
         # test-scripts (Python pytest)
@@ -60,6 +63,19 @@ class Manager:
             help=f"Suites to run: {', '.join(CREATE_SUITES)} (default: all)",
         )
         cp.add_argument("--output-dir", type=Path, default=None)
+
+        # validate
+        sub.add_parser(
+            "validate",
+            help="Validate branch name, commit messages, no-TODO, large files",
+        )
+
+        # lint
+        lp = sub.add_parser("lint", help="Run lint checks (kotlin or python)")
+        lp.add_argument("target", choices=["kotlin", "python"])
+
+        # coverage
+        sub.add_parser("coverage", help="Generate Kover XML report and verify 80% threshold")
 
         # adb
         ap = sub.add_parser("adb", help="ADB device management")
@@ -91,6 +107,15 @@ class Manager:
                 suites=args.suites,
                 output_dir=args.output_dir,
             )
+
+        if args.command == "validate":
+            return ValidateAction(self._runner).run()
+
+        if args.command == "lint":
+            return LintAction(self._runner).run(target=args.target)
+
+        if args.command == "coverage":
+            return CoverageAction(self._runner).run()
 
         if args.command == "adb":
             adb = AdbAction(self._runner)

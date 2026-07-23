@@ -3,6 +3,7 @@ package app.otter.util
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -243,5 +244,73 @@ class PathValidatorTest {
 
         // Then
         assertFalse("Trailing traversal should be rejected", result)
+    }
+
+    // ===== UNC and drive-relative Windows paths =====
+
+    @Test
+    fun `should reject UNC network path`() {
+        val result = pathValidator.isSafePath("\\\\evil-server\\share\\payload.txt")
+        assertFalse("UNC path should be rejected", result)
+    }
+
+    @Test
+    fun `should reject drive-relative path without backslash`() {
+        // "C:evil.txt" resolves against drive C's current directory, not the destination folder.
+        val result = pathValidator.isSafePath("C:evil.txt")
+        assertFalse("Drive-relative path should be rejected", result)
+    }
+
+    @Test
+    fun `should throw SecurityException for UNC path via createSafeOutputFile`() {
+        val destination = tempFolder.newFolder("output")
+
+        org.junit.Assert.assertThrows(SecurityException::class.java) {
+            pathValidator.createSafeOutputFile(destination, "\\\\evil-server\\share\\payload.txt")
+        }
+    }
+
+    @Test
+    fun `should throw SecurityException (not IOException) for drive-relative path via createSafeOutputFile`() {
+        val destination = tempFolder.newFolder("output")
+
+        org.junit.Assert.assertThrows(SecurityException::class.java) {
+            pathValidator.createSafeOutputFile(destination, "C:evil.txt")
+        }
+    }
+
+    @Test
+    fun `validatePath wraps an unresolvable canonical path into SecurityException instead of leaking IOException`() {
+        // Bypasses isSafePath directly to test validatePath's own defense-in-depth handling.
+        // This defense is Windows-only: a colon mid-filename only makes File.canonicalPath throw
+        // IOException on Windows (drive-relative reference). On Linux ':' is an ordinary filename
+        // character, so this resolves cleanly inside destination and validatePath correctly does
+        // NOT throw there — there is nothing to defend against on that platform.
+        assumeTrue(System.getProperty("os.name").contains("Windows", ignoreCase = true))
+
+        val destination = tempFolder.newFolder("output")
+        val invalidFile = java.io.File(destination, "C:evil.txt")
+
+        org.junit.Assert.assertThrows(SecurityException::class.java) {
+            pathValidator.validatePath(invalidFile, destination, "C:evil.txt")
+        }
+    }
+
+    @Test
+    fun `should throw SecurityException for directory-name prefix bypass`() {
+        // Given: dest = /tmp/base/dest, output = /tmp/base/dest-evil/passwd
+        // Before fix: startsWith("/tmp/base/dest") is TRUE for "/tmp/base/dest-evil/passwd"
+        // After fix:  startsWith("/tmp/base/dest/") is FALSE → SecurityException thrown
+        val base = tempFolder.newFolder("base")
+        val dest = java.io.File(base, "dest").apply { mkdir() }
+        val evil = java.io.File(base, "dest-evil/passwd")
+        evil.parentFile.mkdirs()
+
+        try {
+            pathValidator.validatePath(evil, dest, "dest-evil/passwd")
+            assertTrue("Should throw SecurityException for directory-name prefix bypass", false)
+        } catch (e: SecurityException) {
+            assertTrue("SecurityException thrown for directory-name prefix bypass", true)
+        }
     }
 }

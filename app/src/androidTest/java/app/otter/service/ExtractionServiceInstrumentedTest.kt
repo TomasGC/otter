@@ -265,6 +265,28 @@ class ExtractionServiceInstrumentedTest {
         assertTrue("EventBus should be reset after stop", true)
     }
 
+    @Test
+    fun service_extractedFilesWrittenToExpectedLocation() = runBlocking {
+        val testFile = createTestZipFile("file-output-test.zip")
+        val archivePath = ResourcePathConverter.fromUri(Uri.fromFile(testFile))
+
+        // For file:// URIs in cacheDir, the destination resolver places output
+        // in the same directory as the archive: cacheDir/file-output-test/
+        val expectedOutputDir = File(context.cacheDir, "file-output-test")
+        expectedOutputDir.deleteRecursively()
+        testFiles.add(expectedOutputDir)
+
+        context.startService(ExtractionService.newIntent(context, archivePath, testFile.name))
+
+        withTimeout(15_000) {
+            eventBus.completeEvents.first()
+        }
+
+        assertTrue("Output directory must exist after extraction", expectedOutputDir.exists())
+        val extractedFiles = expectedOutputDir.walk().filter { it.isFile }.toList()
+        assertTrue("At least 1 file must be extracted to the output directory", extractedFiles.isNotEmpty())
+    }
+
     // Helper method to create a small test ZIP file
     private fun createTestZipFile(name: String): File {
         val zipFile = File(context.cacheDir, name)

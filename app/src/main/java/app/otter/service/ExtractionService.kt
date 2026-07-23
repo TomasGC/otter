@@ -216,6 +216,10 @@ class ExtractionService : Service() {
             }
 
             showExtractionResult(fileName, lastError, extractedFilesCount, destinationFolder)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // User-initiated stop: no notification at all, not even a "failed" one.
+            Timber.tag(TAG).d("Extraction cancelled: $fileName")
+            throw e
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Fatal error during extraction: ${e.message}")
             showCompletionNotification(fileName = fileName, success = false, message = e.message ?: "Unknown error")

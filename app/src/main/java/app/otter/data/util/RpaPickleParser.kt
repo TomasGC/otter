@@ -27,6 +27,7 @@ object RpaPickleParser {
     private const val PICKLE_SHORT_BINUNICODE = 0x8C
     private const val PICKLE_BINUNICODE = 'X'.code
     private const val PICKLE_BINUNICODE8 = 0x8D
+    private const val PICKLE_SHORT_BINSTRING = 'U'.code
     private const val PICKLE_SHORT_BINBYTES = 0x43
     private const val PICKLE_BINBYTES = 'B'.code
     private const val PICKLE_BINBYTES8 = 0x8E
@@ -94,6 +95,7 @@ object RpaPickleParser {
                 PICKLE_SHORT_BINUNICODE to ::handleShortBinUnicode,
                 PICKLE_BINUNICODE to ::handleBinUnicode,
                 PICKLE_BINUNICODE8 to ::handleBinUnicode8,
+                PICKLE_SHORT_BINSTRING to ::handleShortBinString,
                 PICKLE_SHORT_BINBYTES to ::handleShortBinBytes,
                 PICKLE_BINBYTES to ::handleBinBytes,
                 PICKLE_BINBYTES8 to ::handleBinBytes8,
@@ -163,6 +165,15 @@ object RpaPickleParser {
             val bytes = ByteArray(length)
             input.readFully(bytes)
             return bytes
+        }
+
+        // Legacy Python-2 8-bit str opcode. Some Ren'Py archivers encode each index value as
+        // [(offset, size, prefix)] instead of [(offset, size)], where "prefix" is built via
+        // this opcode (typically an empty string, memoized once and reused via BINGET for
+        // every subsequent entry). RpaFileEntry never reads this value — it only needs to be
+        // pushed onto the stack so later TUPLE3/APPEND/SETITEMS opcodes stay aligned.
+        private fun handleShortBinString() {
+            stack.add(String(readBytesOfLength(input.readUnsignedByte()), Charsets.ISO_8859_1))
         }
 
         private fun handleShortBinBytes() { stack.add(readBytesOfLength(input.readUnsignedByte())) }

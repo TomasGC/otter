@@ -1,5 +1,6 @@
 package app.otter.service
 
+import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import io.mockk.mockk
@@ -30,71 +31,53 @@ class NotificationHelperTest {
     }
 
     @Test
+    fun `createNotificationChannel creates channel with correct id and importance`() {
+        helper.createNotificationChannel()
+        verify {
+            notificationManager.createNotificationChannel(match {
+                it.id == NotificationHelper.CHANNEL_ID &&
+                it.importance == android.app.NotificationManager.IMPORTANCE_LOW
+            })
+        }
+    }
+
+    @Test
     fun `should create progress notification with indeterminate progress`() {
-        // Given
-        val fileName = "test.zip"
-
-        // When
-        val notification = helper.createProgressNotification(fileName, 0)
-
-        // Then
-        assertNotNull("Notification should not be null", notification)
+        val notification = helper.createProgressNotification("test.zip", 0)
+        assertNotNull(notification)
+        assertEquals("Extracting test.zip", notification.extras.getString(Notification.EXTRA_TITLE))
+        assertEquals("Preparing extraction...", notification.extras.getString(Notification.EXTRA_TEXT))
     }
 
     @Test
     fun `should create progress notification with percentage`() {
-        // Given
-        val fileName = "test.zip"
-        val progress = 50
-        val extractedCount = 50
-        val totalCount = 100
-
-        // When
-        val notification = helper.createProgressNotification(fileName, progress, extractedCount, totalCount)
-
-        // Then
-        assertNotNull("Notification should not be null", notification)
+        val notification = helper.createProgressNotification("test.zip", 50, 50, 100)
+        assertNotNull(notification)
+        assertEquals("50/100 files (50%)", notification.extras.getString(Notification.EXTRA_TEXT))
     }
 
     @Test
     fun `should create progress notification with file count only`() {
-        // Given
-        val fileName = "test.zip"
-        val progress = 0
-        val extractedCount = 10
-
-        // When
-        val notification = helper.createProgressNotification(fileName, progress, extractedCount, 0)
-
-        // Then
-        assertNotNull("Notification should not be null", notification)
+        val notification = helper.createProgressNotification("test.zip", 0, 10, 0)
+        assertNotNull(notification)
+        assertEquals("10 files", notification.extras.getString(Notification.EXTRA_TEXT))
     }
 
     @Test
     fun `should create success notification`() {
-        // Given
-        val fileName = "test.zip"
-        val extractedFilesCount = 42
-        val outputPath = "/storage/emulated/0/Download/test"
-
-        // When
-        val notification = helper.createSuccessNotification(fileName, extractedFilesCount)
-
-        // Then
-        assertNotNull("Notification should not be null", notification)
+        val notification = helper.createSuccessNotification("test.zip", 42)
+        assertNotNull(notification)
+        assertEquals("Extraction Complete", notification.extras.getString(Notification.EXTRA_TITLE))
+        assertEquals("42 files extracted from test.zip", notification.extras.getString(Notification.EXTRA_TEXT))
     }
 
     @Test
     fun `should create failure notification`() {
-        // Given
-        val fileName = "test.zip"
-        val errorMessage = "Corrupted archive"
-
-        // When
-        val notification = helper.createFailureNotification(fileName, errorMessage)
-
-        // Then
-        assertNotNull("Notification should not be null", notification)
+        val notification = helper.createFailureNotification("test.zip", "Corrupted archive")
+        assertNotNull(notification)
+        assertEquals("Extraction Failed", notification.extras.getString(Notification.EXTRA_TITLE))
+        assertEquals("Failed to extract test.zip: Corrupted archive",
+            notification.extras.getString(Notification.EXTRA_TEXT))
     }
 
     @Test
@@ -123,14 +106,9 @@ class NotificationHelperTest {
 
     @Test
     fun `should handle zero extracted files`() {
-        // Given
-        val fileName = "test.zip"
-
-        // When
-        val notification = helper.createProgressNotification(fileName, 0, 0, 0)
-
-        // Then
-        assertNotNull("Notification should not be null", notification)
+        val notification = helper.createProgressNotification("test.zip", 0, 0, 0)
+        assertNotNull(notification)
+        assertEquals("Preparing extraction...", notification.extras.getString(Notification.EXTRA_TEXT))
     }
 
     @Test
@@ -214,26 +192,17 @@ class NotificationHelperTest {
 
     @Test
     fun `should create notification with file list`() {
-        // Given
-        val fileName = "test.zip"
-        val progress = 50
-        val extractedCount = 3
-        val totalCount = 6
         val recentFiles = listOf("file1.txt", "file2.jpg", "file3.pdf")
-
-        // When
         val notification = helper.createProgressNotification(
-            fileName = fileName,
-            progress = progress,
-            extractedCount = extractedCount,
-            totalCount = totalCount,
+            fileName = "test.zip", progress = 50, extractedCount = 3, totalCount = 6,
             recentFiles = recentFiles
         )
-
-        // Then
-        assertNotNull("Notification should not be null", notification)
-        // RemoteViews content cannot be easily tested without instrumented tests
-        // This test verifies that the notification builds successfully with file list
+        assertNotNull(notification)
+        val lines = notification.extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
+        assertNotNull("InboxStyle lines must be present", lines)
+        assertEquals("✓ file1.txt", lines!![0].toString())
+        assertEquals("✓ file2.jpg", lines[1].toString())
+        assertEquals("→ file3.pdf", lines[2].toString())
     }
 
     @Test

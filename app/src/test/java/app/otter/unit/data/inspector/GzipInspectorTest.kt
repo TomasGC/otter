@@ -151,6 +151,17 @@ class GzipInspectorTest {
     }
 
     @Test
+    fun `entries returns empty inner path when filename is exactly the gz extension`() {
+        val file = createGzipFile(".gz", "content")
+        val inspector = GzipInspector(file)
+
+        val entries = inspector.entries().toList()
+
+        assertEquals("", entries[0].path)
+        inspector.close()
+    }
+
+    @Test
     fun `entries sizeBytes is zero`() {
         val file = createGzipFile("data.gz", "some content here")
         val inspector = GzipInspector(file)

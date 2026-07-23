@@ -15,12 +15,26 @@ class FakeResult:
     args: list = field(default_factory=list)
 
 
+class FakeStdout:
+    """Minimal stand-in for Popen.stdout — iterable and closeable, like a real pipe."""
+
+    def __init__(self, lines: list[str]) -> None:
+        self._lines = iter(lines)
+        self.closed = False
+
+    def __iter__(self):
+        return self._lines
+
+    def close(self) -> None:
+        self.closed = True
+
+
 class FakePopen:
     """Minimal Popen stand-in for streaming output tests."""
 
     def __init__(self, lines: list[str] = None, returncode: int = 0) -> None:
         self.returncode = returncode
-        self.stdout = iter(lines or ["BUILD SUCCESSFUL\n"])
+        self.stdout = FakeStdout(lines or ["BUILD SUCCESSFUL\n"])
 
     def wait(self, timeout: int = None) -> int:
         return self.returncode
@@ -46,6 +60,7 @@ class FakeSubprocessRunner:
         self._run_queue: list[FakeResult] = []
         self._popen_lines: list[str] = ["BUILD SUCCESSFUL\n"]
         self._popen_returncode: int = 0
+        self.last_popen: "FakePopen | None" = None
 
     # --- configuration API ---
 
@@ -72,7 +87,8 @@ class FakeSubprocessRunner:
 
     def popen(self, cmd: list[str], **kwargs) -> FakePopen:
         self.calls.append(list(cmd))
-        return FakePopen(list(self._popen_lines), self._popen_returncode)
+        self.last_popen = FakePopen(list(self._popen_lines), self._popen_returncode)
+        return self.last_popen
 
     # --- query helpers ---
 

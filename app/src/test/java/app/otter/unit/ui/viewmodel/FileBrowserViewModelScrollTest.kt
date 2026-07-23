@@ -4,6 +4,7 @@ import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.ResourcePath
 import io.mockk.coEvery
+import io.mockk.coVerify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -707,6 +708,59 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
 
         // selectAllArchives must call browseItemsUseCase with Int.MAX_VALUE to fetch all
         assertEquals("selectAllArchives must request all items at once", Int.MAX_VALUE, maxLimitUsed)
+    }
+
+    @Test
+    fun `alternating small scroll reports do not change which cached items are exposed`() = runTest {
+        // Reproduces a real Compose interaction: after a window swap, LazyColumn's key-based
+        // scroll-anchor preservation can report the scroll position flipping back (e.g. 37 then
+        // immediately 0) without any real user scroll. That report must not itself change which
+        // items are exposed, or the two reports feed off each other in an endless swap loop.
+        val allItems = createMockArchiveItems(1000)
+        coEvery { browseItemsUseCase.invoke(any(), any(), any()) } returns Result.success(
+            BrowseResult.Paginated(items = allItems.take(100), hasMore = true, totalEstimate = 1000, nextOffset = 100)
+        )
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+
+        viewModel.onScrollPositionChanged(firstVisibleItemIndex = 37)
+        val afterFirst = getCurrentSuccessState().items.map { it.name }
+
+        viewModel.onScrollPositionChanged(firstVisibleItemIndex = 0)
+        val afterSecond = getCurrentSuccessState().items.map { it.name }
+
+        assertEquals(
+            "Exposed items must not flip when the reported position changes without a real cache change",
+            afterFirst,
+            afterSecond
+        )
+    }
+
+    @Test
+    fun `filterArchivesOnly with sparse matches still triggers loadNextPage when filtered list is exhausted`() = runTest {
+        // Raw page 1: 90 plain files then 10 archives (raw absolute indices 90..99).
+        // With filterArchivesOnly on, the DISPLAYED list is just those 10 archives — a scroll
+        // report of "displayed position 9" (its last item) must not be read as raw absolute
+        // index 9 (still deep in cache, no load needed). It must correctly recognize the user
+        // reached the end of the matching content and fetch more raw data to find further ones.
+        val page1 = createMockArchiveItems(90) + (90 until 100).map { createArchiveItem("archive_$it.zip") }
+        coEvery { browseItemsUseCase.invoke(any(), offset = 0, limit = 100) } returns Result.success(
+            BrowseResult.Paginated(items = page1, hasMore = true, totalEstimate = 1000, nextOffset = 100)
+        )
+        val page2 = (100 until 110).map { createArchiveItem("archive_$it.zip") } + createMockArchiveItems(90)
+        coEvery { browseItemsUseCase.invoke(any(), offset = 100, limit = 100) } returns Result.success(
+            BrowseResult.Paginated(items = page2, hasMore = true, totalEstimate = 1000, nextOffset = 200)
+        )
+
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel.toggleArchiveFilter()
+
+        val displayedBefore = getCurrentSuccessState().items
+        assertEquals("Only the 10 archives should be displayed while filtered", 10, displayedBefore.size)
+
+        // Scroll to the end of the short filtered list (its last displayed position).
+        viewModel.onScrollPositionChanged(firstVisibleItemIndex = 9)
+
+        coVerify(exactly = 1) { browseItemsUseCase.invoke(any(), offset = 100, limit = 100) }
     }
 
     @Test

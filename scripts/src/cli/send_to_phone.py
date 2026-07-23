@@ -103,6 +103,7 @@ class FilePusher:
             stripped = line.strip()
             if stripped:
                 print(f"   {stripped}", end="\r", flush=True)
+        proc.stdout.close()
         proc.wait()
 
         print()

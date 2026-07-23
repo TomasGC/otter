@@ -7,7 +7,28 @@ from android import AdbManager, GradleRunner
 from common.file_utils import get_project_root, load_test_settings
 from common.subprocess_runner import SubprocessRunner
 
-SUITES = ["unit", "instrumented", "coverage"]
+_APP_PACKAGE = "app.otter"
+
+SUITES = [
+    "unit",
+    "integration-mocks",
+    "integration-reals",
+    "integrations",
+    "instrumented",
+]
+
+# This test revokes its own app's POST_NOTIFICATIONS permission while its process is
+# alive. Revoking a permission from a live process makes the OS kill that process
+# outright (ActivityManager: "Killing ... permissions revoked") -- which kills the
+# instrumented test code running inside it too, taking down every test queued after
+# it in the same run. It must run in its own isolated instrumentation invocation,
+# bracketed by adb pm revoke/grant from the host, with the permission already denied
+# before its process starts.
+PERMISSION_ISOLATED_TEST = (
+    "app.otter.ExtractionActivityContentUriTest#" "postNotificationsDenied_extractionStillStarts_noPermissionCrash"
+)
+PERMISSION_ISOLATED_PACKAGE = "app.otter"
+PERMISSION_ISOLATED_PERMISSION = "android.permission.POST_NOTIFICATIONS"
 
 
 class TestAction:
@@ -40,9 +61,22 @@ class TestAction:
             self._settings = load_test_settings()
         return self._settings
 
-    def run_unit(self, coverage: bool = False) -> bool:
-        task = "testDebugUnitTestCoverage" if coverage else "testDebugUnitTest"
-        return self._gradle.run_task(task)
+    def run_unit(self) -> bool:
+        ok = True
+        for test_type in ["unit-domain-service", "unit-data", "unit-ui"]:
+            if not self._gradle.run_task("testDebugUnitTest", extra_args=[f"-DtestType={test_type}"]):
+                ok = False
+        return ok
+
+    def run_integration_mocks(self) -> bool:
+        ok = True
+        for test_type in ["integration-mock-extractor", "integration-mock-other"]:
+            if not self._gradle.run_task("testDebugUnitTest", extra_args=[f"-DtestType={test_type}"]):
+                ok = False
+        return ok
+
+    def run_integration_reals(self) -> bool:
+        return self._gradle.run_task("testDebugUnitTest", extra_args=["-DtestType=integration-real"])
 
     def send_archives(self, device: str) -> int:
         settings = self._get_settings()
@@ -64,24 +98,115 @@ class TestAction:
                     sent += 1
         return sent
 
+    def _grant_manage_external_storage(self, device: str) -> bool:
+        # Build both APKs then install directly on the target ADB device.
+        # Gradle's installDebug can target a managed-device AVD instead of the
+        # ADB-connected device, causing appops set to fail with "No UID".
+        from cli.actions.build import BuildAction
+
+        build = BuildAction(
+            self._runner,
+            gradle=self._gradle,
+            adb=self._adb,
+            project_root=self._project_root,
+        )
+        if not build.build_apk() or not build.build_test_apk():
+            return False
+        main_apk = build.get_apk_path()
+        test_apk = build.get_test_apk_path()
+        if not main_apk or not self._adb.install_apk(main_apk, device):
+            return False
+        if not test_apk or not self._adb.install_apk(test_apk, device):
+            return False
+        result = self._runner.run(
+            [
+                "adb",
+                "-s",
+                device,
+                "shell",
+                "appops",
+                "set",
+                _APP_PACKAGE,
+                "MANAGE_EXTERNAL_STORAGE",
+                "allow",
+            ]
+        )
+        return result.returncode == 0
+
     def run_instrumented(self, device: str) -> bool:
+        import os
+
         settings = self._get_settings()
         timeout = settings["test_execution"]["instrumented_timeout_seconds"]
+        if not self._grant_manage_external_storage(device):
+            print("ERROR: failed to grant MANAGE_EXTERNAL_STORAGE")
+            return False
         self.send_archives(device)
-        return self._gradle.run_task("connectedDebugAndroidTest", timeout=timeout)
+        os.environ["OTTER_ARCHIVES_PUSHED"] = "1"
+        try:
+            main_ok = self._gradle.run_task(
+                "connectedDebugAndroidTest",
+                timeout=timeout,
+                extra_args=["-Pandroid.testInstrumentationRunnerArguments.notClass=" f"{PERMISSION_ISOLATED_TEST}"],
+            )
+            isolated_ok = self.run_permission_isolated_test(device, timeout)
+        finally:
+            os.environ.pop("OTTER_ARCHIVES_PUSHED", None)
+        return main_ok and isolated_ok
+
+    def run_permission_isolated_test(self, device: str, timeout: int) -> bool:
+        self._runner.run(
+            [
+                "adb",
+                "-s",
+                device,
+                "shell",
+                "pm",
+                "revoke",
+                PERMISSION_ISOLATED_PACKAGE,
+                PERMISSION_ISOLATED_PERMISSION,
+            ],
+            capture_output=True,
+        )
+        ok = self._gradle.run_task(
+            "connectedDebugAndroidTest",
+            timeout=timeout,
+            extra_args=[f"-Pandroid.testInstrumentationRunnerArguments.class={PERMISSION_ISOLATED_TEST}"],
+        )
+        self._runner.run(
+            [
+                "adb",
+                "-s",
+                device,
+                "shell",
+                "pm",
+                "grant",
+                PERMISSION_ISOLATED_PACKAGE,
+                PERMISSION_ISOLATED_PERMISSION,
+            ],
+            capture_output=True,
+        )
+        return ok
 
     def run(self, suites: list[str] | None = None) -> int:
         suites = suites or []
-
-        if "coverage" in suites:
-            return 0 if self.run_unit(coverage=True) else 1
-
-        run_unit = not suites or "unit" in suites
-        run_instrumented = not suites or "instrumented" in suites
+        run_all = not suites
+        run_unit_flag = run_all or "unit" in suites
+        run_integ_mocks = run_all or "integration-mocks" in suites or "integrations" in suites
+        run_integ_reals = run_all or "integration-reals" in suites or "integrations" in suites
+        run_instrumented = run_all or "instrumented" in suites
         success = True
 
-        if run_unit:
+        if run_unit_flag:
             if not self.run_unit():
+                success = False
+
+        if run_integ_mocks:
+            if not self.run_integration_mocks():
+                success = False
+
+        if run_integ_reals:
+            if not self.run_integration_reals():
                 success = False
 
         if run_instrumented:

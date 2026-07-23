@@ -4,6 +4,9 @@ import app.otter.domain.inspector.ArchiveEntry
 import app.otter.domain.inspector.ArchiveType
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import org.apache.commons.compress.archivers.zip.GeneralPurposeBit
+import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
+import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
@@ -330,6 +333,17 @@ class ZipInspectorTest {
     }
 
     @Test
+    fun `isEncrypted returns true for encrypted ZIP`() {
+        val zipFile = createEncryptedZip()
+
+        val inspector = ZipInspector(zipFile)
+
+        assertTrue(inspector.isEncrypted())
+
+        inspector.close()
+    }
+
+    @Test
     fun `isEncrypted should throw IllegalStateException after close`() {
         val zipFile = createTestZip(mapOf("test.txt" to "content"))
 
@@ -483,5 +497,52 @@ class ZipInspectorTest {
             zip.closeEntry()
         }
         return zipFile
+    }
+
+    private fun createEncryptedZip(): File {
+        val file = tempFolder.newFile("encrypted.zip")
+        // Create a regular ZIP using standard Java API
+        ZipOutputStream(file.outputStream()).use { zip ->
+            zip.putNextEntry(ZipEntry("secret.txt"))
+            zip.write("content".toByteArray())
+            zip.closeEntry()
+        }
+
+        // Manually set the encryption flag (bit 0 of general purpose bit flag) in the ZIP file
+        val fileBytes = file.readBytes().toMutableList()
+
+        // Find and modify local file header (starts with 0x50, 0x4b, 0x03, 0x04)
+        for (i in 0 until fileBytes.size - 3) {
+            if (fileBytes[i] == 0x50.toByte() &&
+                fileBytes[i + 1] == 0x4b.toByte() &&
+                fileBytes[i + 2] == 0x03.toByte() &&
+                fileBytes[i + 3] == 0x04.toByte()) {
+                // Found local file header, set encryption flag at offset i+6 (bit 0)
+                val flagIndex = i + 6
+                if (flagIndex < fileBytes.size - 1) {
+                    fileBytes[flagIndex] = (fileBytes[flagIndex].toInt() or 0x01).toByte()
+                }
+                break
+            }
+        }
+
+        // Find and modify central directory header (starts with 0x50, 0x4b, 0x01, 0x02)
+        for (i in 0 until fileBytes.size - 3) {
+            if (fileBytes[i] == 0x50.toByte() &&
+                fileBytes[i + 1] == 0x4b.toByte() &&
+                fileBytes[i + 2] == 0x01.toByte() &&
+                fileBytes[i + 3] == 0x02.toByte()) {
+                // Found central directory header, set encryption flag at offset i+8 (bit 0)
+                // Central directory has offset +2 compared to local file header
+                val flagIndex = i + 8
+                if (flagIndex < fileBytes.size - 1) {
+                    fileBytes[flagIndex] = (fileBytes[flagIndex].toInt() or 0x01).toByte()
+                }
+                break
+            }
+        }
+
+        file.writeBytes(fileBytes.toByteArray())
+        return file
     }
 }

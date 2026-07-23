@@ -63,7 +63,11 @@ class TarInspector(
         return when (archiveType) {
             ArchiveType.TAR_GZ -> TarArchiveInputStream(GzipCompressorInputStream(buffered))
             ArchiveType.TAR_BZ2 -> TarArchiveInputStream(BZip2CompressorInputStream(buffered))
-            else -> TarArchiveInputStream(buffered)
+            ArchiveType.TAR -> TarArchiveInputStream(buffered)
+            else -> {
+                buffered.close()
+                throw IllegalArgumentException("Unsupported type for TarInspector: $archiveType")
+            }
         }
     }
 }

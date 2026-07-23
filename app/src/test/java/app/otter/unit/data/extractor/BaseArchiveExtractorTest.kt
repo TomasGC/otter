@@ -7,7 +7,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
+import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -213,6 +216,238 @@ class BaseArchiveExtractorTest {
 
         // Cleanup
         tempFile.delete()
+    }
+
+    @Test
+    fun `TempFileManager - empty stream throws IllegalStateException`() {
+        val emptyStream = ByteArrayInputStream(ByteArray(0))
+        val extractor = FakeArchiveExtractor()
+
+        val ex = assertThrows(IllegalStateException::class.java) {
+            extractor.testCreateTempFile(emptyStream, ArchiveType.ZIP)
+        }
+        assertTrue("Error message should mention empty or doesn't exist",
+            ex.message?.contains("empty") == true || ex.message?.contains("exist") == true)
+    }
+
+    @Test
+    fun `TempFileManager - TAR_GZ type produces temp file ending with tar dot gz`() {
+        val content = "some content"
+        val inputStream = ByteArrayInputStream(content.toByteArray())
+        val extractor = FakeArchiveExtractor()
+
+        val tempFile = extractor.testCreateTempFile(inputStream, ArchiveType.TAR_GZ)
+        try {
+            assertTrue("Temp file must end with .tar.gz", tempFile.name.endsWith(".tar.gz"))
+        } finally {
+            tempFile.delete()
+        }
+    }
+
+    @Test
+    fun `TempFileManager - ZIP type produces temp file ending with dot zip`() {
+        val content = "content"
+        val inputStream = ByteArrayInputStream(content.toByteArray())
+        val extractor = FakeArchiveExtractor()
+
+        val tempFile = extractor.testCreateTempFile(inputStream, ArchiveType.ZIP)
+        try {
+            assertTrue("Temp file must end with .zip", tempFile.name.endsWith(".zip"))
+        } finally {
+            tempFile.delete()
+        }
+    }
+
+    @Test
+    fun `TempFileManager - TAR_BZ2 type produces temp file ending with tar dot bz2`() {
+        val content = "content"
+        val inputStream = ByteArrayInputStream(content.toByteArray())
+        val extractor = FakeArchiveExtractor()
+
+        val tempFile = extractor.testCreateTempFile(inputStream, ArchiveType.TAR_BZ2)
+        try {
+            assertTrue("Temp file must end with .tar.bz2", tempFile.name.endsWith(".tar.bz2"))
+        } finally {
+            tempFile.delete()
+        }
+    }
+
+    // ===== isEntrySelected boundary tests =====
+
+    private class EntrySelector : BaseArchiveExtractor(
+        TempFileManager(), SevenZipExtractorHelper()
+    ) {
+        override fun getTag() = "Test"
+        override fun supports(type: ArchiveType) = false
+        override suspend fun extractInternal(
+            inputStream: java.io.InputStream,
+            destinationPath: File,
+            archiveType: ArchiveType,
+            sourceFileName: String,
+            selectedItems: List<String>?,
+            onProgress: (ExtractionProgress) -> Unit
+        ): ExtractionResult = ExtractionResult.Success(destinationPath.absolutePath, 0)
+
+        fun testIsEntrySelected(entryName: String, selectedPaths: Set<String>?) =
+            isEntrySelected(entryName, selectedPaths)
+    }
+
+    @Test
+    fun `isEntrySelected - null selectedPaths returns true for any entry`() {
+        val sel = EntrySelector()
+        assertTrue(sel.testIsEntrySelected("anything.txt", null))
+    }
+
+    @Test
+    fun `isEntrySelected - exact match returns true`() {
+        val sel = EntrySelector()
+        assertTrue(sel.testIsEntrySelected("images/photo.jpg", setOf("images/photo.jpg")))
+    }
+
+    @Test
+    fun `isEntrySelected - non-match returns false`() {
+        val sel = EntrySelector()
+        assertFalse(sel.testIsEntrySelected("videos/clip.mp4", setOf("images/photo.jpg")))
+    }
+
+    @Test
+    fun `isEntrySelected - directory prefix match includes entries under dir`() {
+        val sel = EntrySelector()
+        assertTrue(sel.testIsEntrySelected("images/photo.jpg", setOf("images/")))
+        assertTrue(sel.testIsEntrySelected("images/sub/thumb.jpg", setOf("images/")))
+    }
+
+    @Test
+    fun `isEntrySelected - directory prefix does not match sibling directory with similar name`() {
+        val sel = EntrySelector()
+        // "images/" must NOT match "images-extra/photo.jpg"
+        assertFalse(sel.testIsEntrySelected("images-extra/photo.jpg", setOf("images/")))
+    }
+
+    @Test
+    fun `isEntrySelected - empty selectedPaths returns false for any entry`() {
+        val sel = EntrySelector()
+        assertFalse(sel.testIsEntrySelected("file.txt", emptySet()))
+    }
+
+    // ===== extractWithTempFile tests =====
+
+    private class ExtractorWithTempAccess(
+        private val fakeTempFileManager: ITempFileManager = TempFileManager()
+    ) : BaseArchiveExtractor(fakeTempFileManager, SevenZipExtractorHelper()) {
+        override fun getTag() = "TempTest"
+        override fun supports(type: ArchiveType) = false
+        override suspend fun extractInternal(
+            inputStream: java.io.InputStream, destinationPath: File, archiveType: ArchiveType,
+            sourceFileName: String, selectedItems: List<String>?, onProgress: (ExtractionProgress) -> Unit
+        ): ExtractionResult = ExtractionResult.Success(destinationPath.absolutePath, 0)
+
+        suspend fun callExtractWithTempFile(
+            stream: java.io.InputStream,
+            archiveType: ArchiveType,
+            block: suspend (File) -> ExtractionResult
+        ): ExtractionResult = extractWithTempFile(stream, archiveType, block)
+    }
+
+    private class TrackingTempFileManager : ITempFileManager {
+        var createdFile: File? = null
+        override fun createTempFile(inputStream: java.io.InputStream, archiveType: ArchiveType, tag: String): File {
+            val file = File.createTempFile("tracking_", ".tmp")
+            inputStream.copyTo(file.outputStream())
+            createdFile = file
+            return file
+        }
+    }
+
+    private class FailingTempFileManager : ITempFileManager {
+        override fun createTempFile(inputStream: java.io.InputStream, archiveType: ArchiveType, tag: String): File {
+            throw IllegalStateException("Temp file creation failed")
+        }
+    }
+
+    @Test
+    fun `extractWithTempFile calls lambda and deletes temp file on success`() = runTest {
+        val trackingManager = TrackingTempFileManager()
+        val extractor = ExtractorWithTempAccess(trackingManager)
+        val stream = ByteArrayInputStream("content".toByteArray())
+
+        val result = extractor.callExtractWithTempFile(stream, ArchiveType.ZIP) { tempFile ->
+            assertTrue("Lambda receives a real file", tempFile.exists())
+            ExtractionResult.Success(tempFile.absolutePath, 1)
+        }
+
+        assertTrue(result is ExtractionResult.Success)
+        val createdFile = trackingManager.createdFile
+        assertNotNull("TrackingManager must have created a file", createdFile)
+        assertFalse("Temp file must be deleted after success", createdFile!!.exists())
+    }
+
+    @Test
+    fun `extractWithTempFile deletes temp file even when lambda throws`() = runTest {
+        val trackingManager = TrackingTempFileManager()
+        val extractor = ExtractorWithTempAccess(trackingManager)
+        val stream = ByteArrayInputStream("content".toByteArray())
+
+        try {
+            extractor.callExtractWithTempFile(stream, ArchiveType.ZIP) { _ ->
+                throw RuntimeException("lambda error")
+            }
+        } catch (_: RuntimeException) { /* expected */ }
+
+        val createdFile = trackingManager.createdFile
+        assertNotNull("TrackingManager must have created a file before throw", createdFile)
+        assertFalse("Temp file must be deleted even when lambda throws", createdFile!!.exists())
+    }
+
+    @Test
+    fun `extractWithTempFile propagates exception from failing TempFileManager`() = runTest {
+        val extractor = ExtractorWithTempAccess(FailingTempFileManager())
+        val stream = ByteArrayInputStream("content".toByteArray())
+
+        assertThrows(IllegalStateException::class.java) {
+            runBlocking {
+                extractor.callExtractWithTempFile(stream, ArchiveType.ZIP) { file ->
+                    ExtractionResult.Success(file.absolutePath, 0)
+                }
+            }
+        }
+    }
+
+    // ===== ProgressThrottler tests =====
+
+    private class ThrottlerAccessor : BaseArchiveExtractor(TempFileManager(), SevenZipExtractorHelper()) {
+        override fun getTag() = "ThrottlerTest"
+        override fun supports(type: ArchiveType) = false
+        override suspend fun extractInternal(
+            inputStream: java.io.InputStream, destinationPath: File, archiveType: ArchiveType,
+            sourceFileName: String, selectedItems: List<String>?, onProgress: (ExtractionProgress) -> Unit
+        ): ExtractionResult = ExtractionResult.Success(destinationPath.absolutePath, 0)
+
+        fun makeThrottler(throttleMs: Long) = ProgressThrottler(throttleMs)
+    }
+
+    @Test
+    fun `ProgressThrottler - shouldNotify returns true on very first call`() {
+        val accessor = ThrottlerAccessor()
+        val throttler = accessor.makeThrottler(1000L)
+        assertTrue("First call must always notify", throttler.shouldNotify())
+    }
+
+    @Test
+    fun `ProgressThrottler - shouldNotify returns false on immediate second call`() {
+        val accessor = ThrottlerAccessor()
+        val throttler = accessor.makeThrottler(1000L)
+        throttler.shouldNotify() // set lastNotificationTime
+        assertFalse("Immediate second call must not notify", throttler.shouldNotify())
+    }
+
+    @Test
+    fun `ProgressThrottler - shouldNotify returns true after throttleMs elapsed`() {
+        val accessor = ThrottlerAccessor()
+        val throttler = accessor.makeThrottler(10L) // 10ms throttle
+        throttler.shouldNotify()                    // first call sets time
+        Thread.sleep(25)                            // wait > throttleMs
+        assertTrue("After 25ms with 10ms throttle: must notify", throttler.shouldNotify())
     }
 
 }

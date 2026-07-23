@@ -251,6 +251,95 @@ class ArchiveInspectorFactoryTest {
         }
     }
 
+    @Test
+    fun `create should detect RPA by rpa extension`() {
+        val rpaFile = tempFolder.newFile("game.rpa")
+        rpaFile.writeText("any content")
+        val factory = ArchiveInspectorFactory(mockLibraryManager)
+
+        val result = factory.create(rpaFile)
+
+        assertTrue(result.isSuccess)
+        result.onSuccess { inspector ->
+            assertEquals(ArchiveType.RPA, inspector.getArchiveType())
+            inspector.close()
+        }
+    }
+
+    @Test
+    fun `create returns failure for empty file with unknown extension`() {
+        val emptyFile = tempFolder.newFile("archive.xyz")
+        val factory = ArchiveInspectorFactory(mockLibraryManager)
+
+        val result = factory.create(emptyFile)
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is IllegalArgumentException)
+    }
+
+    @Test
+    fun `create succeeds for empty file with zip extension by trusting the extension`() {
+        // 0 bytes is shorter than ZIP_MAGIC (4 bytes); hasMatchingMagic's size guard must
+        // reject the comparison without throwing, then fall back to extension trust.
+        val emptyZip = tempFolder.newFile("archive.zip")
+        val factory = ArchiveInspectorFactory(mockLibraryManager)
+
+        val result = factory.create(emptyZip)
+
+        assertTrue(result.isSuccess)
+        result.onSuccess { inspector ->
+            assertEquals(ArchiveType.ZIP, inspector.getArchiveType())
+            inspector.close()
+        }
+    }
+
+    @Test
+    fun `create succeeds for file shorter than ZIP magic length with zip extension`() {
+        val shortZip = tempFolder.newFile("short.zip")
+        shortZip.writeBytes(byteArrayOf(0x50, 0x4B)) // first 2 bytes of ZIP magic only
+        val factory = ArchiveInspectorFactory(mockLibraryManager)
+
+        val result = factory.create(shortZip)
+
+        assertTrue(result.isSuccess)
+        result.onSuccess { inspector ->
+            assertEquals(ArchiveType.ZIP, inspector.getArchiveType())
+            inspector.close()
+        }
+    }
+
+    @Test
+    fun `create succeeds for empty file with gz extension by trusting the extension`() {
+        // Non-ZIP extensions never trigger a magic-byte read at all; this documents that
+        // an empty .gz still resolves successfully at the factory level (parsing failures
+        // surface later, from the inspector itself, per the class's documented design).
+        val emptyGz = tempFolder.newFile("archive.gz")
+        val factory = ArchiveInspectorFactory(mockLibraryManager)
+
+        val result = factory.create(emptyGz)
+
+        assertTrue(result.isSuccess)
+        result.onSuccess { inspector ->
+            assertEquals(ArchiveType.GZIP, inspector.getArchiveType())
+            inspector.close()
+        }
+    }
+
+    @Test
+    fun `create falls back to ZIP for zip extension when magic bytes mismatch`() {
+        val fakeZip = tempFolder.newFile("archive.zip")
+        fakeZip.writeBytes(byteArrayOf(0x52, 0x61, 0x72, 0x21))  // RAR magic, not ZIP
+        val factory = ArchiveInspectorFactory(mockLibraryManager)
+
+        val result = factory.create(fakeZip)
+
+        assertTrue(result.isSuccess)
+        result.onSuccess { inspector ->
+            assertEquals(ArchiveType.ZIP, inspector.getArchiveType())
+            inspector.close()
+        }
+    }
+
     private fun createTestZip(filename: String): File {
         val zipFile = tempFolder.newFile(filename)
         ZipOutputStream(FileOutputStream(zipFile)).use { zip ->

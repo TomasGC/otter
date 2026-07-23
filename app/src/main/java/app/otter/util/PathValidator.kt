@@ -21,7 +21,12 @@ class PathValidator @Inject constructor() {
      * @throws SecurityException if path traversal is detected
      */
     fun validatePath(outputFile: File, destinationPath: File, entryName: String) {
-        if (!outputFile.canonicalPath.startsWith(destinationPath.canonicalPath)) {
+        val canonicalOutput = try {
+            outputFile.canonicalPath
+        } catch (e: java.io.IOException) {
+            throw SecurityException("Entry has an invalid path: $entryName", e)
+        }
+        if (!canonicalOutput.startsWith(destinationPath.canonicalPath + File.separator)) {
             throw SecurityException("Entry outside destination: $entryName")
         }
     }
@@ -40,8 +45,13 @@ class PathValidator @Inject constructor() {
         // Reject absolute paths on Unix/Linux
         if (path.startsWith("/")) return false
 
-        // Reject absolute paths on Windows (C:\, D:\, etc.)
-        if (path.matches(Regex("^[A-Za-z]:\\\\.+"))) return false
+        // Reject UNC network paths on Windows (\\server\share\...)
+        if (path.startsWith("\\\\")) return false
+
+        // Reject absolute (C:\...) and drive-relative (C:foo) Windows paths.
+        // Drive-relative paths resolve against that drive's current directory,
+        // not the destination folder, so a bare backslash check is not enough.
+        if (path.matches(Regex("^[A-Za-z]:.+"))) return false
 
         return true
     }

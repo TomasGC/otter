@@ -68,30 +68,38 @@ class ExtractionDestinationResolver @Inject constructor(
             }
         }
 
-        // Try method 2: DocumentFile parent (works for standard document URIs)
-        val documentFile = DocumentFile.fromSingleUri(context, archiveUri)
-        Timber.tag(TAG).d("DocumentFile: $documentFile, name: ${documentFile?.name}")
+        // Try method 2: Resolve the archive's own real path via ContentResolver/DocumentsContract,
+        // then take its parent directory.
+        // NOTE: DocumentFile.fromSingleUri() has no tree context, so documentFile.parentFile is
+        // always null (SingleDocumentFile is constructed with a hardcoded null parent) — we
+        // cannot navigate to a parent DocumentFile. Resolving the archive URI itself and taking
+        // File(...).parent achieves the same goal without relying on that always-null field.
 
-        val parentUri = documentFile?.parentFile?.uri
-        Timber.tag(TAG).d("Parent URI: $parentUri")
+        // Try method 2a: ContentResolver-based real path (works for standard authorities)
+        val realPath = getRealPathFromUri(archiveUri)
+        Timber.tag(TAG).d("Archive real path (method 2a): $realPath")
 
-        if (parentUri != null) {
-            // Try method 2a: Get real path from parent URI (works for standard authorities)
-            val parentPath = getRealPathFromUri(parentUri)
-            Timber.tag(TAG).d("Parent real path (method 2a): $parentPath")
-
+        if (realPath != null) {
+            val parentPath = File(realPath).parent
             if (parentPath != null) {
                 Timber.tag(TAG).d("Extracting to same folder as archive: $parentPath")
                 return createDestinationFolder(parentPath, fileName)
             }
+        }
 
-            // Try method 2b: Build path from DocumentFile hierarchy (works for Samsung My Files)
-            val pathFromHierarchy = getPathFromDocumentHierarchy(documentFile.parentFile)
-            Timber.tag(TAG).d("Parent path from hierarchy (method 2b): $pathFromHierarchy")
+        // Try method 2b: Build path from DocumentsContract docId (works for Samsung My Files
+        // and standard external-storage document authorities)
+        val documentFile = DocumentFile.fromSingleUri(context, archiveUri)
+        Timber.tag(TAG).d("DocumentFile: $documentFile, name: ${documentFile?.name}")
 
-            if (pathFromHierarchy != null) {
-                Timber.tag(TAG).d("Extracting to same folder as archive (from hierarchy): $pathFromHierarchy")
-                return createDestinationFolder(pathFromHierarchy, fileName)
+        val pathFromHierarchy = getPathFromDocumentHierarchy(documentFile)
+        Timber.tag(TAG).d("Archive path from hierarchy (method 2b): $pathFromHierarchy")
+
+        if (pathFromHierarchy != null) {
+            val parentPath = File(pathFromHierarchy).parent
+            if (parentPath != null) {
+                Timber.tag(TAG).d("Extracting to same folder as archive (from hierarchy): $parentPath")
+                return createDestinationFolder(parentPath, fileName)
             }
         }
 
@@ -150,7 +158,12 @@ class ExtractionDestinationResolver @Inject constructor(
         return try {
             val uri = documentFile.uri
             Timber.tag(TAG).d("Building path from hierarchy for URI: $uri")
-            if (!DocumentsContract.isDocumentUri(context, uri)) return null
+            // NOTE: deliberately not gated on DocumentsContract.isDocumentUri() — that check
+            // also requires the authority to be registered with the OS as a DocumentsProvider,
+            // which can be false even for a well-formed document URI (e.g. in test
+            // environments, or on OEM ROMs with unusual PackageManager state). The authority
+            // whitelist in resolveDocumentPath() below already limits which URIs are parsed,
+            // and a malformed docId is caught by this method's own try/catch.
             val docId = DocumentsContract.getDocumentId(uri)
             resolveDocumentPath(uri, docId)
         } catch (e: Exception) {

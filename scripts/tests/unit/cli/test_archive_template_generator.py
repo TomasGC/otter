@@ -160,6 +160,49 @@ class TestMain:
         assert (tmp_path / "out").exists()
 
 
+class TestGenerateDeepNested:
+    def test_creates_requested_depth(self, tmp_path):
+        gen = ArchiveTemplateGenerator(random.Random(0))
+        gen.generate_deep_nested(tmp_path / "out", depth=5)
+        deepest = tmp_path / "out"
+        for level in range(1, 6):
+            deepest = deepest / f"level_{level}"
+        assert deepest.is_dir()
+
+    def test_places_files_at_deepest_level(self, tmp_path):
+        gen = ArchiveTemplateGenerator(random.Random(0))
+        gen.generate_deep_nested(tmp_path / "out", depth=3, files_per_level=2)
+        deepest = tmp_path / "out" / "level_1" / "level_2" / "level_3"
+        assert len(list(deepest.iterdir())) == 2
+
+    def test_returns_output_dir(self, tmp_path):
+        gen = ArchiveTemplateGenerator(random.Random(0))
+        out = tmp_path / "out"
+        result = gen.generate_deep_nested(out, depth=2)
+        assert result == out
+
+
+class TestGenerateLongFilename:
+    def test_creates_file_with_requested_length(self, tmp_path):
+        gen = ArchiveTemplateGenerator(random.Random(0))
+        gen.generate_long_filename(tmp_path / "out", max_length=255)
+        names = [f.name for f in (tmp_path / "out").iterdir()]
+        assert len(names) == 1
+        assert len(names[0]) == 255
+
+    def test_preserves_extension(self, tmp_path):
+        gen = ArchiveTemplateGenerator(random.Random(0))
+        gen.generate_long_filename(tmp_path / "out", max_length=100, extension=".csv")
+        names = [f.name for f in (tmp_path / "out").iterdir()]
+        assert names[0].endswith(".csv")
+
+    def test_returns_output_dir(self, tmp_path):
+        gen = ArchiveTemplateGenerator(random.Random(0))
+        out = tmp_path / "out"
+        result = gen.generate_long_filename(out, max_length=50)
+        assert result == out
+
+
 class TestCreateFiles:
     def test_creates_correct_count(self, tmp_path):
         gen = ArchiveTemplateGenerator(random.Random(42))

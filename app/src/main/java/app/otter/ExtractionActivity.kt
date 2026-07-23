@@ -127,12 +127,17 @@ class ExtractionActivity : ComponentActivity() {
         }
 
         val serviceIntent = ExtractionService.newIntent(this, resolvedPath, fileName)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+            Toast.makeText(this, "Extracting $fileName...", Toast.LENGTH_SHORT).show()
+        } catch (e: SecurityException) {
+            android.util.Log.e("ExtractionActivity", "Cannot start extraction for $fileName: ${e.message}")
+            Toast.makeText(this, "Cannot access archive: permission denied", Toast.LENGTH_LONG).show()
         }
-        Toast.makeText(this, "Extracting $fileName...", Toast.LENGTH_SHORT).show()
     }
 
     private fun copyContentUriToCacheFile(uri: android.net.Uri, fileName: String): ResourcePath? {

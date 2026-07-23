@@ -160,6 +160,30 @@ class ExtractArchiveUseCaseTest {
         assertTrue(result is ExtractionProgress.Success)
     }
 
+    @Test
+    fun `should allow extraction when content URI reports unknown size sentinel`() = runTest {
+        // -1L means size unknown (content:// provider did not populate SIZE column)
+        val archiveWithUnknownSize = ArchiveFile(
+            path = ResourcePath.FileSystem("content://com.example/archive.zip"),
+            name = "archive.zip",
+            sizeBytes = -1L,
+            mimeType = "application/zip",
+            type = ArchiveType.ZIP
+        )
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
+
+        every {
+            repository.extractArchive(archiveWithUnknownSize, destinationPath, null)
+        } returns flowOf(ExtractionProgress.Success("/downloads/archive", 3))
+
+        val result = useCase(archiveWithUnknownSize, destinationPath).first()
+
+        assertTrue(
+            "Extraction must proceed when sizeBytes is -1L (unknown content:// size)",
+            result is ExtractionProgress.Success
+        )
+    }
+
     private fun createValidArchive() = ArchiveFile(
         path = ResourcePath.FileSystem("file:///test.zip"),
         name = "test.zip",

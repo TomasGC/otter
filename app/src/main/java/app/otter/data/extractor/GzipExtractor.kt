@@ -3,7 +3,9 @@ package app.otter.data.extractor
 import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 import timber.log.Timber
@@ -26,7 +28,8 @@ import javax.inject.Inject
  */
 class GzipExtractor @Inject constructor(
     tempFileManager: ITempFileManager,
-    sevenZipHelper: SevenZipExtractorHelper
+    sevenZipHelper: SevenZipExtractorHelper,
+    private val sizeGuardFactory: () -> ArchiveSizeGuard = { ArchiveSizeGuard() }
 ) : BaseArchiveExtractor(tempFileManager, sevenZipHelper, SingleFileProgressCalculator()) {
 
     override fun supports(type: ArchiveType): Boolean = type == ArchiveType.GZIP
@@ -52,9 +55,18 @@ class GzipExtractor @Inject constructor(
         destinationPath.mkdirs()
 
         // Decompress using Apache Commons Compress
+        val sizeGuard = sizeGuardFactory()
+        sizeGuard.startEntry()
+        val buffer = ByteArray(BaseArchiveExtractor.BUFFER_SIZE_BYTES)
         GzipCompressorInputStream(BufferedInputStream(inputStream)).use { gzipInput ->
             outputFile.outputStream().buffered(BaseArchiveExtractor.BUFFER_SIZE_BYTES).use { output ->
-                gzipInput.copyTo(output, BaseArchiveExtractor.BUFFER_SIZE_BYTES)
+                while (true) {
+                    if (!isActive) throw CancellationException("GZIP extraction cancelled")
+                    val bytesRead = gzipInput.read(buffer)
+                    if (bytesRead == -1) break
+                    sizeGuard.track(bytesRead)
+                    output.write(buffer, 0, bytesRead)
+                }
             }
         }
 

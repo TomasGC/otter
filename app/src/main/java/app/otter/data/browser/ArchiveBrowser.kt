@@ -14,8 +14,14 @@ import app.otter.util.MimeTypeUtil
  * - Large archives (≥10k entries): Returns Paginated result with partial items
  *
  * Performance characteristics:
- * - Small archives: O(n) where n = total entries (filters + sorts all items)
- * - Large archives: O(n) where n = total entries (streams + filters + sorts + paginates)
+ * - First browse() call: O(n) where n = total entries (streams inspector, filters + sorts)
+ * - Repeated browse() calls on an already-visited directory: O(1) amortized — the sorted,
+ *   filtered item list for that directory is cached on this instance, so paginating through
+ *   the same directory (the common scroll scenario) never re-streams the inspector.
+ *
+ * The cache assumes the underlying archive file does not change during this browser's
+ * lifetime (read-only viewing) — callers that keep an ArchiveBrowser alive across a whole
+ * browsing session (see ItemBrowserRepositoryImpl) rely on this.
  *
  * Implementation details:
  * - Uses [ArchiveInspector.countEntries] to determine pagination strategy (O(1))
@@ -31,6 +37,14 @@ class ArchiveBrowser(
     private val archivePath: String,
     private val mimeTypeUtil: MimeTypeUtil = MimeTypeUtil()
 ) {
+
+    // Sorted + filtered (but not yet offset/limit-sliced) items per normalized directory path.
+    // ConcurrentHashMap + computeIfAbsent: ItemBrowserRepositoryImpl keeps one ArchiveBrowser
+    // alive per archive, so concurrent scroll-prefetch calls can race here.
+    private val directoryCache = java.util.concurrent.ConcurrentHashMap<String, List<BrowsableItem>>()
+
+    // All entries in the archive (explicit + synthesized implicit directories), read once.
+    private var cachedRawEntries: List<app.otter.domain.inspector.ArchiveEntry>? = null
 
     /**
      * Browse items at the specified path within the archive.
@@ -50,43 +64,9 @@ class ArchiveBrowser(
         // Normalize entryPath (ensure trailing slash for directories, or empty for root)
         val normalizedPath = if (entryPath.isEmpty()) "" else entryPath.trimEnd('/') + "/"
 
-        // Get all entries from inspector
-        val allEntries = inspector.entries().toList()
-
-        // Extract implicit directories (directories not explicitly in the archive)
-        val implicitDirs = allEntries
-            .filter { it.path.startsWith(normalizedPath) }
-            .mapNotNull { entry ->
-                val relativePath = entry.path.removePrefix(normalizedPath)
-                val firstSlash = relativePath.indexOf('/')
-                if (firstSlash > 0) {
-                    // This entry is in a subdirectory
-                    normalizedPath + relativePath.substring(0, firstSlash) + "/"
-                } else null
-            }
-            .distinct()
-            .map { dirPath ->
-                app.otter.domain.inspector.ArchiveEntry(
-                    path = dirPath,
-                    isDirectory = true,
-                    sizeBytes = 0L,
-                    compressedSize = 0L,
-                    lastModified = 0L
-                )
-            }
-
-        // Combine explicit entries with implicit directories
-        val allEntriesWithDirs = (allEntries + implicitDirs).distinctBy { it.path }
-
-        // Filter entries in the specified directory
-        val filteredEntries = allEntriesWithDirs.asSequence()
-            .filter { entry -> isInDirectory(entry.path, normalizedPath) }
-            .map { entry -> mapToNavigableItem(entry, normalizedPath) }
-            .sortedWith(compareBy(
-                { !it.canNavigateInto }, // Directories first (canNavigateInto = true)
-                { it.name.lowercase() }  // Case-insensitive sort
-            ))
-            .toList()
+        val filteredEntries = directoryCache.computeIfAbsent(normalizedPath) {
+            computeDirectoryEntries(it)
+        }
 
         // Determine pagination strategy based on filtered items count
         val filteredCount = filteredEntries.size
@@ -120,6 +100,63 @@ class ArchiveBrowser(
                 BrowseResult.Complete(paginatedItems)
             }
         }
+    }
+
+    /**
+     * Returns the sorted, filtered items for [normalizedPath], computed from the (cached)
+     * raw entry list. Only the raw inspector stream is expensive; this per-directory pass
+     * is cheap CPU work and is itself cached by the caller.
+     */
+    private fun computeDirectoryEntries(normalizedPath: String): List<BrowsableItem> {
+        return getRawEntriesWithImplicitDirs().asSequence()
+            .filter { entry -> isInDirectory(entry.path, normalizedPath) }
+            .map { entry -> mapToNavigableItem(entry, normalizedPath) }
+            .sortedWith(compareBy(
+                { !it.canNavigateInto }, // Directories first (canNavigateInto = true)
+                { it.name.lowercase() }  // Case-insensitive sort
+            ))
+            .toList()
+    }
+
+    /**
+     * Streams all entries from the inspector once, synthesizes implicit directories at every
+     * nesting level, and caches the combined list — this is the one truly expensive operation
+     * per archive, regardless of how many directories are later browsed. Synchronized because
+     * concurrent first-callers would otherwise each stream the inspector independently.
+     */
+    @Synchronized
+    private fun getRawEntriesWithImplicitDirs(): List<app.otter.domain.inspector.ArchiveEntry> {
+        cachedRawEntries?.let { return it }
+
+        val allEntries = inspector.entries().toList()
+
+        val implicitDirs = allEntries
+            .flatMap { entry -> ancestorDirPaths(entry.path) }
+            .distinct()
+            .map { dirPath ->
+                app.otter.domain.inspector.ArchiveEntry(
+                    path = dirPath,
+                    isDirectory = true,
+                    sizeBytes = 0L,
+                    compressedSize = 0L,
+                    lastModified = 0L
+                )
+            }
+
+        val combined = (allEntries + implicitDirs).distinctBy { it.path }
+        cachedRawEntries = combined
+        return combined
+    }
+
+    /** All ancestor directory paths implied by an entry path, e.g. "a/b/c.txt" -> ["a/", "a/b/"]. */
+    private fun ancestorDirPaths(entryPath: String): List<String> {
+        val result = mutableListOf<String>()
+        var index = entryPath.indexOf('/')
+        while (index > 0) {
+            result.add(entryPath.substring(0, index + 1))
+            index = entryPath.indexOf('/', index + 1)
+        }
+        return result
     }
 
     /**
