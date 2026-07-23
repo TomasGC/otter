@@ -10,9 +10,13 @@ import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
 import app.otter.domain.model.ResourcePath
+import android.database.Cursor
+import android.provider.OpenableColumns
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
@@ -262,6 +266,101 @@ class ArchiveRepositoryImplTest {
 
         assertNotNull("Empty list must be passed (not null)", capturedSelectedItems)
         assertTrue("Empty list must be empty", capturedSelectedItems!!.isEmpty())
+    }
+
+    // ========== null destination path ==========
+
+    @Test
+    fun `should emit Error when destination path is null`() = runTest {
+        // Intercept ResourcePathConverter.toUri to return a mock URI with null path for
+        // the destination, exercising the null-path guard in ArchiveRepositoryImpl.
+        val archive = createTestArchive()
+        val destinationPath = ResourcePath.FileSystem("content://test/destination")
+
+        val mockDestUri = mockk<android.net.Uri>()
+        every { mockDestUri.path } returns null
+
+        mockkObject(ResourcePathConverter)
+        try {
+            every { ResourcePathConverter.toUri(archive.path) } returns
+                android.net.Uri.parse("file:///test.zip")
+            every { ResourcePathConverter.toUri(destinationPath) } returns mockDestUri
+
+            val results = repository.extractArchive(archive, destinationPath).toList()
+
+            assertTrue(
+                "Should emit Error for null destination path",
+                results.any { it is ExtractionProgress.Error }
+            )
+            val error = results.filterIsInstance<ExtractionProgress.Error>().first()
+            assertTrue(
+                "Error message should mention destination path",
+                error.message.contains("destination") || error.message.contains("Invalid")
+            )
+        } finally {
+            unmockkObject(ResourcePathConverter)
+        }
+    }
+
+    // ========== DISPLAY_NAME cursor ==========
+
+    @Test
+    fun `should use DISPLAY_NAME from cursor as source file name when query succeeds`() = runTest {
+        val archive = createTestArchive()
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
+        val inputStream = ByteArrayInputStream(byteArrayOf())
+
+        // Mock cursor with DISPLAY_NAME
+        val mockCursor = mockk<Cursor>(relaxed = true)
+        every { mockCursor.moveToFirst() } returns true
+        every { mockCursor.getColumnIndex(OpenableColumns.DISPLAY_NAME) } returns 0
+        every { mockCursor.getString(0) } returns "my_custom_name.zip"
+
+        every { contentResolver.query(any(), any(), null, null, null) } returns mockCursor
+        every { contentResolver.openInputStream(any()) } returns inputStream
+
+        var capturedSourceFileName: String? = null
+        coEvery {
+            zipExtractor.extract(any(), any(), any(), any(), any(), any())
+        } answers {
+            capturedSourceFileName = arg(3) // sourceFileName is arg index 3
+            ExtractionResult.Success("/downloads/test", 1)
+        }
+
+        repository.extractArchive(archive, destinationPath).toList()
+
+        assertEquals(
+            "sourceFileName must be the DISPLAY_NAME from cursor",
+            "my_custom_name.zip",
+            capturedSourceFileName
+        )
+    }
+
+    @Test
+    fun `when query returns null getFileNameFromUri uses last path segment`() = runTest {
+        val archive = createTestArchive()
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
+        val inputStream = ByteArrayInputStream(byteArrayOf())
+
+        // query returns null → fallback to uri.lastPathSegment
+        every { contentResolver.query(any(), any(), null, null, null) } returns null
+        every { contentResolver.openInputStream(any()) } returns inputStream
+
+        var capturedSourceFileName: String? = null
+        coEvery {
+            zipExtractor.extract(any(), any(), any(), any(), any(), any())
+        } answers {
+            capturedSourceFileName = arg(3) // sourceFileName is arg index 3
+            ExtractionResult.Success("/downloads/test", 1)
+        }
+
+        repository.extractArchive(archive, destinationPath).toList()
+
+        assertEquals(
+            "sourceFileName must fall back to last path segment when query returns null",
+            "test.zip",
+            capturedSourceFileName
+        )
     }
 
     private fun createTestArchive() = ArchiveFile(

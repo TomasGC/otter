@@ -183,6 +183,26 @@ class ExtractionEventBusTest {
     }
 
     @Test
+    fun `reset should clear progressState to null`() = runTest {
+        // Given
+        eventBus.emitProgress(
+            fileName = "test.zip",
+            currentFile = "file.txt",
+            extractedCount = 3,
+            totalCount = 10,
+            progress = 0.3f
+        )
+        val before = eventBus.progressState.first { it != null }
+        assertNotNull("State should be non-null before reset", before)
+
+        // When
+        eventBus.reset()
+
+        // Then
+        assertEquals(null, eventBus.progressState.value)
+    }
+
+    @Test
     fun `cancelling collection should stop receiving state updates`() = runTest {
         // Given
         val receivedEvents = mutableListOf<ExtractionEventBus.ProgressEvent?>()

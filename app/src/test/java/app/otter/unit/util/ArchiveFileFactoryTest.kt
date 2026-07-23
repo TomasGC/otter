@@ -219,7 +219,91 @@ class ArchiveFileFactoryTest {
         assertNull(archiveFile)
     }
 
+    // ========== content:// SIZE column absent — content:// SIZE=0 false rejection fix ==========
+
+    @Test
+    fun `createFromContentUri with missing SIZE column should store unknown size sentinel`() {
+        // Arrange: cursor without SIZE column (Google Files / some Samsung URIs)
+        val cursor = android.database.MatrixCursor(
+            arrayOf(android.provider.OpenableColumns.DISPLAY_NAME)
+        )
+        cursor.addRow(arrayOf("archive.zip"))
+
+        val mockContentResolver = io.mockk.mockk<android.content.ContentResolver>(relaxed = true)
+        io.mockk.every { context.contentResolver } returns mockContentResolver
+        io.mockk.every { mockContentResolver.query(any(), any(), any(), any(), any()) } returns cursor
+        io.mockk.every { mockContentResolver.getType(any()) } returns "application/zip"
+
+        // content:// URIs are stored as ResourcePath.FileSystem with the URI string as path
+        val path = app.otter.domain.model.ResourcePath.FileSystem("content://com.example.provider/archive.zip")
+
+        // Act
+        val result = factory.createFromPath(path, "archive.zip")
+
+        // Assert: must not be null, and sizeBytes must be -1L (unknown)
+        assertNotNull("ArchiveFile should not be null when SIZE is absent", result)
+        assertEquals(
+            "sizeBytes should be UNKNOWN_SIZE sentinel (-1L) when SIZE column is absent",
+            -1L,
+            result!!.sizeBytes
+        )
+    }
+
+    @Test
+    fun `createFromContentUri with SIZE column present and non-zero should store actual size`() {
+        val cursor = android.database.MatrixCursor(
+            arrayOf(android.provider.OpenableColumns.SIZE, android.provider.OpenableColumns.DISPLAY_NAME)
+        )
+        cursor.addRow(arrayOf(4096L, "archive.zip"))
+
+        val mockContentResolver = io.mockk.mockk<android.content.ContentResolver>(relaxed = true)
+        io.mockk.every { context.contentResolver } returns mockContentResolver
+        io.mockk.every { mockContentResolver.query(any(), any(), any(), any(), any()) } returns cursor
+        io.mockk.every { mockContentResolver.getType(any()) } returns "application/zip"
+
+        // content:// URIs are stored as ResourcePath.FileSystem with the URI string as path
+        val path = app.otter.domain.model.ResourcePath.FileSystem("content://com.example.provider/archive.zip")
+
+        val result = factory.createFromPath(path, "archive.zip")
+
+        assertNotNull(result)
+        assertEquals(4096L, result!!.sizeBytes)
+    }
+
     // ========== content:// path fallback (Samsung bug fix) ==========
+
+    @Test
+    fun `createFromContentUri with empty cursor (moveToFirst false) returns null`() {
+        val cursor = android.database.MatrixCursor(arrayOf(android.provider.OpenableColumns.DISPLAY_NAME))
+        // No rows added → moveToFirst() returns false
+
+        val mockCr = io.mockk.mockk<android.content.ContentResolver>(relaxed = true)
+        io.mockk.every { context.contentResolver } returns mockCr
+        io.mockk.every { mockCr.query(any(), any(), any(), any(), any()) } returns cursor
+
+        val path = app.otter.domain.model.ResourcePath.FileSystem("content://com.example.provider/archive.zip")
+        val result = factory.createFromPath(path, "archive.zip")
+
+        assertNull("Empty cursor must return null", result)
+    }
+
+    @Test
+    fun `createFromContentUri with unknown archive extension returns null`() {
+        val cursor = android.database.MatrixCursor(
+            arrayOf(android.provider.OpenableColumns.SIZE, android.provider.OpenableColumns.DISPLAY_NAME)
+        )
+        cursor.addRow(arrayOf(1024L, "file.xyz"))
+
+        val mockCr = io.mockk.mockk<android.content.ContentResolver>(relaxed = true)
+        io.mockk.every { context.contentResolver } returns mockCr
+        io.mockk.every { mockCr.query(any(), any(), any(), any(), any()) } returns cursor
+        io.mockk.every { mockCr.getType(any()) } returns "application/octet-stream"
+
+        val path = app.otter.domain.model.ResourcePath.FileSystem("content://com.example.provider/file.xyz")
+        val result = factory.createFromPath(path, "file.xyz")
+
+        assertNull("Unknown archive extension must return null", result)
+    }
 
     @Test
     fun `createFromPath with content URI string falls back to content URI handler`() {

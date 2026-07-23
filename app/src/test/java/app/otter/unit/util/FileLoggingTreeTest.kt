@@ -13,6 +13,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import timber.log.Timber
 import java.io.File
 import kotlin.io.path.createTempDirectory
 
@@ -80,5 +81,56 @@ class FileLoggingTreeTest {
         val timestampPart = fileName.removePrefix("otter-log-").removeSuffix(".txt")
         val regex = """\d{4}-\d{2}-\d{2}-\d{2}-\d{2}""".toRegex()
         assertTrue("Filename should contain valid timestamp", regex.matches(timestampPart))
+    }
+
+    private fun withTree(block: (FileLoggingTree) -> Unit) {
+        val tree = FileLoggingTree(context)
+        Timber.plant(tree)
+        try {
+            block(tree)
+        } finally {
+            Timber.uproot(tree)
+        }
+    }
+
+    @Test
+    fun `log writes DEBUG message with D priority char`() = withTree { tree ->
+        Timber.tag("TestTag").d("Debug message")
+        val content = File(tree.getLogPath()).readText()
+        assertTrue(content.contains("Debug message"))
+        assertTrue(content.contains("D/TestTag"))
+    }
+
+    @Test
+    fun `log writes INFO message with I priority char`() = withTree { tree ->
+        Timber.tag("Tag").i("Info message")
+        assertTrue(File(tree.getLogPath()).readText().contains("I/Tag"))
+    }
+
+    @Test
+    fun `log writes WARN message with W priority char`() = withTree { tree ->
+        Timber.tag("Tag").w("Warn message")
+        assertTrue(File(tree.getLogPath()).readText().contains("W/Tag"))
+    }
+
+    @Test
+    fun `log writes ERROR message with E priority char`() = withTree { tree ->
+        Timber.tag("Tag").e("Error message")
+        assertTrue(File(tree.getLogPath()).readText().contains("E/Tag"))
+    }
+
+    @Test
+    fun `log writes VERBOSE message with V priority char`() = withTree { tree ->
+        Timber.tag("Tag").v("Verbose message")
+        assertTrue(File(tree.getLogPath()).readText().contains("V/Tag"))
+    }
+
+    @Test
+    fun `log appends throwable stack trace when throwable is not null`() = withTree { tree ->
+        val exception = RuntimeException("test error")
+        Timber.tag("Tag").e(exception, "Error with throwable")
+        val content = File(tree.getLogPath()).readText()
+        assertTrue(content.contains("Error with throwable"))
+        assertTrue(content.contains("RuntimeException"))
     }
 }

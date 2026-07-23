@@ -144,6 +144,39 @@ class TarInspectorTest {
         inspector.close()
     }
 
+    @Test
+    fun `entries called twice returns the same result`() {
+        val file = createTar("test.tar", listOf("a.txt" to "hello", "b.txt" to "world"))
+        val inspector = TarInspector(file, ArchiveType.TAR)
+
+        val first = inspector.entries().toList()
+        val second = inspector.entries().toList()
+
+        assertEquals(first.map { it.path }, second.map { it.path })
+        inspector.close()
+    }
+
+    @Test
+    fun `entries preserves explicit lastModified timestamp`() {
+        val file = tempFolder.newFile("timestamped.tar")
+        val expectedMillis = 1_600_000_000_000L // TAR mtime resolution is seconds
+        TarArchiveOutputStream(FileOutputStream(file)).use { tar ->
+            val entry = TarArchiveEntry("a.txt")
+            val data = "hello".toByteArray()
+            entry.size = data.size.toLong()
+            entry.modTime = java.util.Date(expectedMillis)
+            tar.putArchiveEntry(entry)
+            tar.write(data)
+            tar.closeArchiveEntry()
+        }
+        val inspector = TarInspector(file, ArchiveType.TAR)
+
+        val entries = inspector.entries().toList()
+
+        assertEquals(expectedMillis, entries[0].lastModified)
+        inspector.close()
+    }
+
     // --- TAR_GZ ---
 
     @Test
@@ -234,6 +267,15 @@ class TarInspectorTest {
 
         assertFalse(inspector.isEncrypted())
         inspector.close()
+    }
+
+    @Test
+    fun `openTarStream throws for unsupported archive type`() {
+        val file = createTar("test.tar", listOf("a.txt" to "x"))
+        val inspector = TarInspector(file, ArchiveType.ZIP)
+        assertThrows(IllegalArgumentException::class.java) {
+            inspector.entries().toList()
+        }
     }
 
     // --- Helpers ---

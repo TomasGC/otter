@@ -30,6 +30,11 @@ class TarExtractorTest {
     }
 
     @Test
+    fun `supports TAR_BZ2 type`() {
+        assertTrue(tarExtractor.supports(ArchiveType.TAR_BZ2))
+    }
+
+    @Test
     fun `does not support ZIP type`() {
         assertFalse(tarExtractor.supports(ArchiveType.ZIP))
     }

@@ -2,6 +2,8 @@ package app.otter.util
 
 import android.content.Context
 import android.net.Uri
+import io.mockk.every
+import io.mockk.mockk
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -333,20 +335,18 @@ class ExtractionDestinationResolverTest {
 
     @Test
     fun `getPathFromDocumentHierarchy with external storage docId returns correct path`() {
-        // Given - external storage document URI format: primary:Download/test.zip
-        // We test the parsing logic directly
+        // external storage document URI format: primary:Download/test.zip
         val externalStorageUri = Uri.parse(
             "content://com.android.externalstorage.documents/document/primary%3ADownload%2Ftest.zip"
         )
+        val documentFile = androidx.documentfile.provider.DocumentFile.fromSingleUri(context, externalStorageUri)
 
-        // When - test resolving the path from hierarchy
-        // In Robolectric, DocumentsContract.isDocumentUri may return false,
-        // so this validates graceful null return
-        val result = resolver.getRealPathFromUri(externalStorageUri)
+        val result = resolver.getPathFromDocumentHierarchy(documentFile)
 
-        // Then - either a valid path or null (no crash)
-        // The method signature already returns String? for this case
-        assertTrue("Method must not throw", true) // Test is about no-crash guarantee
+        assertEquals(
+            "${android.os.Environment.getExternalStorageDirectory()}/Download/test.zip",
+            result,
+        )
     }
 
     @Test
@@ -361,5 +361,86 @@ class ExtractionDestinationResolverTest {
         assertNotNull(destination)
         assertEquals("my_archive", destination.name)
         assertTrue("Must be in Downloads", destination.absolutePath.contains("Download"))
+    }
+
+    // ========== Standard document URI same-folder resolution ==========
+    // DocumentFile.fromSingleUri() always has parentFile == null (SingleDocumentFile is
+    // constructed with a hardcoded null parent — verified against the documentfile-1.0.1
+    // bytecode), so resolveDestination()'s "method 2" (documentFile?.parentFile?.uri) could
+    // never resolve a parent, and every standard document:// archive silently fell back to
+    // Downloads instead of extracting alongside the source file as documented.
+
+    @Test
+    fun `resolveDestination with standard external storage document URI extracts to same folder as archive`() {
+        val docId = "primary:Download/sub/archive.zip"
+        val uri = Uri.parse(
+            "content://com.android.externalstorage.documents/document/${Uri.encode(docId)}"
+        )
+        val fileName = "archive.zip"
+
+        val destination = resolver.resolveDestination(uri, fileName)
+
+        val expectedParent = java.io.File(
+            android.os.Environment.getExternalStorageDirectory(), "Download/sub"
+        ).absolutePath
+        assertEquals("archive", destination.name)
+        assertEquals(
+            "Should extract to the archive's own folder, not fall back to Downloads",
+            expectedParent,
+            destination.parentFile?.absolutePath,
+        )
+    }
+
+    @Test
+    fun `resolveDestination with Samsung My Files document URI extracts to same folder as archive`() {
+        val docId = "primary:/storage/emulated/0/Download/sub/archive.zip"
+        val uri = Uri.parse(
+            "content://com.sec.android.app.myfiles.FileProvider/document/${Uri.encode(docId)}"
+        )
+        val fileName = "archive.zip"
+
+        val destination = resolver.resolveDestination(uri, fileName)
+
+        assertEquals("archive", destination.name)
+        assertEquals(
+            "Should extract to the archive's own folder, not fall back to Downloads",
+            java.io.File("/storage/emulated/0/Download/sub").absolutePath,
+            destination.parentFile?.absolutePath,
+        )
+    }
+
+    @Test
+    fun `resolveDestination falls back to Downloads when document URI docId is malformed`() {
+        // docId missing the "primary:" prefix required by resolveExternalStorageDocPath
+        val docId = "unexpectedformat"
+        val uri = Uri.parse(
+            "content://com.android.externalstorage.documents/document/${Uri.encode(docId)}"
+        )
+
+        val destination = resolver.resolveDestination(uri, "archive.zip")
+
+        assertTrue(
+            "Malformed docId must still fall back to Downloads, not crash",
+            destination.absolutePath.contains("Download"),
+        )
+    }
+
+    @Test
+    fun `getPathFromDocumentHierarchy with null documentFile returns null`() {
+        val result = resolver.getPathFromDocumentHierarchy(null)
+        org.junit.Assert.assertNull("Null documentFile must return null immediately", result)
+    }
+
+    @Test
+    fun `getPathFromMediaStore returns null when ContentResolver query throws`() {
+        val mockContext = mockk<android.content.Context>(relaxed = true)
+        val mockCr = mockk<android.content.ContentResolver>(relaxed = true)
+        every { mockContext.contentResolver } returns mockCr
+        every { mockCr.query(any(), any(), any(), any(), any()) } throws RuntimeException("query failed")
+
+        val testResolver = ExtractionDestinationResolver(mockContext)
+        val result = testResolver.getPathFromMediaStore(Uri.parse("content://media/external/file/1"))
+
+        org.junit.Assert.assertNull("Exception in MediaStore query must return null, not propagate", result)
     }
 }

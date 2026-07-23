@@ -644,6 +644,56 @@ class ZipExtractorTest {
         assertFalse("folder2/file3.txt should NOT exist", File(destination, "folder2/file3.txt").exists())
     }
 
+    // ===== Zip-bomb protection =====
+
+    @Test
+    fun `should fail extraction when entry exceeds max file size (zip bomb protection)`() = runTest {
+        val zipBytes = createTestZip(mapOf("bomb.txt" to "x".repeat(2000)))
+        val destination = tempFolder.newFolder("output")
+        val guardedExtractor = ZipExtractor(
+            realPathValidator,
+            tempFileManager,
+            sevenZipHelper,
+            sizeGuardFactory = { ArchiveSizeGuard(maxFileSizeBytes = 1000L, maxTotalSizeBytes = 10_000L) }
+        )
+
+        val result = guardedExtractor.extract(
+            inputStream = zipBytes.inputStream(),
+            destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
+            onProgress = {}
+        )
+
+        assertTrue("Should fail when entry exceeds per-file size limit", result is ExtractionResult.Failure)
+    }
+
+    @Test
+    fun `should fail extraction when cumulative entries exceed max total size (zip bomb protection)`() = runTest {
+        val zipBytes = createTestZip(mapOf(
+            "a.txt" to "x".repeat(600),
+            "b.txt" to "x".repeat(600),
+            "c.txt" to "x".repeat(600)
+        ))
+        val destination = tempFolder.newFolder("output")
+        val guardedExtractor = ZipExtractor(
+            realPathValidator,
+            tempFileManager,
+            sevenZipHelper,
+            sizeGuardFactory = { ArchiveSizeGuard(maxFileSizeBytes = 1000L, maxTotalSizeBytes = 1000L) }
+        )
+
+        val result = guardedExtractor.extract(
+            inputStream = zipBytes.inputStream(),
+            destinationPath = destination,
+            archiveType = ArchiveType.ZIP,
+            sourceFileName = "test.zip",
+            onProgress = {}
+        )
+
+        assertTrue("Should fail when cumulative size exceeds total limit", result is ExtractionResult.Failure)
+    }
+
     private fun createTestZip(files: Map<String, String>): ByteArray {
         val output = ByteArrayOutputStream()
         ZipOutputStream(output).use { zip ->
