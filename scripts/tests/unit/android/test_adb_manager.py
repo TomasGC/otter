@@ -185,37 +185,21 @@ class TestGetRunningEmulators:
         assert AdbManager(runner).get_running_emulators() == []
 
     def test_returns_emulator_id_when_present(self):
-        runner = (
-            FakeSubprocessRunner()
-            .add_run(returncode=0)
-            .add_run(returncode=0, stdout=ADB_DEVICES_EMULATOR)
-        )
+        runner = FakeSubprocessRunner().add_run(returncode=0).add_run(returncode=0, stdout=ADB_DEVICES_EMULATOR)
         result = AdbManager(runner).get_running_emulators()
         assert result == ["emulator-5554"]
 
     def test_returns_emulator_even_when_offline(self):
-        runner = (
-            FakeSubprocessRunner()
-            .add_run(returncode=0)
-            .add_run(returncode=0, stdout=ADB_DEVICES_EMULATOR_OFFLINE)
-        )
+        runner = FakeSubprocessRunner().add_run(returncode=0).add_run(returncode=0, stdout=ADB_DEVICES_EMULATOR_OFFLINE)
         result = AdbManager(runner).get_running_emulators()
         assert result == ["emulator-5554"]
 
     def test_excludes_physical_devices(self):
-        runner = (
-            FakeSubprocessRunner()
-            .add_run(returncode=0)
-            .add_run(returncode=0, stdout=ADB_DEVICES_ONE)
-        )
+        runner = FakeSubprocessRunner().add_run(returncode=0).add_run(returncode=0, stdout=ADB_DEVICES_ONE)
         assert AdbManager(runner).get_running_emulators() == []
 
     def test_returns_empty_when_no_devices(self):
-        runner = (
-            FakeSubprocessRunner()
-            .add_run(returncode=0)
-            .add_run(returncode=0, stdout=ADB_DEVICES_EMPTY)
-        )
+        runner = FakeSubprocessRunner().add_run(returncode=0).add_run(returncode=0, stdout=ADB_DEVICES_EMPTY)
         assert AdbManager(runner).get_running_emulators() == []
 
     def test_returns_empty_on_subprocess_error(self):
@@ -273,17 +257,16 @@ class TestListAvds:
 
     def test_uses_android_home_when_not_in_path(self):
         runner = FakeSubprocessRunner().add_run(returncode=0, stdout=AVD_LIST_ONE)
-        with patch("shutil.which", return_value=None), \
-             patch.dict("os.environ", {"ANDROID_HOME": "/fake/sdk"}, clear=True), \
-             patch("pathlib.Path.exists", return_value=True):
+        with patch("shutil.which", return_value=None), patch.dict(
+            "os.environ", {"ANDROID_HOME": "/fake/sdk"}, clear=True
+        ), patch("pathlib.Path.exists", return_value=True):
             result = AdbManager(runner).list_avds()
         assert result == ["Pixel_6_API_34"]
         assert runner.called_with("-list-avds")
 
     def test_returns_empty_when_no_binary_anywhere(self):
         runner = FakeSubprocessRunner()
-        with patch("shutil.which", return_value=None), \
-             patch.dict("os.environ", {}, clear=True):
+        with patch("shutil.which", return_value=None), patch.dict("os.environ", {}, clear=True):
             result = AdbManager(runner).list_avds()
         assert result == []
         assert runner.call_count == 0
@@ -299,10 +282,10 @@ class TestWaitForEmulator:
         # adb -e wait-for-device → adb version (is_available) → adb devices → shell boot loop
         runner = (
             FakeSubprocessRunner()
-            .add_run(returncode=0)                                # adb -e wait-for-device
-            .add_run(returncode=0)                                # adb version (is_available)
+            .add_run(returncode=0)  # adb -e wait-for-device
+            .add_run(returncode=0)  # adb version (is_available)
             .add_run(returncode=0, stdout=ADB_DEVICES_EMULATOR)  # adb devices
-            .add_run(returncode=0)                                # shell boot loop exits cleanly
+            .add_run(returncode=0)  # shell boot loop exits cleanly
         )
         result = AdbManager(runner).wait_for_emulator(timeout=30)
         assert result == "emulator-5554"
@@ -311,9 +294,9 @@ class TestWaitForEmulator:
         # wait-for-device succeeds but adb devices shows nothing (race: offline emulator evicted)
         runner = (
             FakeSubprocessRunner()
-            .add_run(returncode=0)                               # adb -e wait-for-device
-            .add_run(returncode=0)                               # adb version
-            .add_run(returncode=0, stdout=ADB_DEVICES_EMPTY)    # adb devices → empty
+            .add_run(returncode=0)  # adb -e wait-for-device
+            .add_run(returncode=0)  # adb version
+            .add_run(returncode=0, stdout=ADB_DEVICES_EMPTY)  # adb devices → empty
         )
         result = AdbManager(runner).wait_for_emulator(timeout=30)
         assert result is None
@@ -322,16 +305,17 @@ class TestWaitForEmulator:
         # Device connected but sys.boot_completed never reaches 1 → shell exits non-zero
         runner = (
             FakeSubprocessRunner()
-            .add_run(returncode=0)                                # adb -e wait-for-device
-            .add_run(returncode=0)                                # adb version
+            .add_run(returncode=0)  # adb -e wait-for-device
+            .add_run(returncode=0)  # adb version
             .add_run(returncode=0, stdout=ADB_DEVICES_EMULATOR)  # adb devices
-            .add_run(returncode=1)                                # shell boot loop fails/killed
+            .add_run(returncode=1)  # shell boot loop fails/killed
         )
         result = AdbManager(runner).wait_for_emulator(timeout=30)
         assert result is None
 
     def test_returns_none_on_timeout_expired(self):
         import subprocess as _sp
+
         runner = FakeSubprocessRunner()
 
         def raise_timeout(cmd, **kw):
@@ -387,38 +371,34 @@ class TestWaitForEmulator:
 class TestStartEmulator:
     def test_returns_true_on_success(self):
         runner = FakeSubprocessRunner()
-        with patch("shutil.which", return_value="emulator"), \
-             patch("subprocess.Popen"):
+        with patch("shutil.which", return_value="emulator"), patch("subprocess.Popen"):
             result = AdbManager(runner).start_emulator("Pixel_6_API_34")
         assert result is True
 
     def test_returns_false_when_no_binary(self):
         runner = FakeSubprocessRunner()
-        with patch("shutil.which", return_value=None), \
-             patch.dict("os.environ", {}, clear=True):
+        with patch("shutil.which", return_value=None), patch.dict("os.environ", {}, clear=True):
             result = AdbManager(runner).start_emulator("Pixel_6_API_34")
         assert result is False
 
     def test_returns_false_on_file_not_found(self):
         runner = FakeSubprocessRunner()
-        with patch("shutil.which", return_value="emulator"), \
-             patch("subprocess.Popen", side_effect=FileNotFoundError()):
+        with patch("shutil.which", return_value="emulator"), patch("subprocess.Popen", side_effect=FileNotFoundError()):
             result = AdbManager(runner).start_emulator("Pixel_6_API_34")
         assert result is False
 
     def test_calls_popen_with_correct_avd(self):
         runner = FakeSubprocessRunner()
-        with patch("shutil.which", return_value="emulator"), \
-             patch("subprocess.Popen") as mock_popen:
+        with patch("shutil.which", return_value="emulator"), patch("subprocess.Popen") as mock_popen:
             AdbManager(runner).start_emulator("MyAVD")
         args = mock_popen.call_args[0][0]
         assert args == ["emulator", "-avd", "MyAVD"]
 
     def test_calls_popen_with_devnull_streams(self):
         import subprocess as _sp
+
         runner = FakeSubprocessRunner()
-        with patch("shutil.which", return_value="emulator"), \
-             patch("subprocess.Popen") as mock_popen:
+        with patch("shutil.which", return_value="emulator"), patch("subprocess.Popen") as mock_popen:
             AdbManager(runner).start_emulator("TestAVD")
         kwargs = mock_popen.call_args[1]
         assert kwargs.get("stdout") == _sp.DEVNULL
@@ -427,7 +407,6 @@ class TestStartEmulator:
     def test_does_not_call_runner(self):
         # Popen is fire-and-forget; injected runner must not be used.
         runner = FakeSubprocessRunner()
-        with patch("shutil.which", return_value="emulator"), \
-             patch("subprocess.Popen"):
+        with patch("shutil.which", return_value="emulator"), patch("subprocess.Popen"):
             AdbManager(runner).start_emulator("TestAVD")
         assert runner.call_count == 0

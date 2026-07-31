@@ -65,11 +65,7 @@ class AdbManager:
                 timeout=TIMEOUT_ADB_DEVICES,
                 check=True,
             )
-            return [
-                line.split("\t")[0].strip()
-                for line in result.stdout.split("\n")
-                if line.startswith("emulator-")
-            ]
+            return [line.split("\t")[0].strip() for line in result.stdout.split("\n") if line.startswith("emulator-")]
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
             return []
 
@@ -77,6 +73,7 @@ class AdbManager:
         import os
         import shutil
         import sys
+
         if shutil.which("emulator"):
             return "emulator"
         android_home = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
@@ -106,6 +103,7 @@ class AdbManager:
 
     def start_emulator(self, avd_name: str) -> bool:
         import subprocess as _sp
+
         binary = self._emulator_binary()
         if not binary:
             print("emulator binary not found — add Android SDK emulator to PATH or set ANDROID_HOME")
@@ -123,6 +121,7 @@ class AdbManager:
 
     def wait_for_emulator(self, timeout: int = 180) -> str | None:
         import time
+
         print(f"Waiting for emulator to be ready (up to {timeout}s)...")
         deadline = time.time() + timeout
         try:
@@ -138,8 +137,13 @@ class AdbManager:
             # Block until system fully booted — getprop -w suspends until property changes, no polling
             remaining = max(1, int(deadline - time.time()))
             result = self._runner.run(
-                ["adb", "-s", emu, "shell",
-                 "while [ \"$(getprop sys.boot_completed)\" != \"1\" ]; do getprop -w sys.boot_completed; done"],
+                [
+                    "adb",
+                    "-s",
+                    emu,
+                    "shell",
+                    'while [ "$(getprop sys.boot_completed)" != "1" ]; do getprop -w sys.boot_completed; done',
+                ],
                 timeout=remaining,
                 check=False,
             )
