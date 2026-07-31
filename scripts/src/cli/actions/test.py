@@ -79,16 +79,17 @@ class TestAction:
         return self._gradle.run_task("testDebugUnitTest", extra_args=["-DtestType=integration-real"])
 
     def send_archives(self, device: str) -> int:
+        from cli.send_to_phone import resolve_archive_files
+
         settings = self._get_settings()
         device_path = settings["test_archives"]["device_path"]
-        host_path = self._project_root / settings["test_archives"]["host_path"]
+        archive_files = resolve_archive_files(self._project_root, settings)
         self._runner.run(
             ["adb", "-s", device, "shell", f"mkdir -p {device_path}"],
             capture_output=True,
         )
         sent = 0
-        for filename in settings["test_archives"]["files"]:
-            src = host_path / filename
+        for src in archive_files:
             if src.exists():
                 result = self._runner.run(
                     ["adb", "-s", device, "push", str(src), device_path],
@@ -213,14 +214,29 @@ class TestAction:
             devices = self._adb.get_connected()
             if not devices:
                 device = self._get_connector().auto_connect()
+                if device:
+                    devices = self._adb.get_connected()
+            if not devices:
+                device = self._ensure_emulator()
                 if not device:
                     print("No device connected for instrumented tests")
                     return 1
-                devices = self._adb.get_connected()
-            if not devices:
-                print("Device connected but not visible to adb")
-                return 1
+                devices = [device]
             if not self.run_instrumented(devices[0]):
                 success = False
 
         return 0 if success else 1
+
+    def _ensure_emulator(self) -> str | None:
+        emulators = self._adb.get_running_emulators()
+        if emulators:
+            print(f"Found running emulator: {emulators[0]}, waiting for ready state...")
+            return self._adb.wait_for_emulator()
+        avds = self._adb.list_avds()
+        if not avds:
+            print("No AVD found — create one in Android Studio")
+            return None
+        print(f"Starting emulator: {avds[0]}")
+        if not self._adb.start_emulator(avds[0]):
+            return None
+        return self._adb.wait_for_emulator()
