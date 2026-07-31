@@ -124,6 +124,16 @@ class FilePusher:
         return success, fail
 
 
+def resolve_archive_files(project_root: Path, test_settings: dict) -> list[Path]:
+    """Return all archive files to push, expanding glob patterns from test_settings."""
+    ta = test_settings.get("test_archives", {})
+    host_dir = project_root / ta.get("host_path", "archives")
+    files: list[Path] = [host_dir / f for f in ta.get("files", [])]
+    for pattern in ta.get("glob_files", []):
+        files.extend(sorted(host_dir.glob(pattern)))
+    return files
+
+
 def main() -> None:  # pragma: no cover
     import argparse
     import io
@@ -145,9 +155,8 @@ def main() -> None:  # pragma: no cover
 
     project_root = get_project_root()
     if not args.files:
-        host_path = test_settings["test_archives"]["host_path"]
-        archive_files = test_settings["test_archives"]["files"]
-        args.files = [str(project_root / host_path / f) for f in archive_files]
+        resolved = resolve_archive_files(project_root, test_settings)
+        args.files = [str(f) for f in resolved]
         print(f"Sending {len(args.files)} test archives from configuration...")
 
     pusher = FilePusher(RealSubprocessRunner())

@@ -65,3 +65,53 @@ class TestGetDevicesIntegration:
         runner = FakeSubprocessRunner().add_run(returncode=0).add_run(returncode=0, stdout=self.ADB_REAL_OUTPUT)
         devices = AdbManager(runner).get_connected()
         assert not any("daemon" in d for d in devices)
+
+
+class TestWaitForEmulatorIntegration:
+    """wait_for_emulator two-phase sequence with FakeSubprocessRunner."""
+
+    _ADB_EMULATOR = "List of devices attached\nemulator-5554\tdevice\n"
+    _ADB_EMPTY = "List of devices attached\n"
+
+    def test_returns_emulator_id_on_clean_boot(self):
+        runner = (
+            FakeSubprocessRunner()
+            .add_run(returncode=0)  # adb -e wait-for-device
+            .add_run(returncode=0)  # adb version (is_available)
+            .add_run(returncode=0, stdout=self._ADB_EMULATOR)  # adb devices
+            .add_run(returncode=0)  # shell boot loop
+        )
+        assert AdbManager(runner).wait_for_emulator(timeout=30) == "emulator-5554"
+
+    def test_phase1_called_with_e_flag(self):
+        runner = (
+            FakeSubprocessRunner()
+            .add_run(returncode=0)
+            .add_run(returncode=0)
+            .add_run(returncode=0, stdout=self._ADB_EMULATOR)
+            .add_run(returncode=0)
+        )
+        AdbManager(runner).wait_for_emulator(timeout=30)
+        assert runner.calls[0] == ["adb", "-e", "wait-for-device"]
+
+    def test_phase2_targets_emulator_and_uses_getprop_w(self):
+        runner = (
+            FakeSubprocessRunner()
+            .add_run(returncode=0)
+            .add_run(returncode=0)
+            .add_run(returncode=0, stdout=self._ADB_EMULATOR)
+            .add_run(returncode=0)
+        )
+        AdbManager(runner).wait_for_emulator(timeout=30)
+        boot_cmd = runner.calls[3]
+        assert boot_cmd[:3] == ["adb", "-s", "emulator-5554"]
+        assert "getprop -w" in " ".join(boot_cmd)
+
+    def test_returns_none_when_no_emulator_after_phase1(self):
+        runner = (
+            FakeSubprocessRunner()
+            .add_run(returncode=0)  # wait-for-device
+            .add_run(returncode=0)  # is_available
+            .add_run(returncode=0, stdout=self._ADB_EMPTY)  # devices → empty
+        )
+        assert AdbManager(runner).wait_for_emulator(timeout=30) is None

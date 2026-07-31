@@ -1,6 +1,7 @@
 package app.otter.data.extractor
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.otter.data.extractor.ExtractionOptions
 import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
@@ -57,7 +58,7 @@ class ZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test.zip",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -91,7 +92,7 @@ class ZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test-multi.zip",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -124,7 +125,7 @@ class ZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test-progress.zip",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = { progress ->
                 if (progress is ExtractionProgress.Extracting) {
                     progressValues.add((progress.progress * 100).toInt())
@@ -150,7 +151,7 @@ class ZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test-deep.zip",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -181,7 +182,7 @@ class ZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test-corrupted.zip",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -201,7 +202,7 @@ class ZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test-malicious.zip",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -227,7 +228,7 @@ class ZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test-special.zip",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 

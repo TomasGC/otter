@@ -29,6 +29,8 @@ def make_action(tmp_path, settings=None):
     connector = MagicMock()
     gradle.run_task.return_value = True
     adb.get_connected.return_value = ["192.168.1.1:5555"]
+    adb.get_running_emulators.return_value = []
+    adb.list_avds.return_value = []
     connector.auto_connect.return_value = "192.168.1.1:5555"
     action = AndroidTestAction(
         runner,
@@ -168,6 +170,28 @@ class TestSendArchives:
 
         sent = action.send_archives("192.168.1.1:5555")
         assert sent == 0
+
+    def test_sends_glob_files_when_specified(self, tmp_path):
+        archives_dir = tmp_path / "archives"
+        archives_dir.mkdir()
+        (archives_dir / "split.7z.001").write_bytes(b"7Z")
+        (archives_dir / "split.7z.002").write_bytes(b"7Z")
+        settings = {
+            **SETTINGS,
+            "test_archives": {
+                **SETTINGS["test_archives"],
+                "host_path": str(archives_dir),
+                "files": [],
+                "glob_files": ["split.7z.*"],
+            },
+        }
+        action, _, _, runner, _ = make_action(tmp_path, settings)
+        runner.add_run(returncode=0)  # mkdir
+        runner.add_run(returncode=0)  # push 001
+        runner.add_run(returncode=0)  # push 002
+
+        sent = action.send_archives("192.168.1.1:5555")
+        assert sent == 2
 
 
 class TestRunInstrumented:
@@ -388,3 +412,74 @@ class TestGrantManageExternalStorage:
         adb.install_apk.return_value = True
         runner.add_run(returncode=1)  # appops set fails
         assert action._grant_manage_external_storage("emulator-5554") is False
+
+
+class TestEnsureEmulator:
+    def test_returns_running_emulator_when_ready(self, tmp_path):
+        action, _, adb, _, _ = make_action(tmp_path)
+        adb.get_running_emulators.return_value = ["emulator-5554"]
+        adb.wait_for_emulator.return_value = "emulator-5554"
+        result = action._ensure_emulator()
+        assert result == "emulator-5554"
+        adb.wait_for_emulator.assert_called_once_with()
+
+    def test_returns_none_when_running_emulator_not_ready_in_time(self, tmp_path):
+        action, _, adb, _, _ = make_action(tmp_path)
+        adb.get_running_emulators.return_value = ["emulator-5554"]
+        adb.wait_for_emulator.return_value = None
+        assert action._ensure_emulator() is None
+
+    def test_starts_avd_when_no_running_emulator(self, tmp_path):
+        action, _, adb, _, _ = make_action(tmp_path)
+        adb.get_running_emulators.return_value = []
+        adb.list_avds.return_value = ["Pixel_6_API_34"]
+        adb.start_emulator.return_value = True
+        adb.wait_for_emulator.return_value = "emulator-5554"
+        result = action._ensure_emulator()
+        adb.start_emulator.assert_called_once_with("Pixel_6_API_34")
+        assert result == "emulator-5554"
+
+    def test_returns_none_when_no_avds(self, tmp_path):
+        action, _, adb, _, _ = make_action(tmp_path)
+        adb.get_running_emulators.return_value = []
+        adb.list_avds.return_value = []
+        assert action._ensure_emulator() is None
+        adb.start_emulator.assert_not_called()
+
+    def test_returns_none_when_start_emulator_fails(self, tmp_path):
+        action, _, adb, _, _ = make_action(tmp_path)
+        adb.get_running_emulators.return_value = []
+        adb.list_avds.return_value = ["Pixel_6_API_34"]
+        adb.start_emulator.return_value = False
+        assert action._ensure_emulator() is None
+        adb.wait_for_emulator.assert_not_called()
+
+    def test_run_uses_emulator_when_no_physical_device(self, tmp_path):
+        action, gradle, adb, runner, connector = make_action(tmp_path)
+        adb.get_connected.return_value = []
+        connector.auto_connect.return_value = None
+        adb.get_running_emulators.return_value = ["emulator-5554"]
+        adb.wait_for_emulator.return_value = "emulator-5554"
+        action._grant_manage_external_storage = MagicMock(return_value=True)
+        runner.add_run(returncode=0)
+        rc = action.run(suites=["instrumented"])
+        assert rc == 0
+        gradle.run_task.assert_called()
+
+    def test_starts_first_avd_when_multiple_avds(self, tmp_path):
+        action, _, adb, _, _ = make_action(tmp_path)
+        adb.get_running_emulators.return_value = []
+        adb.list_avds.return_value = ["Pixel_6_API_34", "Pixel_8_API_35"]
+        adb.start_emulator.return_value = True
+        adb.wait_for_emulator.return_value = "emulator-5554"
+        action._ensure_emulator()
+        adb.start_emulator.assert_called_once_with("Pixel_6_API_34")
+
+    def test_run_returns_1_when_no_device_at_all(self, tmp_path):
+        action, _, adb, _, connector = make_action(tmp_path)
+        adb.get_connected.return_value = []
+        connector.auto_connect.return_value = None
+        adb.get_running_emulators.return_value = []
+        adb.list_avds.return_value = []
+        rc = action.run(suites=["instrumented"])
+        assert rc == 1

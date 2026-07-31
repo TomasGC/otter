@@ -1,7 +1,7 @@
 # Project Architecture - Otter (Android Archive Extractor)
 
 **Purpose**: System architecture and design decisions for Otter (ZIP + RAR + 7z + TAR + RPA extraction with background service)
-**Last Updated**: 2026-06-29
+**Last Updated**: 2026-07-31
 
 ---
 
@@ -18,10 +18,10 @@
 | **Async** | Kotlin Coroutines | Asynchronous programming |
 | **Reactive** | Flow | Reactive data streams |
 | **Build** | Gradle (KTS) + Python scripts (manage.py) | Kotlin DSL + cross-platform build/test/ADB automation via OOP DI scripts |
-| **Testing** | JUnit + MockK + Coroutines Test | 698 tests (495 unit + 111 integ-mock + 2 integ-real + 90 instrumented) |
+| **Testing** | JUnit + MockK + Coroutines Test | 698 tests (495 unit + 111 integ-mock + 2 integ-real + 90 instrumented) + 628 Python script tests |
 | **ZIP Extraction** | java.util.zip + IZipFileReader | Native ZIP (testable via interface) |
-| **RAR Extraction** | 7-Zip-JBinding | RAR4/RAR5 support (.so libs) |
-| **7z Extraction** | 7-Zip-JBinding | 7-Zip format support (.so libs) |
+| **RAR Extraction** | 7-Zip-JBinding + MultiVolumeCallback | RAR4/RAR5 + split-archive (.part1.rar) support |
+| **7z Extraction** | 7-Zip-JBinding + MultiVolumeCallback | 7-Zip format + split-archive (.7z.001) support |
 | **TAR/GZIP Extraction** | Apache Commons Compress | TAR, TAR.GZ, TGZ, GZIP support |
 | **RPA Extraction** | Custom (RpaPickleParser) | Ren'Py Archive (binary protocol 2) |
 | **Archive Inspection** | ZipInspector, RpaInspector, TarInspector, GzipInspector, SevenZipBasedInspector | Lazy streaming entry enumeration for all supported formats |
@@ -558,7 +558,7 @@ GitHub Actions with language-prefixed workflows (GitHub does not support subdire
 3. Both require `PYTHONPATH=scripts/src` for cross-module imports
 
 **Coverage**: ≥80% enforced via Kover
-**Test Count**: 698 Kotlin + ~377 Python script tests
+**Test Count**: 698 Kotlin + 628 Python script tests
 **Success Rate**: 95-100% (Gradle Managed Devices)
 
 ---

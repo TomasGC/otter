@@ -38,7 +38,7 @@ class RpaExtractorRealIntegrationTest {
             corruptFile.writeText("This is not an RPA file at all. Just plain text.")
 
             val result = corruptFile.inputStream().use { input ->
-                extractor.extract(input, outputDir, ArchiveType.RPA, corruptFile.name, null) {}
+                extractor.extract(input, outputDir, ArchiveType.RPA, corruptFile.name) {}
             }
 
             assertTrue(
@@ -57,7 +57,7 @@ class RpaExtractorRealIntegrationTest {
             // emptyFile is 0 bytes by default
 
             val result = emptyFile.inputStream().use { input ->
-                extractor.extract(input, outputDir, ArchiveType.RPA, emptyFile.name, null) {}
+                extractor.extract(input, outputDir, ArchiveType.RPA, emptyFile.name) {}
             }
 
             assertTrue(

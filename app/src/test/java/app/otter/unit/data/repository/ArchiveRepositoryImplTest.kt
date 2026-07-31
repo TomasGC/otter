@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import app.otter.data.extractor.ArchiveExtractor
+import app.otter.data.extractor.ExtractionOptions
 import app.otter.data.util.ResourcePathConverter
 import app.otter.domain.model.ArchiveFile
 import app.otter.domain.model.ArchiveType
@@ -218,7 +219,7 @@ class ArchiveRepositoryImplTest {
         coEvery {
             zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } answers {
-            capturedSelectedItems = arg(4)
+            capturedSelectedItems = (arg(4) as ExtractionOptions).selectedItems
             ExtractionResult.Success("/downloads/test", 2)
         }
 
@@ -238,7 +239,7 @@ class ArchiveRepositoryImplTest {
         coEvery {
             zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } answers {
-            capturedSelectedItems = arg(4)
+            capturedSelectedItems = (arg(4) as ExtractionOptions).selectedItems
             ExtractionResult.Success("/downloads/test", 5)
         }
 
@@ -258,7 +259,7 @@ class ArchiveRepositoryImplTest {
         coEvery {
             zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } answers {
-            capturedSelectedItems = arg(4)
+            capturedSelectedItems = (arg(4) as ExtractionOptions).selectedItems
             ExtractionResult.Success("/downloads/test", 0)
         }
 
@@ -266,6 +267,54 @@ class ArchiveRepositoryImplTest {
 
         assertNotNull("Empty list must be passed (not null)", capturedSelectedItems)
         assertTrue("Empty list must be empty", capturedSelectedItems!!.isEmpty())
+    }
+
+    // ========== sourceFile propagation ==========
+
+    @Test
+    fun `should pass non-null sourceFile when archive uri resolves to existing file`() = runTest {
+        val realFile = temporaryFolder.newFile("real_archive.zip")
+        val archive = ArchiveFile(
+            path = ResourcePath.FileSystem(Uri.fromFile(realFile).toString()),
+            name = realFile.name,
+            sizeBytes = realFile.length(),
+            mimeType = "application/zip",
+            type = ArchiveType.ZIP
+        )
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
+        every { contentResolver.openInputStream(any()) } returns ByteArrayInputStream(byteArrayOf())
+
+        var capturedSourceFile: File? = null
+        coEvery {
+            zipExtractor.extract(any(), any(), any(), any(), any(), any())
+        } answers {
+            capturedSourceFile = (arg(4) as ExtractionOptions).sourceFile
+            ExtractionResult.Success("/downloads/test", 1)
+        }
+
+        repository.extractArchive(archive, destinationPath).toList()
+
+        assertNotNull("sourceFile must be non-null when archive file exists on disk", capturedSourceFile)
+        assertEquals(realFile.absolutePath, capturedSourceFile!!.absolutePath)
+    }
+
+    @Test
+    fun `should pass null sourceFile when archive uri path does not exist on disk`() = runTest {
+        val archive = createTestArchive() // file:///test.zip — does not exist on Robolectric FS
+        val destinationPath = ResourcePath.FileSystem("file:///downloads")
+        every { contentResolver.openInputStream(any()) } returns ByteArrayInputStream(byteArrayOf())
+
+        var capturedSourceFile: File? = File("sentinel")
+        coEvery {
+            zipExtractor.extract(any(), any(), any(), any(), any(), any())
+        } answers {
+            capturedSourceFile = (arg(4) as ExtractionOptions).sourceFile
+            ExtractionResult.Success("/downloads/test", 1)
+        }
+
+        repository.extractArchive(archive, destinationPath).toList()
+
+        assertNull("sourceFile must be null when file does not exist on disk", capturedSourceFile)
     }
 
     // ========== null destination path ==========

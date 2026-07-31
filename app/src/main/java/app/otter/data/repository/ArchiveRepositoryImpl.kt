@@ -3,6 +3,7 @@ package app.otter.data.repository
 import android.content.Context
 import android.net.Uri
 import app.otter.data.extractor.ArchiveExtractor
+import app.otter.data.extractor.ExtractionOptions
 import app.otter.data.util.ResourcePathConverter
 import app.otter.domain.model.ArchiveFile
 import app.otter.domain.model.ExtractionProgress
@@ -53,9 +54,16 @@ class ArchiveRepositoryImpl @Inject constructor(
             // Extract source filename for extractors that need it (e.g., GZIP)
             val sourceFileName = getFileNameFromUri(context, archiveUri)
 
+            // Resolve URI to a real File path for volume-aware formats (RAR, 7z).
+            // Returns null for content:// URIs that cannot be resolved to the filesystem
+            // (e.g., Samsung My Files shares) — those fall back to single-volume extraction.
+            val sourceFile = ResourcePathConverter.toFile(archiveUri)?.takeIf { it.exists() }
+                ?: archiveUri.path?.let { java.io.File(it) }?.takeIf { it.exists() }
+
             // Emit progress events in real-time
+            val options = ExtractionOptions(sourceFile, selectedItems)
             val result = context.contentResolver.openInputStream(archiveUri)?.use { inputStream ->
-                extractor.extract(inputStream, destinationFile, archive.type, sourceFileName, selectedItems) { progress ->
+                extractor.extract(inputStream, destinationFile, archive.type, sourceFileName, options) { progress ->
                     trySend(progress)
                 }
             } ?: run {

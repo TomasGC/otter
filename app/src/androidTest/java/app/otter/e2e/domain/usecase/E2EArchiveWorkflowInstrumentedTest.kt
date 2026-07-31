@@ -2,6 +2,7 @@ package app.otter.domain.usecase.e2e
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.otter.data.extractor.ArchiveExtractor
+import app.otter.data.extractor.ExtractionOptions
 import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.ExtractionResult
@@ -188,7 +189,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
             destinationPath = outputDir,
             archiveType = archiveType,
             sourceFileName = corruptedFile.name,
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -219,7 +220,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
             destinationPath = outputDir,
             archiveType = archiveType,
             sourceFileName = maliciousFile.name,
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -253,7 +254,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
             destinationPath = outputDir,
             archiveType = archiveType,
             sourceFileName = emptyFile.name,
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -278,7 +279,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
                 destinationPath = outputDir,
                 archiveType = archiveType,
                 sourceFileName = File(testArchivePath).name,
-                selectedItems = null,
+                options = ExtractionOptions(),
                 onProgress = { _ ->
                     progressCallCount++
                     // Simulate cancellation after first progress callback
@@ -567,7 +568,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
             destinationPath = outputDir,
             archiveType = archiveType,
             sourceFileName = archiveFile.name,
-            selectedItems = sampleEntries,
+            options = ExtractionOptions(selectedItems = sampleEntries),
             onProgress = {}
         )
         val duration = System.currentTimeMillis() - startTime
@@ -599,7 +600,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
             destinationPath = outputDir,
             archiveType = archiveType,
             sourceFileName = archiveFile.name,
-            selectedItems = listOf(firstEntry),
+            options = ExtractionOptions(selectedItems = listOf(firstEntry)),
             onProgress = {}
         )
         val duration = System.currentTimeMillis() - startTime
@@ -629,7 +630,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
             destinationPath = outputDir,
             archiveType = archiveType,
             sourceFileName = deepNestedFile.name,
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
         val duration = System.currentTimeMillis() - startTime
@@ -672,7 +673,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
             destinationPath = outputDir,
             archiveType = archiveType,
             sourceFileName = longNameFile.name,
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
         val duration = System.currentTimeMillis() - startTime
@@ -710,7 +711,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
                 destinationPath = outputDir,
                 archiveType = archiveType,
                 sourceFileName = File(testArchivePath).name,
-                selectedItems = null,
+                options = ExtractionOptions(),
                 onProgress = {}
             )
         }
@@ -741,7 +742,7 @@ abstract class E2EArchiveWorkflowInstrumentedTest : BaseInstrumentedTest() {
                     destinationPath = outputDir,
                     archiveType = archiveType,
                     sourceFileName = "test_$index${archiveExtension}",
-                    selectedItems = null,
+                    options = ExtractionOptions(),
                     onProgress = {}
                 )
                 assertTrue("Extraction $index should succeed", result is ExtractionResult.Success)

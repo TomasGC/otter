@@ -1,6 +1,7 @@
 package app.otter.data.extractor
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.otter.data.extractor.ExtractionOptions
 import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionResult
 import app.otter.domain.usecase.helpers.ArchiveNavigationTestHelper
@@ -8,6 +9,7 @@ import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -51,7 +53,7 @@ class SevenZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.SEVEN_ZIP,
             sourceFileName = "test_archive.7z",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -76,7 +78,7 @@ class SevenZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.SEVEN_ZIP,
             sourceFileName = "corrupted_test_archive.7z",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -95,7 +97,7 @@ class SevenZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.SEVEN_ZIP,
             sourceFileName = "test_archive.7z",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -116,7 +118,7 @@ class SevenZipExtractorInstrumentedTest {
             destinationPath = probeDir,
             archiveType = ArchiveType.SEVEN_ZIP,
             sourceFileName = "test_archive.7z",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -134,7 +136,7 @@ class SevenZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.SEVEN_ZIP,
             sourceFileName = "test_archive.7z",
-            selectedItems = selectedPaths,
+            options = ExtractionOptions(selectedItems = selectedPaths),
             onProgress = {}
         )
 
@@ -155,7 +157,7 @@ class SevenZipExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.SEVEN_ZIP,
             sourceFileName = "test_archive.7z",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -164,5 +166,25 @@ class SevenZipExtractorInstrumentedTest {
             ?.toList() ?: emptyList()
         assertTrue("No files should escape destination", escapedFiles.isEmpty())
         assertTrue("Extraction of valid 7z must not fail", result is ExtractionResult.Success)
+    }
+
+    @Test
+    fun extractMultiVolume_realSevenZipOnDevice() = runTest {
+        val firstVolume = ArchiveNavigationTestHelper.getSplitArchiveFirstVolumeOrNull(
+            ArchiveNavigationTestHelper.SPLIT_7Z_FIRST_VOLUME
+        )
+        assumeTrue("split_7z multi-volume archive not on device", firstVolume != null)
+
+        val result = extractor.extract(
+            inputStream = firstVolume!!.inputStream(),
+            destinationPath = tempFolder.newFolder("output-7z-multi"),
+            archiveType = ArchiveType.SEVEN_ZIP,
+            sourceFileName = firstVolume.name,
+            options = ExtractionOptions(sourceFile = firstVolume),
+            onProgress = {}
+        )
+
+        assertTrue("7z multi-volume extraction must succeed", result is ExtractionResult.Success)
+        assertTrue("Must extract at least 1 file", (result as ExtractionResult.Success).extractedFilesCount > 0)
     }
 }

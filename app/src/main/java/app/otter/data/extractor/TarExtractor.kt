@@ -41,7 +41,7 @@ class TarExtractor @Inject constructor(
         destinationPath: File,
         archiveType: ArchiveType,
         sourceFileName: String,
-        selectedItems: List<String>?,
+        options: ExtractionOptions,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult = withContext(Dispatchers.IO) {
         var extractedCount = 0
@@ -51,7 +51,7 @@ class TarExtractor @Inject constructor(
         // Count total entries first (requires re-opening stream for actual extraction)
         // For now, we'll use -1 as totalCount since we can't count without consuming the stream
         val totalCount = -1
-        val selectedPaths = selectedItems?.toSet()
+        val selectedPaths = options.selectedItems?.toSet()
 
         // Progress throttler from base class
         val throttler = ProgressThrottler()

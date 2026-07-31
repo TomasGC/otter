@@ -3,6 +3,7 @@ package app.otter.data.extractor
 import net.sf.sevenzipjbinding.IInArchive
 import net.sf.sevenzipjbinding.SevenZip
 import net.sf.sevenzipjbinding.impl.RandomAccessFileInStream
+import net.sf.sevenzipjbinding.impl.VolumedArchiveInStream
 import timber.log.Timber
 import java.io.File
 import java.io.RandomAccessFile
@@ -33,6 +34,7 @@ class ArchiveLibraryManager @Inject constructor() {
     companion object {
         private const val TAG = "ArchiveLibraryManager"
         private const val ERROR_MESSAGE_UNSUPPORTED_FORMAT = "unsupported format or corrupted"
+        private const val ERROR_MESSAGE_MULTI_VOLUME_FAILED = "failed to open multi-volume archive"
     }
 
     /**
@@ -59,6 +61,36 @@ class ArchiveLibraryManager @Inject constructor() {
                 ?: error("Failed to open archive: ${archiveFile.name} ($ERROR_MESSAGE_UNSUPPORTED_FORMAT)")
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Failed to open archive: ${archiveFile.name}")
+            throw e
+        }
+    }
+
+    /**
+     * Opens a potentially multi-volume archive using [VolumedArchiveInStream].
+     *
+     * Works for both single-volume and multi-volume archives:
+     * - Single-volume: the callback is called once for the first file, then returns null.
+     * - Multi-volume (RAR old/new-style, 7z .001/.002/...): the library requests each
+     *   successive volume by name through the callback.
+     *
+     * Returns the opened [IInArchive] and the [MultiVolumeCallback] that must be closed
+     * after extraction to release the underlying [RandomAccessFile] handles.
+     *
+     * @param baseFile The first (or only) volume file.
+     */
+    @Synchronized
+    internal fun openVolumedArchive(baseFile: File): Pair<IInArchive, MultiVolumeCallback> {
+        val callback = MultiVolumeCallback(baseFile.parentFile
+            ?: error("Archive file has no parent directory: ${baseFile.absolutePath}"))
+        return try {
+            val volumedStream = VolumedArchiveInStream(baseFile.name, callback)
+            val inArchive = SevenZip.openInArchive(null, volumedStream)
+                ?: error("Failed to open archive: ${baseFile.name} ($ERROR_MESSAGE_MULTI_VOLUME_FAILED)")
+            Timber.tag(TAG).d("Opened volumed archive: ${baseFile.name}")
+            inArchive to callback
+        } catch (e: Exception) {
+            callback.close()
+            Timber.tag(TAG).e(e, "Failed to open volumed archive: ${baseFile.name}")
             throw e
         }
     }

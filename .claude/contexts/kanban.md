@@ -4,6 +4,19 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ---
 
+2026-07-31 - [#49] Multi-Volume RAR/7z Extraction
+- Added MultiVolumeCallback + ExtractionOptions for split-archive extraction (RAR .part1.rar, 7z .7z.001) via 7-Zip-JBinding volume chaining
+- Replaced emulator polling loop with event-driven AdbManager.wait_for_emulator() (adb wait-for-device + getprop -w sys.boot_completed)
+- Added split.py orchestrator with glob-pattern detection; send_archives pushes all volume parts to device
+- Adopted *UnitTest/*MockIntegrationTest naming convention; redesigned CI filter stages for granular parallelism
+- Added wait_for_emulator test pyramid (unit + integration-mock + e2e local_only) and local_only pytest marker + root conftest
+- Fixed: black formatting (3 files), test_is_available_reflects_adb_install marked local_only (ADB absent on CI ubuntu-latest)
+tags: #multi-volume #rar #7z #adb #emulator #testing #ci-cd #naming-convention
+Ref: https://github.com/TomasGC/otter/issues/49
+Commits: cabd19a, f100dff, d7bdefc, a3d027b
+
+---
+
 2026-06-26 - [#46] Other Archive Inspectors
 - Added GzipInspector, TarInspector (TAR/TAR_GZ/TAR_BZ2), SevenZipBasedInspector (RAR/7z) for archive browsing
 - Extended TarExtractor to support TAR_BZ2 extraction with BZip2CompressorInputStream

@@ -25,6 +25,8 @@ object ArchiveNavigationTestHelper {
     const val TEST_ARCHIVE_7Z = "test_archive.7z"
     const val CORRUPTED_ARCHIVE_RAR = "corrupted_test_archive.rar"
     const val CORRUPTED_ARCHIVE_7Z = "corrupted_test_archive.7z"
+    const val SPLIT_7Z_FIRST_VOLUME = "split_7z.7z.001"
+    const val SPLIT_RAR_FIRST_VOLUME = "split_rar.part1.rar"
 
     private val testArchivesDir: File
         get() = File(TestConstants.TestArchives.devicePath)
@@ -35,6 +37,11 @@ object ArchiveNavigationTestHelper {
         val path = File(testArchivesDir, archiveName).absolutePath
         assertTrue("Test archive not found: $path", File(path).exists())
         return path
+    }
+
+    fun getSplitArchiveFirstVolumeOrNull(firstVolumeName: String): File? {
+        val file = File(testArchivesDir, firstVolumeName)
+        return if (file.exists()) file else null
     }
 
     // ========== Browse (using injected BrowseItemsUseCase) ==========
