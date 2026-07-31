@@ -24,7 +24,7 @@ import java.io.File
  * - createExtractor(): Factory method to create extractor with appropriate dependencies
  * - cleanupExtractor(): Optional cleanup for real implementations
  */
-abstract class ZipExtractorIntegrationTestBase {
+abstract class ZipExtractorFakeReaderMockIntegrationTestBase {
 
     protected lateinit var tempDir: File
     protected lateinit var zipFile: File
@@ -511,7 +511,7 @@ abstract class ZipExtractorIntegrationTestBase {
                 destinationPath = outputDir,
                 archiveType = ArchiveType.ZIP,
                 sourceFileName = zipFile.name,
-                selectedItems = listOf("file1.txt", "file5.txt", "file10.txt"),
+                options = ExtractionOptions(selectedItems = listOf("file1.txt", "file5.txt", "file10.txt")),
                 onProgress = {}
             )
         }
@@ -550,7 +550,7 @@ abstract class ZipExtractorIntegrationTestBase {
                 destinationPath = outputDir,
                 archiveType = ArchiveType.ZIP,
                 sourceFileName = zipFile.name,
-                selectedItems = listOf("root1.txt", "folder1/file1.txt", "folder2/file4.txt"),
+                options = ExtractionOptions(selectedItems = listOf("root1.txt", "folder1/file1.txt", "folder2/file4.txt")),
                 onProgress = {}
             )
         }
@@ -586,7 +586,7 @@ abstract class ZipExtractorIntegrationTestBase {
                 destinationPath = outputDir,
                 archiveType = ArchiveType.ZIP,
                 sourceFileName = zipFile.name,
-                selectedItems = emptyList(),
+                options = ExtractionOptions(selectedItems = emptyList()),
                 onProgress = {}
             )
         }
@@ -616,7 +616,7 @@ abstract class ZipExtractorIntegrationTestBase {
                 destinationPath = outputDir,
                 archiveType = ArchiveType.ZIP,
                 sourceFileName = zipFile.name,
-                selectedItems = null,
+                options = ExtractionOptions(),
                 onProgress = {}
             )
         }
@@ -646,7 +646,7 @@ abstract class ZipExtractorIntegrationTestBase {
                 destinationPath = outputDir,
                 archiveType = ArchiveType.ZIP,
                 sourceFileName = zipFile.name,
-                selectedItems = listOf("file1.txt", "non_existent.txt", "another_missing.txt"),
+                options = ExtractionOptions(selectedItems = listOf("file1.txt", "non_existent.txt", "another_missing.txt")),
                 onProgress = {}
             )
         }
@@ -672,7 +672,7 @@ abstract class ZipExtractorIntegrationTestBase {
                 destinationPath = outputDir,
                 archiveType = ArchiveType.ZIP,
                 sourceFileName = zipFile.name,
-                selectedItems = listOf("file10.txt", "file25.txt", "file50.txt", "file75.txt", "file100.txt"),
+                options = ExtractionOptions(selectedItems = listOf("file10.txt", "file25.txt", "file50.txt", "file75.txt", "file100.txt")),
                 onProgress = {}
             )
         }
@@ -744,7 +744,7 @@ abstract class ZipExtractorIntegrationTestBase {
                 destinationPath = outputDir,
                 archiveType = ArchiveType.ZIP,
                 sourceFileName = zipFile.name,
-                selectedItems = listOf("folder1/file1.txt", "folder1/file2.txt", "folder1/nested/file3.txt"),
+                options = ExtractionOptions(selectedItems = listOf("folder1/file1.txt", "folder1/file2.txt", "folder1/nested/file3.txt")),
                 onProgress = {}
             )
         }
@@ -779,7 +779,7 @@ abstract class ZipExtractorIntegrationTestBase {
                 destinationPath = outputDir,
                 archiveType = ArchiveType.ZIP,
                 sourceFileName = zipFile.name,
-                selectedItems = listOf("root1.txt", "folder1/file1.txt", "folder1/file2.txt"),
+                options = ExtractionOptions(selectedItems = listOf("root1.txt", "folder1/file1.txt", "folder1/file2.txt")),
                 onProgress = {}
             )
         }

@@ -26,7 +26,7 @@ import java.io.FileOutputStream
  * which fully mocks ArchiveInspector. ArchiveLibraryManager is mocked since TAR/GZIP dispatch
  * never touches it (only RAR/7z do).
  */
-class ItemBrowserRepositoryRealInspectorIntegrationTest {
+class ItemBrowserRepositoryRealInspectorMockIntegrationTest {
 
     @get:Rule
     val tempFolder = TemporaryFolder()

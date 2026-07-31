@@ -20,7 +20,7 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.FileOutputStream
 
-class ArchiveBrowserTarGzipIntegrationTest {
+class ArchiveBrowserTarGzipMockIntegrationTest {
 
     @get:Rule
     val tempFolder = TemporaryFolder()

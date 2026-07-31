@@ -19,7 +19,7 @@ import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
-class ZipExtractorTest {
+class ZipExtractorMockIntegrationTest {
 
     @get:Rule
     val tempFolder = TemporaryFolder()
@@ -394,7 +394,7 @@ class ZipExtractorTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test.zip",
-            selectedItems = listOf("file1.txt", "file3.txt"),
+            options = ExtractionOptions(selectedItems = listOf("file1.txt", "file3.txt")),
             onProgress = {}
         )
 
@@ -423,7 +423,7 @@ class ZipExtractorTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test.zip",
-            selectedItems = emptyList(),
+            options = ExtractionOptions(selectedItems = emptyList()),
             onProgress = {}
         )
 
@@ -451,7 +451,7 @@ class ZipExtractorTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test.zip",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -481,7 +481,7 @@ class ZipExtractorTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test.zip",
-            selectedItems = listOf("root.txt", "folder1/file1.txt"),
+            options = ExtractionOptions(selectedItems = listOf("root.txt", "folder1/file1.txt")),
             onProgress = {}
         )
 
@@ -510,7 +510,7 @@ class ZipExtractorTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test.zip",
-            selectedItems = listOf("file1.txt", "non_existent.txt"),
+            options = ExtractionOptions(selectedItems = listOf("file1.txt", "non_existent.txt")),
             onProgress = {}
         )
 
@@ -599,7 +599,7 @@ class ZipExtractorTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test.zip",
-            selectedItems = listOf("folder1/file1.txt", "folder1/file2.txt", "folder1/nested/file3.txt"),
+            options = ExtractionOptions(selectedItems = listOf("folder1/file1.txt", "folder1/file2.txt", "folder1/nested/file3.txt")),
             onProgress = {}
         )
 
@@ -630,7 +630,7 @@ class ZipExtractorTest {
             destinationPath = destination,
             archiveType = ArchiveType.ZIP,
             sourceFileName = "test.zip",
-            selectedItems = listOf("root.txt", "folder1/file1.txt", "folder1/file2.txt"),
+            options = ExtractionOptions(selectedItems = listOf("root.txt", "folder1/file1.txt", "folder1/file2.txt")),
             onProgress = {}
         )
 

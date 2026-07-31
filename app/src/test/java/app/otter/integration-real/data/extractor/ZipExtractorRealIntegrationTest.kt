@@ -17,9 +17,9 @@ import java.io.File
  * REAL integration tests for ZipExtractor WITHOUT mocks.
  * Uses real file I/O and real implementations (SimpleTempFileManager).
  * These tests are slower but validate the complete extraction pipeline.
- * All common scenarios inherited from ZipExtractorIntegrationTestBase.
+ * All common scenarios inherited from ZipExtractorFakeReaderMockIntegrationTestBase.
  */
-class ZipExtractorRealIntegrationTest : ZipExtractorIntegrationTestBase() {
+class ZipExtractorRealIntegrationTest : ZipExtractorFakeReaderMockIntegrationTestBase() {
 
     private lateinit var tempFileManager: SimpleTempFileManager
 

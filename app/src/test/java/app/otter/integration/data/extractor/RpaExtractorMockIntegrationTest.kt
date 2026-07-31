@@ -10,7 +10,7 @@ import org.junit.Before
 import org.junit.Test
 import java.io.File
 
-class RpaExtractorTest {
+class RpaExtractorMockIntegrationTest {
 
     private lateinit var outputDir: File
 

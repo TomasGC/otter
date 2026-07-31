@@ -17,6 +17,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
 
 /**
  * Unit tests for RarExtractor.
@@ -26,7 +27,7 @@ import org.junit.rules.TemporaryFolder
  * for that. Below the native archive-opening layer (ArchiveLibraryManager) is mocked,
  * which lets us test RarExtractor's own delegation and error-handling logic on the JVM.
  */
-class RarExtractorTest {
+class RarExtractorMockIntegrationTest {
 
     @get:Rule
     val tempFolder = TemporaryFolder()
@@ -79,6 +80,68 @@ class RarExtractorTest {
         ) {}
 
         assertTrue("Corrupted archive must produce Failure, not crash", result is ExtractionResult.Failure)
+    }
+
+    @Test
+    fun `when sourceFile provided, should use openVolumedArchive instead of openArchive`() = runTest {
+        val mockManager = mockk<ArchiveLibraryManager>(relaxed = true)
+        val mockArchive = mockk<IInArchive>(relaxed = true)
+        val mockCallback = mockk<MultiVolumeCallback>(relaxed = true)
+        every { mockManager.openVolumedArchive(any()) } returns (mockArchive to mockCallback)
+        every { mockArchive.numberOfItems } returns 0
+
+        val mockedExtractor = RarExtractor(realPathValidator, mockManager, tempFileManager, sevenZipHelper)
+        val destination = tempFolder.newFolder("output")
+        val fakeSourceFile = tempFolder.newFile("archive.rar")
+
+        val result = mockedExtractor.extract(
+            "rar content".toByteArray().inputStream(), destination, ArchiveType.RAR, "archive.rar",
+            options = ExtractionOptions(sourceFile = fakeSourceFile)
+        ) {}
+
+        assertTrue("Should succeed with sourceFile path", result is ExtractionResult.Success)
+        verify { mockManager.openVolumedArchive(fakeSourceFile) }
+        verify(exactly = 0) { mockManager.openArchive(any()) }
+        verify { mockCallback.close() }
+    }
+
+    @Test
+    fun `when sourceFile provided and openVolumedArchive fails, should return Failure`() = runTest {
+        val mockManager = mockk<ArchiveLibraryManager>(relaxed = true)
+        every { mockManager.openVolumedArchive(any()) } throws
+            IllegalStateException("Failed to open multi-volume archive")
+
+        val mockedExtractor = RarExtractor(realPathValidator, mockManager, tempFileManager, sevenZipHelper)
+        val destination = tempFolder.newFolder("output")
+        val fakeSourceFile = tempFolder.newFile("archive.part1.rar")
+
+        val result = mockedExtractor.extract(
+            "rar content".toByteArray().inputStream(), destination, ArchiveType.RAR, "archive.part1.rar",
+            options = ExtractionOptions(sourceFile = fakeSourceFile)
+        ) {}
+
+        assertTrue("Failed multi-volume open must produce Failure", result is ExtractionResult.Failure)
+    }
+
+    @Test
+    fun `when sourceFile provided, callback is closed even on extraction error`() = runTest {
+        val mockManager = mockk<ArchiveLibraryManager>(relaxed = true)
+        val mockArchive = mockk<IInArchive>(relaxed = true)
+        val mockCallback = mockk<MultiVolumeCallback>(relaxed = true)
+        every { mockManager.openVolumedArchive(any()) } returns (mockArchive to mockCallback)
+        every { mockArchive.numberOfItems } returns 1
+        every { mockArchive.getProperty(0, any()) } throws RuntimeException("Corrupt entry")
+
+        val mockedExtractor = RarExtractor(realPathValidator, mockManager, tempFileManager, sevenZipHelper)
+        val destination = tempFolder.newFolder("output")
+        val fakeSourceFile = tempFolder.newFile("archive.rar")
+
+        mockedExtractor.extract(
+            "rar content".toByteArray().inputStream(), destination, ArchiveType.RAR, "archive.rar",
+            options = ExtractionOptions(sourceFile = fakeSourceFile)
+        ) {}
+
+        verify { mockCallback.close() }
     }
 
     @Test

@@ -20,7 +20,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
 
-class GzipExtractorIntegrationTest {
+class GzipExtractorMockIntegrationTest {
 
     @get:Rule
     val tempFolder = TemporaryFolder()
@@ -102,7 +102,7 @@ class GzipExtractorIntegrationTest {
         val outDir = tempFolder.newFolder("out-bomb")
 
         val result = gz.inputStream().use { input ->
-            guardedExtractor.extract(input, outDir, ArchiveType.GZIP, "bomb.bin.gz", null) {}
+            guardedExtractor.extract(input, outDir, ArchiveType.GZIP, "bomb.bin.gz", ) {}
         }
 
         assertTrue("Should fail when decompressed content exceeds size limit", result is ExtractionResult.Failure)
@@ -144,7 +144,7 @@ class GzipExtractorIntegrationTest {
         val outDir = tempFolder.newFolder("out-selected")
 
         val result = gz.inputStream().use { input ->
-            extractor.extract(input, outDir, ArchiveType.GZIP, "document.txt.gz", emptyList()) {}
+            extractor.extract(input, outDir, ArchiveType.GZIP, "document.txt.gz", ExtractionOptions(selectedItems = emptyList())) {}
         }
 
         assertTrue("Success even with empty selectedItems", result is ExtractionResult.Success)
@@ -159,7 +159,7 @@ class GzipExtractorIntegrationTest {
 
         // Pass sourceFileName without extension to simulate the fallback path
         val result = gz.inputStream().use { input ->
-            extractor.extract(input, outDir, ArchiveType.GZIP, "noextension", null) {}
+            extractor.extract(input, outDir, ArchiveType.GZIP, "noextension", ) {}
         }
 
         // Fallback: output filename = "noextension" (sourceFileName returned unchanged)
@@ -179,7 +179,7 @@ class GzipExtractorIntegrationTest {
         assertThrows(CancellationException::class.java) {
             runBlocking(cancelled) {
                 gz.inputStream().use { input ->
-                    extractor.extract(input, outDir, ArchiveType.GZIP, gz.name, null) {}
+                    extractor.extract(input, outDir, ArchiveType.GZIP, gz.name, ) {}
                 }
             }
         }
@@ -212,7 +212,7 @@ class GzipExtractorIntegrationTest {
         runBlocking {
             val job = launch(Dispatchers.Default) {
                 throttled.use { input ->
-                    extractor.extract(input, outDir, ArchiveType.GZIP, gz.name, null) {}
+                    extractor.extract(input, outDir, ArchiveType.GZIP, gz.name, ) {}
                 }
             }
             delay(60) // let the loop run through a couple of throttled reads first
@@ -227,7 +227,7 @@ class GzipExtractorIntegrationTest {
 
     private suspend fun extract(file: File, sourceFileName: String, outDir: File): ExtractionResult =
         file.inputStream().use { input ->
-            extractor.extract(input, outDir, ArchiveType.GZIP, sourceFileName, null) {}
+            extractor.extract(input, outDir, ArchiveType.GZIP, sourceFileName, ) {}
         }
 
     private fun createGzip(name: String, content: ByteArray): File {

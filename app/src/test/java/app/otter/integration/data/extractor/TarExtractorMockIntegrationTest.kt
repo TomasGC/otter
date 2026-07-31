@@ -19,7 +19,7 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.FileOutputStream
 
-class TarExtractorIntegrationTest {
+class TarExtractorMockIntegrationTest {
 
     @get:Rule
     val tempFolder = TemporaryFolder()
@@ -193,7 +193,7 @@ class TarExtractorIntegrationTest {
         val outDir = tempFolder.newFolder("tar-cancel-pin")
 
         val result = tarFile.inputStream().use { input ->
-            extractor.extract(input, outDir, ArchiveType.TAR, tarFile.name, null) {}
+            extractor.extract(input, outDir, ArchiveType.TAR, tarFile.name, ) {}
         }
 
         assertTrue(
@@ -215,7 +215,7 @@ class TarExtractorIntegrationTest {
         val tar = createTar("bomb.tar", mapOf("bomb.txt" to "x".repeat(50).toByteArray()))
 
         val result = tar.inputStream().use { input ->
-            guardedExtractor.extract(input, outputDir, ArchiveType.TAR, tar.name, null) {}
+            guardedExtractor.extract(input, outputDir, ArchiveType.TAR, tar.name, ) {}
         }
 
         assertTrue("Should fail when entry exceeds per-file size limit", result is ExtractionResult.Failure)
@@ -270,7 +270,7 @@ class TarExtractorIntegrationTest {
 
     private suspend fun extract(file: File, type: ArchiveType): ExtractionResult =
         file.inputStream().use { input ->
-            extractor.extract(input, outputDir, type, file.name, null) {}
+            extractor.extract(input, outputDir, type, file.name) {}
         }
 
     private suspend fun extractSelective(
@@ -279,7 +279,7 @@ class TarExtractorIntegrationTest {
         selectedItems: List<String>?
     ): ExtractionResult =
         file.inputStream().use { input ->
-            extractor.extract(input, outputDir, type, file.name, selectedItems) {}
+            extractor.extract(input, outputDir, type, file.name, ExtractionOptions(selectedItems = selectedItems)) {}
         }
 
     private fun createTar(name: String, entries: Map<String, ByteArray>): File {

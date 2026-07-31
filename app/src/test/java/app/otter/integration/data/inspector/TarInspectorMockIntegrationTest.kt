@@ -16,7 +16,7 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.FileOutputStream
 
-class TarInspectorIntegrationTest {
+class TarInspectorMockIntegrationTest {
 
     @get:Rule
     val tempFolder = TemporaryFolder()

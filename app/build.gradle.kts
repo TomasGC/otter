@@ -16,8 +16,8 @@ android {
         applicationId = "app.otter"
         minSdk = 26
         targetSdk = 35
-        versionCode = 255
-        versionName = "0.0.255"
+        versionCode = 271
+        versionName = "0.0.271"
 
         testInstrumentationRunner = "app.otter.HiltTestRunner"
         vectorDrawables {
@@ -278,49 +278,44 @@ afterEvaluate {
 tasks.named("testDebugUnitTest", Test::class.java) {
     val testType = System.getProperty("testType", "all")
     when (testType) {
-        // Unit - domain + service + util (exclude integration tests sharing same packages)
         "unit-domain-service" -> filter {
             includeTestsMatching("app.otter.domain.*")
             includeTestsMatching("app.otter.service.*")
             includeTestsMatching("app.otter.util.*")
             excludeTestsMatching("*IntegrationTest*")
-            excludeTestsMatching("*RealIntegrationTest*")
+            excludeTestsMatching("*InstrumentedTest*")
         }
-        // Unit - data layer (browser, inspector, repository, util + 4 unit extractor tests)
-        // Note: app.otter.data.extractor is shared with integration tests, use class names for unit
         "unit-data" -> filter {
-            includeTestsMatching("app.otter.data.browser.*")
-            includeTestsMatching("app.otter.data.inspector.*")
-            includeTestsMatching("app.otter.data.repository.*")
-            includeTestsMatching("app.otter.data.util.*")
-            includeTestsMatching("*BaseArchiveExtractorTest*")
-            includeTestsMatching("*RpaArchiveCreationTest*")
-            includeTestsMatching("*RpaExtractorParseTest*")
-            includeTestsMatching("*RpaHexDumpTest*")
+            includeTestsMatching("app.otter.data.*")
+            excludeTestsMatching("*IntegrationTest*")
+            excludeTestsMatching("*InstrumentedTest*")
         }
-        // Unit - UI / ViewModel
         "unit-ui" -> filter {
             includeTestsMatching("app.otter.ui.*")
+            excludeTestsMatching("*IntegrationTest*")
+            excludeTestsMatching("*InstrumentedTest*")
         }
-        // Integration mock - extractor tests (ZIP, RAR, TAR, 7z, RPA against real archives)
         "integration-mock-extractor" -> filter {
             includeTestsMatching("app.otter.data.extractor.*")
-            excludeTestsMatching("*BaseArchiveExtractorTest*")
-            excludeTestsMatching("*RpaArchiveCreationTest*")
-            excludeTestsMatching("*RpaExtractorParseTest*")
-            excludeTestsMatching("*RpaHexDumpTest*")
+            excludeTestsMatching("*UnitTest*")
             excludeTestsMatching("*RealIntegrationTest*")
+            excludeTestsMatching("*InstrumentedTest*")
         }
-        // Integration mock - service, viewmodel, domain usecase
         "integration-mock-other" -> filter {
             includeTestsMatching("app.otter.integration.data.browser.*")
+            includeTestsMatching("app.otter.integration.data.inspector.*")
+            includeTestsMatching("app.otter.integration.data.repository.*")
             includeTestsMatching("app.otter.integration.service.*")
             includeTestsMatching("app.otter.integration.viewmodel.*")
-            includeTestsMatching("app.otter.domain.usecase.ExtractSelectedItemsIntegrationTest")
+            includeTestsMatching("app.otter.domain.usecase.ExtractSelectedItemsMockIntegrationTest")
+            excludeTestsMatching("*UnitTest*")
+            excludeTestsMatching("*RealIntegrationTest*")
+            excludeTestsMatching("*InstrumentedTest*")
         }
-        // Integration real - no mocks at all
         "integration-real" -> filter {
             includeTestsMatching("*RealIntegrationTest*")
+            excludeTestsMatching("*UnitTest*")
+            excludeTestsMatching("*InstrumentedTest*")
         }
         // "all" → no filter, runs everything (default for local development)
     }

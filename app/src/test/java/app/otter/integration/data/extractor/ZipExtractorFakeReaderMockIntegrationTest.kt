@@ -8,12 +8,12 @@ import io.mockk.mockk
 /**
  * Mock-based integration tests for ZipExtractor.
  * Uses SimpleTempFileManager (real temp file creation), mocked SevenZipHelper, and mocked IZipFileReaderFactory.
- * All test scenarios are inherited from ZipExtractorIntegrationTestBase.
+ * All test scenarios are inherited from ZipExtractorFakeReaderMockIntegrationTestBase.
  *
  * This variant validates extraction logic with mocked ZIP reader (uses real file but mocked reader factory).
  * For full real I/O validation, see ZipExtractorRealIntegrationTest.
  */
-class ZipExtractorIntegrationTest : ZipExtractorIntegrationTestBase() {
+class ZipExtractorFakeReaderMockIntegrationTest : ZipExtractorFakeReaderMockIntegrationTestBase() {
 
     private lateinit var tempFileManager: SimpleTempFileManager
 

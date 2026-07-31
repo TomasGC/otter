@@ -11,7 +11,7 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.FileOutputStream
 
-class GzipInspectorIntegrationTest {
+class GzipInspectorMockIntegrationTest {
 
     @get:Rule
     val tempFolder = TemporaryFolder()

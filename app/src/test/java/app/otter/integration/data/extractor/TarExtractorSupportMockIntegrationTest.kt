@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-class TarExtractorTest {
+class TarExtractorSupportMockIntegrationTest {
 
     private lateinit var pathValidator: PathValidator
     private lateinit var tarExtractor: TarExtractor

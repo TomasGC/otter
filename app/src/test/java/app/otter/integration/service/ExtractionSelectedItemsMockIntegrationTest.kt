@@ -21,7 +21,7 @@ import org.robolectric.annotation.Config
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
-class ExtractionSelectedItemsIntegrationTest {
+class ExtractionSelectedItemsMockIntegrationTest {
 
     private lateinit var context: Context
     private lateinit var queue: ExtractionQueue

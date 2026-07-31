@@ -16,7 +16,7 @@ import org.junit.Before
 import org.junit.Test
 import java.io.File
 
-class RpaExtractorIntegrationTest {
+class RpaExtractorSelectiveMockIntegrationTest {
 
     private lateinit var outputDir: File
     private lateinit var extractor: RpaExtractor
@@ -64,7 +64,7 @@ class RpaExtractorIntegrationTest {
         val fullOutputDir = File.createTempFile("rpa_full_", "").apply { delete(); mkdir() }
         try {
             val fullResult = rpaFile.inputStream().use { input ->
-                extractor.extract(input, fullOutputDir, ArchiveType.RPA, rpaFile.name, null) {}
+                extractor.extract(input, fullOutputDir, ArchiveType.RPA, rpaFile.name, ) {}
             }
             assertTrue(fullResult is ExtractionResult.Success)
             val allFiles = fullOutputDir.walkTopDown().filter { it.isFile }.toList()
@@ -88,7 +88,7 @@ class RpaExtractorIntegrationTest {
         val fullOutputDir = File.createTempFile("rpa_dir_prefix_full_", "").apply { delete(); mkdir() }
         try {
             val fullResult = rpaFile.inputStream().use { input ->
-                extractor.extract(input, fullOutputDir, ArchiveType.RPA, rpaFile.name, null) {}
+                extractor.extract(input, fullOutputDir, ArchiveType.RPA, rpaFile.name, ) {}
             }
             assertTrue(fullResult is ExtractionResult.Success)
 
@@ -123,7 +123,7 @@ class RpaExtractorIntegrationTest {
         assertThrows(CancellationException::class.java) {
             runBlocking(cancelled) {
                 rpaFile.inputStream().use { input ->
-                    extractor.extract(input, outputDir, ArchiveType.RPA, rpaFile.name, null) {}
+                    extractor.extract(input, outputDir, ArchiveType.RPA, rpaFile.name, ) {}
                 }
             }
         }
@@ -139,7 +139,7 @@ class RpaExtractorIntegrationTest {
         val outDir = java.io.File.createTempFile("rpa_wrong_", "").apply { delete(); mkdir() }
         try {
             val result = fakeRpa.inputStream().use { input ->
-                extractor.extract(input, outDir, ArchiveType.RPA, fakeRpa.name, null) {}
+                extractor.extract(input, outDir, ArchiveType.RPA, fakeRpa.name, ) {}
             }
             assertTrue(
                 "Wrong RPA magic must produce Failure",
@@ -167,7 +167,7 @@ class RpaExtractorIntegrationTest {
             )
 
             val result = bombFile.inputStream().use { input ->
-                guardedExtractor.extract(input, bombOutputDir, ArchiveType.RPA, bombFile.name, null) {}
+                guardedExtractor.extract(input, bombOutputDir, ArchiveType.RPA, bombFile.name, ) {}
             }
 
             assertTrue("Should fail when an entry exceeds the per-file size limit", result is ExtractionResult.Failure)
@@ -179,6 +179,6 @@ class RpaExtractorIntegrationTest {
 
     private suspend fun extract(selectedItems: List<String>?): ExtractionResult =
         rpaFile.inputStream().use { input ->
-            extractor.extract(input, outputDir, ArchiveType.RPA, rpaFile.name, selectedItems) {}
+            extractor.extract(input, outputDir, ArchiveType.RPA, rpaFile.name, ExtractionOptions(selectedItems = selectedItems)) {}
         }
 }

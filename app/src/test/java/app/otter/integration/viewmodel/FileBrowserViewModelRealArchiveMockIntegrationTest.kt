@@ -43,7 +43,7 @@ import java.util.zip.ZipOutputStream
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
-class FileBrowserViewModelRealArchiveIntegrationTest {
+class FileBrowserViewModelRealArchiveMockIntegrationTest {
 
     @get:Rule
     val tempFolder = TemporaryFolder()

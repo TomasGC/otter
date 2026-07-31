@@ -17,6 +17,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
 
 /**
  * Unit tests for SevenZipExtractor.
@@ -26,7 +27,7 @@ import org.junit.rules.TemporaryFolder
  * for that. Below the native archive-opening layer (ArchiveLibraryManager) is mocked,
  * which lets us test SevenZipExtractor's own delegation and error-handling logic on the JVM.
  */
-class SevenZipExtractorTest {
+class SevenZipExtractorMockIntegrationTest {
 
     @get:Rule
     val tempFolder = TemporaryFolder()
@@ -84,6 +85,68 @@ class SevenZipExtractorTest {
         ) {}
 
         assertTrue("Corrupted archive must produce Failure, not crash", result is ExtractionResult.Failure)
+    }
+
+    @Test
+    fun `when sourceFile provided, should use openVolumedArchive instead of openArchive`() = runTest {
+        val mockManager = mockk<ArchiveLibraryManager>(relaxed = true)
+        val mockArchive = mockk<IInArchive>(relaxed = true)
+        val mockCallback = mockk<MultiVolumeCallback>(relaxed = true)
+        every { mockManager.openVolumedArchive(any()) } returns (mockArchive to mockCallback)
+        every { mockArchive.numberOfItems } returns 0
+
+        val mockedExtractor = SevenZipExtractor(realPathValidator, mockManager, tempFileManager, sevenZipHelper)
+        val destination = tempFolder.newFolder("output")
+        val fakeSourceFile = tempFolder.newFile("archive.7z.001")
+
+        val result = mockedExtractor.extract(
+            "7z content".toByteArray().inputStream(), destination, ArchiveType.SEVEN_ZIP, "archive.7z.001",
+            options = ExtractionOptions(sourceFile = fakeSourceFile)
+        ) {}
+
+        assertTrue("Should succeed with sourceFile path", result is ExtractionResult.Success)
+        verify { mockManager.openVolumedArchive(fakeSourceFile) }
+        verify(exactly = 0) { mockManager.openArchive(any()) }
+        verify { mockCallback.close() }
+    }
+
+    @Test
+    fun `when sourceFile provided and openVolumedArchive fails, should return Failure`() = runTest {
+        val mockManager = mockk<ArchiveLibraryManager>(relaxed = true)
+        every { mockManager.openVolumedArchive(any()) } throws
+            IllegalStateException("Failed to open multi-volume archive")
+
+        val mockedExtractor = SevenZipExtractor(realPathValidator, mockManager, tempFileManager, sevenZipHelper)
+        val destination = tempFolder.newFolder("output")
+        val fakeSourceFile = tempFolder.newFile("archive.7z.001")
+
+        val result = mockedExtractor.extract(
+            "7z content".toByteArray().inputStream(), destination, ArchiveType.SEVEN_ZIP, "archive.7z.001",
+            options = ExtractionOptions(sourceFile = fakeSourceFile)
+        ) {}
+
+        assertTrue("Failed multi-volume open must produce Failure", result is ExtractionResult.Failure)
+    }
+
+    @Test
+    fun `when sourceFile provided, callback is closed even on extraction error`() = runTest {
+        val mockManager = mockk<ArchiveLibraryManager>(relaxed = true)
+        val mockArchive = mockk<IInArchive>(relaxed = true)
+        val mockCallback = mockk<MultiVolumeCallback>(relaxed = true)
+        every { mockManager.openVolumedArchive(any()) } returns (mockArchive to mockCallback)
+        every { mockArchive.numberOfItems } returns 1
+        every { mockArchive.getProperty(0, any()) } throws RuntimeException("Corrupt entry")
+
+        val mockedExtractor = SevenZipExtractor(realPathValidator, mockManager, tempFileManager, sevenZipHelper)
+        val destination = tempFolder.newFolder("output")
+        val fakeSourceFile = tempFolder.newFile("archive.7z.001")
+
+        mockedExtractor.extract(
+            "7z content".toByteArray().inputStream(), destination, ArchiveType.SEVEN_ZIP, "archive.7z.001",
+            options = ExtractionOptions(sourceFile = fakeSourceFile)
+        ) {}
+
+        verify { mockCallback.close() }
     }
 
     @Test

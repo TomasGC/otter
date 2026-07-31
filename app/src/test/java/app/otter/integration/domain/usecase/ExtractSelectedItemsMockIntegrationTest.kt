@@ -12,7 +12,7 @@ import org.junit.Test
  * Tests the interaction between filtering and selection logic with domain models.
  * No real archives needed - focuses on business logic integration.
  */
-class ExtractSelectedItemsIntegrationTest {
+class ExtractSelectedItemsMockIntegrationTest {
 
     @Test
     fun `extractor integrates with domain models for file list`() {

@@ -33,7 +33,7 @@ import org.robolectric.annotation.Config
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
-class FileBrowserViewModelWindowIntegrationTest {
+class FileBrowserViewModelWindowMockIntegrationTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
     private val browseItemsUseCase = mockk<BrowseItemsUseCase>()

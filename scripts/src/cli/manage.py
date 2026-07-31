@@ -71,8 +71,8 @@ class Manager:
         )
 
         # lint
-        lp = sub.add_parser("lint", help="Run lint checks (kotlin or python)")
-        lp.add_argument("target", choices=["kotlin", "python"])
+        lp = sub.add_parser("lint", help="Run lint checks (kotlin, python, or deps)")
+        lp.add_argument("target", choices=["kotlin", "python", "deps"])
 
         # coverage
         sub.add_parser("coverage", help="Generate Kover XML report and verify 80% threshold")

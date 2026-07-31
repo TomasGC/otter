@@ -183,6 +183,13 @@ class TestManagerLint:
             mgr.dispatch(["lint", "python"])
         MockAction.return_value.run.assert_called_once_with(target="python")
 
+    def test_lint_deps_dispatches_to_lint_action(self):
+        mgr, runner = make_manager()
+        with patch("cli.manage.LintAction") as MockAction:
+            MockAction.return_value.run.return_value = 0
+            mgr.dispatch(["lint", "deps"])
+        MockAction.return_value.run.assert_called_once_with(target="deps")
+
     def test_lint_returns_action_exit_code(self):
         mgr, runner = make_manager()
         with patch("cli.manage.LintAction") as MockAction:
