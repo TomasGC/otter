@@ -30,7 +30,7 @@ class ZipExtractor @Inject constructor(
         destinationPath: File,
         archiveType: ArchiveType,
         sourceFileName: String,
-        selectedItems: List<String>?,
+        options: ExtractionOptions,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult = withContext(Dispatchers.IO) {
         var extractedCount = 0
@@ -56,7 +56,7 @@ class ZipExtractor @Inject constructor(
             val sizeGuard = sizeGuardFactory()
 
             // Convert selectedItems to Set for O(1) lookup if provided
-            val selectedPaths = selectedItems?.toSet()
+            val selectedPaths = options.selectedItems?.toSet()
 
             // Extract from temp file using ZipFileReader abstraction
             zipFileReaderFactory.create(tempFile).use { reader ->

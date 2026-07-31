@@ -41,7 +41,7 @@ class GzipExtractor @Inject constructor(
         destinationPath: File,
         archiveType: ArchiveType,
         sourceFileName: String,
-        selectedItems: List<String>?,
+        options: ExtractionOptions,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult = withContext(Dispatchers.IO) {
         // GZIP decompresses to a single file

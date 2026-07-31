@@ -1,6 +1,7 @@
 package app.otter.data.extractor
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.otter.data.extractor.ExtractionOptions
 import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionResult
 import app.otter.domain.usecase.helpers.ArchiveNavigationTestHelper
@@ -8,6 +9,7 @@ import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -51,7 +53,7 @@ class RarExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.RAR,
             sourceFileName = "test_archive.rar",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -75,7 +77,7 @@ class RarExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.RAR,
             sourceFileName = "test_archive.rar",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -98,7 +100,7 @@ class RarExtractorInstrumentedTest {
             destinationPath = probeDir,
             archiveType = ArchiveType.RAR,
             sourceFileName = "test_archive.rar",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -118,7 +120,7 @@ class RarExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.RAR,
             sourceFileName = "test_archive.rar",
-            selectedItems = selectedPaths,
+            options = ExtractionOptions(selectedItems = selectedPaths),
             onProgress = {}
         )
 
@@ -147,7 +149,7 @@ class RarExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.RAR,
             sourceFileName = "corrupted_test_archive.rar",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -173,7 +175,7 @@ class RarExtractorInstrumentedTest {
             destinationPath = destination,
             archiveType = ArchiveType.RAR,
             sourceFileName = "test_archive.rar",
-            selectedItems = null,
+            options = ExtractionOptions(),
             onProgress = {}
         )
 
@@ -183,5 +185,25 @@ class RarExtractorInstrumentedTest {
             ?.toList() ?: emptyList()
         assertTrue("No files should escape destination", escapedFiles.isEmpty())
         assertTrue("Extraction of valid RAR must not fail", result is ExtractionResult.Success)
+    }
+
+    @Test
+    fun extractMultiVolume_realRarOnDevice() = runTest {
+        val firstVolume = ArchiveNavigationTestHelper.getSplitArchiveFirstVolumeOrNull(
+            ArchiveNavigationTestHelper.SPLIT_RAR_FIRST_VOLUME
+        )
+        assumeTrue("split_rar multi-volume archive not on device", firstVolume != null)
+
+        val result = extractor.extract(
+            inputStream = firstVolume!!.inputStream(),
+            destinationPath = tempFolder.newFolder("output-rar-multi"),
+            archiveType = ArchiveType.RAR,
+            sourceFileName = firstVolume.name,
+            options = ExtractionOptions(sourceFile = firstVolume),
+            onProgress = {}
+        )
+
+        assertTrue("RAR multi-volume extraction must succeed", result is ExtractionResult.Success)
+        assertTrue("Must extract at least 1 file", (result as ExtractionResult.Success).extractedFilesCount > 0)
     }
 }

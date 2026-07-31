@@ -50,6 +50,10 @@
       "long_filename_test_archive.tar.gz",
       "long_filename_test_archive.tar.bz2",
       "long_filename_test_archive.gz"
+    ],
+    "glob_files": [
+      "split_7z.7z.*",
+      "split_rar.part*.rar"
     ]
   },
   "logging": {

@@ -46,7 +46,7 @@ class RpaExtractor @Inject constructor(
         destinationPath: File,
         archiveType: ArchiveType,
         sourceFileName: String,
-        selectedItems: List<String>?,
+        options: ExtractionOptions,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult = withContext(Dispatchers.IO) {
         var extractedCount = 0
@@ -73,7 +73,7 @@ class RpaExtractor @Inject constructor(
             val sizeGuard = sizeGuardFactory()
 
             // Extract each file
-            val selectedPaths = selectedItems?.toSet()
+            val selectedPaths = options.selectedItems?.toSet()
 
             tempFile.inputStream().use {
                 index.forEach { entry ->

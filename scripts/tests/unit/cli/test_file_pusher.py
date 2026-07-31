@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 from fake_subprocess import FakeSubprocessRunner
 
-from cli.send_to_phone import FilePusher
+from cli.send_to_phone import FilePusher, resolve_archive_files
 
 # ---------------------------------------------------------------------------
 # ensure_connection
@@ -186,6 +186,82 @@ class TestPushFiles:
 
         assert success == 1
         assert fail == 1
+
+
+class TestResolveArchiveFiles:
+    def test_returns_exact_files_when_no_glob_files(self, tmp_path):
+        archives = tmp_path / "archives"
+        archives.mkdir()
+        (archives / "a.zip").write_bytes(b"")
+        (archives / "b.rar").write_bytes(b"")
+
+        settings = {"test_archives": {"host_path": "archives", "files": ["a.zip", "b.rar"]}}
+        result = resolve_archive_files(tmp_path, settings)
+        assert result == [archives / "a.zip", archives / "b.rar"]
+
+    def test_expands_glob_patterns(self, tmp_path):
+        archives = tmp_path / "archives"
+        archives.mkdir()
+        for name in ["split.7z.001", "split.7z.002", "split.7z.003"]:
+            (archives / name).write_bytes(b"")
+
+        settings = {
+            "test_archives": {
+                "host_path": "archives",
+                "files": [],
+                "glob_files": ["split.7z.*"],
+            }
+        }
+        result = resolve_archive_files(tmp_path, settings)
+        assert [p.name for p in result] == [
+            "split.7z.001",
+            "split.7z.002",
+            "split.7z.003",
+        ]
+
+    def test_combines_exact_files_and_globs(self, tmp_path):
+        archives = tmp_path / "archives"
+        archives.mkdir()
+        (archives / "regular.zip").write_bytes(b"")
+        (archives / "multi.part1.rar").write_bytes(b"")
+        (archives / "multi.part2.rar").write_bytes(b"")
+
+        settings = {
+            "test_archives": {
+                "host_path": "archives",
+                "files": ["regular.zip"],
+                "glob_files": ["multi.part*.rar"],
+            }
+        }
+        result = resolve_archive_files(tmp_path, settings)
+        names = [p.name for p in result]
+        assert "regular.zip" in names
+        assert "multi.part1.rar" in names
+        assert "multi.part2.rar" in names
+
+    def test_empty_result_when_glob_matches_nothing(self, tmp_path):
+        archives = tmp_path / "archives"
+        archives.mkdir()
+
+        settings = {
+            "test_archives": {
+                "host_path": "archives",
+                "files": [],
+                "glob_files": ["nonexistent.*"],
+            }
+        }
+        result = resolve_archive_files(tmp_path, settings)
+        assert result == []
+
+    def test_missing_glob_files_key_is_tolerated(self, tmp_path):
+        archives = tmp_path / "archives"
+        archives.mkdir()
+        (archives / "x.zip").write_bytes(b"")
+
+        settings = {"test_archives": {"host_path": "archives", "files": ["x.zip"]}}
+        result = resolve_archive_files(tmp_path, settings)
+        assert len(result) == 1
+        assert result[0].name == "x.zip"
 
 
 class TestGetConnectorLazy:

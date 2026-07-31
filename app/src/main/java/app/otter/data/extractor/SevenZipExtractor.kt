@@ -27,18 +27,25 @@ class SevenZipExtractor @Inject constructor(
         destinationPath: File,
         archiveType: ArchiveType,
         sourceFileName: String,
-        selectedItems: List<String>?,
+        options: ExtractionOptions,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult {
         val activeContext = coroutineContext
-        return extractWithTempFile(inputStream, archiveType) { tempFile ->
-            val inArchive = archiveLibraryManager.openArchive(tempFile)
-            sevenZipHelper.extract(
-                inArchive, destinationPath, pathValidator, selectedItems?.toSet(),
-                SevenZipExtractorHelper.ExtractionSession(
-                    onProgress, logger, sizeGuardFactory, isActiveCheck = { activeContext.isActive }
-                )
-            )
+        val session = SevenZipExtractorHelper.ExtractionSession(
+            onProgress, logger, sizeGuardFactory, isActiveCheck = { activeContext.isActive }
+        )
+        return if (options.sourceFile != null) {
+            val (inArchive, callback) = archiveLibraryManager.openVolumedArchive(options.sourceFile)
+            try {
+                sevenZipHelper.extract(inArchive, destinationPath, pathValidator, options.selectedItems?.toSet(), session)
+            } finally {
+                callback.close()
+            }
+        } else {
+            extractWithTempFile(inputStream, archiveType) { tempFile ->
+                val inArchive = archiveLibraryManager.openArchive(tempFile)
+                sevenZipHelper.extract(inArchive, destinationPath, pathValidator, options.selectedItems?.toSet(), session)
+            }
         }
     }
 }

@@ -29,12 +29,12 @@ abstract class BaseArchiveExtractor(
         destinationPath: File,
         archiveType: ArchiveType,
         sourceFileName: String,
-        selectedItems: List<String>?,
+        options: ExtractionOptions,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult = withContext(Dispatchers.IO) {
         try {
             // Delegate extraction to subclass
-            val result = extractInternal(inputStream, destinationPath, archiveType, sourceFileName, selectedItems, onProgress)
+            val result = extractInternal(inputStream, destinationPath, archiveType, sourceFileName, options, onProgress)
 
             // ✅ Automatic final progress callback at 100% for all extractors
             if (result is ExtractionResult.Success) {
@@ -70,7 +70,7 @@ abstract class BaseArchiveExtractor(
         destinationPath: File,
         archiveType: ArchiveType,
         sourceFileName: String,
-        selectedItems: List<String>?,
+        options: ExtractionOptions,
         onProgress: (ExtractionProgress) -> Unit
     ): ExtractionResult
 

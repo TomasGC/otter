@@ -102,7 +102,7 @@ object ArchiveExtractionTestHelper {
             destinationPath = outputDir,
             archiveType = archiveType,
             sourceFileName = archiveFile.name,
-            selectedItems = selectedPaths,
+            options = ExtractionOptions(selectedItems = selectedPaths),
             onProgress = { _: ExtractionProgress -> /* no-op */ }
         )
 
