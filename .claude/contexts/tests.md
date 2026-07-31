@@ -1,6 +1,6 @@
 # Tests - Otter
 
-**Last Updated**: 2026-06-26
+**Last Updated**: 2026-07-31
 
 ---
 
@@ -13,7 +13,7 @@
 | Unit (JVM) | 495 | JUnit + MockK | Pure JVM, no Android deps |
 | Integration mock (JVM) | 111 | JUnit + MockK + real files | Real archives, mocked Android |
 | Integration real (JVM) | 2 | JUnit, no mocks | Real archives, no mocks at all |
-| Instrumented (device) | 90 | AndroidJUnit4 + Hilt | Requires connected device |
+| Instrumented (device) | 90 | AndroidJUnit4 + Hilt | Requires connected device or Android Emulator (AVD) |
 | **Total** | **698** | | |
 
 ### Directory Structure
@@ -50,20 +50,25 @@ app/src/
 │   │                                    # FileFormatters, FileLoggingTree, PathValidator
 │   │
 │   ├── integration/                     # 111 tests — real files + mocks, no Android runtime
-│   │   ├── data/extractor/              # ZIP (mock ZipFileReader), RAR, TAR, 7z, RPA
-│   │   │   ├── ZipExtractorIntegrationTest.kt     # 27 tests via FakeZipFileReader
-│   │   │   ├── ZipExtractorIntegrationTestBase.kt # shared base
-│   │   │   ├── RarExtractorTest.kt
-│   │   │   ├── TarExtractorTest.kt
-│   │   │   ├── SevenZipExtractorTest.kt
-│   │   │   └── RpaExtractorTest.kt
-│   │   ├── data/inspector/              # GzipInspectorIntegrationTest (8), TarInspectorIntegrationTest (9)
-│   │   ├── domain/usecase/              # ExtractSelectedItemsIntegrationTest (10 tests)
-│   │   ├── service/                     # ExtractionSelectedItemsIntegrationTest (5 tests)
+│   │   ├── data/extractor/
+│   │   │   ├── ZipExtractorMockIntegrationTest.kt
+│   │   │   ├── ZipExtractorFakeReaderMockIntegrationTest.kt    # 27 tests via FakeZipFileReader
+│   │   │   ├── ZipExtractorFakeReaderMockIntegrationTestBase.kt
+│   │   │   ├── RarExtractorMockIntegrationTest.kt
+│   │   │   ├── TarExtractorSupportMockIntegrationTest.kt       # supports() method tests
+│   │   │   ├── TarExtractorMockIntegrationTest.kt              # full extraction TAR/TAR_GZ/TAR_BZ2
+│   │   │   ├── SevenZipExtractorMockIntegrationTest.kt
+│   │   │   ├── SevenZipExtractorHelperMockIntegrationTest.kt
+│   │   │   ├── GzipExtractorMockIntegrationTest.kt
+│   │   │   ├── RpaExtractorMockIntegrationTest.kt
+│   │   │   └── RpaExtractorSelectiveMockIntegrationTest.kt     # selective + cancellation + errors
+│   │   ├── data/inspector/              # GzipInspectorMockIntegrationTest (8), TarInspectorMockIntegrationTest (9)
+│   │   ├── domain/usecase/              # ExtractSelectedItemsMockIntegrationTest (10 tests)
+│   │   ├── service/                     # ExtractionSelectedItemsMockIntegrationTest (5 tests)
 │   │   │                                #   verifies selectedItems propagation via intent slot
 │   │   └── viewmodel/                   # FileBrowserViewModel with real ZIP (300 entries)
-│   │       ├── FileBrowserViewModelWindowIntegrationTest.kt  # sliding window scroll cycle
-│   │       └── FileBrowserViewModelRealArchiveIntegrationTest.kt # filter+sort on real data
+│   │       ├── FileBrowserViewModelWindowMockIntegrationTest.kt
+│   │       └── FileBrowserViewModelRealArchiveMockIntegrationTest.kt
 │   │
 │   └── integration-real/               # 2 tests — real archives, zero mocks
 │       └── data/extractor/
@@ -102,7 +107,7 @@ python scripts/manage.py test unit
 python scripts/manage.py test coverage
 # Report: app/build/reports/kover/html/index.html
 
-# Instrumented tests (requires device connected via ADB)
+# Instrumented tests (requires connected device or Android Emulator via ADB)
 python scripts/manage.py test instrumented
 
 # Gradle direct (specific stage via -DtestType)
@@ -156,27 +161,36 @@ CI generates RPA automatically before running tests.
 
 | Module | Tests | Description |
 |--------|-------|-------------|
-| `unit/android/test_adb_manager.py` | 20 | AdbManager class (DI pattern) |
-| `unit/android/test_gradle_runner.py` | 10 | GradleRunner class (DI pattern) |
+| `unit/android/test_adb_manager.py` | 46 | AdbManager class incl. wait_for_emulator (DI + shutil.which patch) |
+| `unit/android/test_gradle_runner.py` | 12 | GradleRunner class (DI pattern) |
 | `unit/android/test_version_manager.py` | 31 | VersionManager class (DI pattern) |
 | `unit/cli/test_archive_creator.py` | 22 | ArchiveCreator class (ZIP/TAR/7z/RPA) |
-| `unit/cli/test_archive_template_generator.py` | 30 | ArchiveTemplateGenerator (magic bytes, extensions, I/O) |
-| `unit/cli/test_device_connector.py` | 58 | DeviceConnector class (mDNS, pairing, all branches) |
-| `unit/cli/test_file_pusher.py` | 17 | FilePusher class (push, skip, mkdir, connector=None paths) |
-| `unit/cli/test_manage.py` | ~15 | Manager dispatch + verb routing |
-| `unit/cli/actions/test_adb_action.py` | ~13 | AdbAction (connect, send, lazy creation) |
-| `unit/cli/actions/test_build_action.py` | ~15 | BuildAction (build, install, version, connector) |
-| `unit/cli/actions/test_test_action.py` | ~25 | TestAction (unit, instrumented, coverage, device flow) |
-| `unit/cli/actions/test_create_action.py` | ~10 | CreateAction (archives, template, rpa-only) |
-| `unit/cli/actions/test_test_scripts_action.py` | ~10 | TestScriptsAction (all tiers) |
+| `unit/cli/test_archive_template_generator.py` | 36 | ArchiveTemplateGenerator (magic bytes, extensions, I/O) |
+| `unit/cli/test_device_connector.py` | 59 | DeviceConnector class (mDNS, pairing, all branches) |
+| `unit/cli/test_file_pusher.py` | 20 | FilePusher class (push, skip, mkdir, connector=None paths) |
+| `unit/cli/test_manage.py` | 33 | Manager dispatch + verb routing |
+| `unit/cli/archive_scenarios/test_split.py` | 18 | SplitArchiveOrchestrator (glob-pattern detection, volume ordering) |
+| `unit/cli/archive_scenarios/test_perfect.py` | 40 | ArchiveCreator perfect-archive scenarios |
+| `unit/cli/archive_scenarios/test_corrupted.py` | 11 | Corrupted archive handling |
+| `unit/cli/actions/test_adb_action.py` | 14 | AdbAction (connect, send, lazy creation) |
+| `unit/cli/actions/test_build_action.py` | 16 | BuildAction (build, install, version, connector) |
+| `unit/cli/actions/test_test_action.py` | 47 | TestAction (unit, instrumented, coverage, device flow) |
+| `unit/cli/actions/test_create_action.py` | 14 | CreateAction (archives, template, rpa-only) |
+| `unit/cli/actions/test_test_scripts_action.py` | 14 | TestScriptsAction (all tiers) |
+| `unit/cli/actions/test_lint_action.py` | 18 | LintAction |
+| `unit/cli/actions/test_validate_action.py` | 19 | ValidateAction |
 | `unit/common/test_console.py` | 14 | Console output formatting |
 | `unit/common/test_file_utils.py` | 8 | File utility functions + load_test_settings |
+| `unit/test_pipeline.py` | 29 | Pipeline orchestration |
 | `integration_mock/cli/test_archive_creation.py` | 32 | ArchiveCreator integration (real FS, multiple formats) |
-| `integration_mock/android/test_adb_integration.py` | 7 | ADB integration (real mDNS) |
+| `integration_mock/cli/archive_scenarios/test_perfect.py` | 36 | Perfect-archive scenarios (real FS) |
+| `integration_mock/android/test_adb_integration.py` | 11 | ADB integration (real mDNS, wait_for_emulator two-phase sequence) |
 | `integration_real/test_rpa_real.py` | 9 | RPA archive real creation + parsing |
 | `integration_real/test_template_generator_real.py` | 8 | ArchiveTemplateGenerator real FS output |
 | `integration_real/cli/test_archive_docker.py` | 6 | Archive creation via Docker (7z, tar) with real tools |
-| **Total** | **~377** | 98.2% line coverage |
+| `integration_real/android/test_adb_real.py` | 2 | AdbManager real subprocess (`is_available` local_only, `list_avds`) |
+| `e2e/android/test_emulator_boot_e2e.py` | 2 | wait_for_emulator against live emulator (local_only) |
+| **Total** | **628** | unit: 538, integ-mock: 68, integ-real: 19, e2e: 3 |
 
 ### Directory Structure
 
