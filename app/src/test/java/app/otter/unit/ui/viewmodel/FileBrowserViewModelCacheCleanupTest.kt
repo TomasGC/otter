@@ -6,9 +6,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
+import app.otter.domain.model.ResourcePath
 
 /**
  * Tests for FileBrowserViewModel cache cleanup.
@@ -23,8 +21,6 @@ import org.robolectric.annotation.Config
  * - Window size limits after cleanup
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
 class FileBrowserViewModelCacheCleanupTest : BaseFileBrowserViewModelTest() {
 
     @Test
@@ -61,6 +57,8 @@ class FileBrowserViewModelCacheCleanupTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Scroll forward significantly to trigger cleanup
@@ -94,6 +92,8 @@ class FileBrowserViewModelCacheCleanupTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Scroll within window (should not trigger cleanup)
@@ -119,6 +119,8 @@ class FileBrowserViewModelCacheCleanupTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Scroll through entire list
@@ -152,6 +154,8 @@ class FileBrowserViewModelCacheCleanupTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Scroll to start (index 0)
@@ -190,6 +194,8 @@ class FileBrowserViewModelCacheCleanupTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Simulate continuous scrolling
@@ -248,6 +254,8 @@ class FileBrowserViewModelCacheCleanupTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Scroll through multiple pages

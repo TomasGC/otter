@@ -9,9 +9,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /**
  * Tests for FileBrowserViewModel scroll detection.
@@ -25,8 +22,6 @@ import org.robolectric.annotation.Config
  * - Boundary scroll positions
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
 class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
 
     @Test
@@ -50,6 +45,8 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Scroll to position near end of viewport (should trigger load)
@@ -84,6 +81,8 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Simulate being at offset 100 and scrolling back up
@@ -107,6 +106,8 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Scroll through entire list - should not trigger pagination
@@ -140,6 +141,8 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Simulate rapid scroll (many position changes)
@@ -163,6 +166,8 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Test boundary positions
@@ -198,7 +203,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             }
         }
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         // Scroll to trigger loadNextPage (distanceToEnd < threshold)
         viewModel.onScrollPositionChanged(firstVisibleItemIndex = 90)
@@ -225,7 +232,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 nextOffset = offset + limit
             ))
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         // At position 40: absoluteIndex = currentWindowStart(0) + 40 = 40
         // maxCached(99) - absoluteIndex(40) = 59 < LOAD_TRIGGER(60) → load triggered
@@ -256,7 +265,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             ))
         }
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         // At position 40: maxCached(99) - absoluteIndex(40) = 59 < LOAD_TRIGGER(60) → triggers
         // State must remain valid after the scroll (no crash, no empty state)
@@ -284,7 +295,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             )
         )
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         // Simulate scroll to position 50 (middle of first page)
         viewModel.onScrollPositionChanged(firstVisibleItemIndex = 50)
@@ -315,7 +328,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             )
         )
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         // Scroll to position 80 (near end of first page)
         viewModel.onScrollPositionChanged(firstVisibleItemIndex = 80)
@@ -356,7 +371,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             }
         }
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         // Select item at position 5 (within initial cache window)
         viewModel.enterSelectionMode()
@@ -390,7 +407,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             )
         )
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         // Select 3 items from the visible cache
         viewModel.enterSelectionMode()
@@ -454,7 +473,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 nextOffset = offset + limit
             ))
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
         val initialItemCount = getCurrentSuccessState().items.size
 
         // Scroll to position 40: maxCached(99) - 40 = 59 < LOAD_TRIGGER(60) → triggers load next page
@@ -480,7 +501,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 nextOffset = 100
             )
         )
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
         val stateBeforeScroll = getCurrentSuccessState()
         val itemCountBefore = stateBeforeScroll.items.size
 
@@ -508,7 +531,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 nextOffset = offset + limit
             ))
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         // Scroll to 150: cleanupCache removes items < keepStart(50) from cache
         viewModel.onScrollPositionChanged(firstVisibleItemIndex = 150)
@@ -537,7 +562,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 else -> Result.success(BrowseResult.Complete(items = allItems.drop(100)))
             }
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         // Scroll to trigger loads and verify state remains valid
         viewModel.onScrollPositionChanged(firstVisibleItemIndex = 40)
@@ -564,7 +591,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 nextOffset = offset + limit
             ))
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         // Jump past cached range: cache is 0-99, scroll to 145 triggers load
         viewModel.onScrollPositionChanged(firstVisibleItemIndex = 145)
@@ -588,7 +617,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 nextOffset = 100
             )
         )
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         // Fire multiple scroll events — each must update lastKnownAbsoluteIndex without crashing
         viewModel.onScrollPositionChanged(firstVisibleItemIndex = 10)
@@ -610,7 +641,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
         coEvery { browseItemsUseCase.invoke(any(), any(), any()) } returns Result.success(
             BrowseResult.Paginated(items = allItems.take(100), hasMore = true, totalEstimate = 200, nextOffset = 100)
         )
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         val beforeFilter = getCurrentSuccessState().items.size
         viewModel.toggleArchiveFilter()
@@ -627,7 +660,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
         coEvery { browseItemsUseCase.invoke(any(), any(), any()) } returns Result.success(
             BrowseResult.Paginated(items = allItems.take(100), hasMore = true, totalEstimate = 200, nextOffset = 100)
         )
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         val beforeSort = getCurrentSuccessState().items.size
         viewModel.setSortOrder(SortOrder.NAME_DESC)
@@ -645,7 +680,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
         coEvery { browseItemsUseCase.invoke(any(), any(), any()) } returns Result.success(
             BrowseResult.Paginated(items = items, hasMore = true, totalEstimate = 1000, nextOffset = 100)
         )
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         viewModel.setSortOrder(SortOrder.NAME_ASC)
 
@@ -668,7 +705,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 nextOffset = offset + limit
             ))
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         viewModel.enterSelectionMode()
         val item = getCurrentSuccessState().items.first()
@@ -701,7 +740,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 ))
             }
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
         viewModel.enterSelectionMode()
 
         viewModel.selectAllArchives()
@@ -720,7 +761,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
         coEvery { browseItemsUseCase.invoke(any(), any(), any()) } returns Result.success(
             BrowseResult.Paginated(items = allItems.take(100), hasMore = true, totalEstimate = 1000, nextOffset = 100)
         )
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         viewModel.onScrollPositionChanged(firstVisibleItemIndex = 37)
         val afterFirst = getCurrentSuccessState().items.map { it.name }
@@ -751,7 +794,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             BrowseResult.Paginated(items = page2, hasMore = true, totalEstimate = 1000, nextOffset = 200)
         )
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
         viewModel.toggleArchiveFilter()
 
         val displayedBefore = getCurrentSuccessState().items
@@ -776,7 +821,9 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 nextOffset = offset + limit
             ))
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         viewModel.toggleArchiveFilter()
         viewModel.onScrollPositionChanged(firstVisibleItemIndex = 20)

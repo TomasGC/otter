@@ -2,7 +2,9 @@ package app.otter.data.repository
 
 import android.content.ContentResolver
 import android.content.Context
+import android.database.Cursor
 import android.net.Uri
+import android.provider.OpenableColumns
 import app.otter.data.extractor.ArchiveExtractor
 import app.otter.data.extractor.ExtractionOptions
 import app.otter.data.util.ResourcePathConverter
@@ -11,17 +13,15 @@ import app.otter.domain.model.ArchiveType
 import app.otter.domain.model.ExtractionProgress
 import app.otter.domain.model.ExtractionResult
 import app.otter.domain.model.ResourcePath
-import android.database.Cursor
-import android.provider.OpenableColumns
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
-import io.mockk.unmockkObject
+import io.mockk.unmockkAll
 import io.mockk.verify
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -30,12 +30,9 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
 import java.io.ByteArrayInputStream
 import java.io.File
 
-@RunWith(RobolectricTestRunner::class)
 class ArchiveRepositoryImplTest {
 
     @get:Rule
@@ -45,9 +42,24 @@ class ArchiveRepositoryImplTest {
     private lateinit var contentResolver: ContentResolver
     private lateinit var zipExtractor: ArchiveExtractor
     private lateinit var repository: ArchiveRepositoryImpl
+    private val uriMockCache = mutableMapOf<String, Uri>()
 
     @Before
     fun setup() {
+        mockkObject(ResourcePathConverter)
+        every { ResourcePathConverter.toUri(any()) } answers {
+            val path = firstArg<ResourcePath>()
+            val uriString = when (path) {
+                is ResourcePath.FileSystem -> path.path
+                is ResourcePath.ArchiveEntry -> path.archivePath
+            }
+            getOrCreateUriMock(uriString)
+        }
+        every { ResourcePathConverter.toFile(any()) } answers {
+            val uri = firstArg<Uri>()
+            uri.path?.let { File(it) }
+        }
+
         context = mockk(relaxed = true)
         contentResolver = mockk(relaxed = true)
         zipExtractor = mockk(relaxed = true)
@@ -58,13 +70,42 @@ class ArchiveRepositoryImplTest {
         repository = ArchiveRepositoryImpl(context, listOf(zipExtractor))
     }
 
+    @After
+    fun tearDown() {
+        uriMockCache.clear()
+        unmockkAll()
+    }
+
+    private fun getOrCreateUriMock(uriString: String): Uri =
+        uriMockCache.getOrPut(uriString) { createUriMock(uriString) }
+
+    private fun createUriMock(uriString: String): Uri {
+        val scheme = when {
+            uriString.startsWith("file://") -> "file"
+            uriString.startsWith("content://") -> "content"
+            else -> ""
+        }
+        val path = when {
+            uriString.startsWith("file:///") -> uriString.removePrefix("file://")
+            uriString.startsWith("file://") -> null
+            uriString.startsWith("content://") -> "/${uriString.substringAfter("://").substringAfter("/")}"
+            else -> uriString
+        }
+        return mockk<Uri>(relaxed = true).also { mock ->
+            every { mock.scheme } returns scheme
+            every { mock.toString() } returns uriString
+            every { mock.path } returns path
+            every { mock.lastPathSegment } returns uriString.substringAfterLast("/").takeIf { it.isNotBlank() }
+        }
+    }
+
     @Test
     fun `should select correct extractor for archive type`() = runTest {
         val archive = createTestArchive()
         val destinationPath = ResourcePath.FileSystem("file:///downloads")
         val inputStream = ByteArrayInputStream(byteArrayOf())
 
-        every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns inputStream
+        every { contentResolver.openInputStream(any()) } returns inputStream
         coEvery {
             zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } returns ExtractionResult.Success("/downloads/test", 5)
@@ -96,7 +137,7 @@ class ArchiveRepositoryImplTest {
         val archive = createTestArchive()
         val destinationPath = ResourcePath.FileSystem("file:///downloads")
 
-        every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns null
+        every { contentResolver.openInputStream(any()) } returns null
 
         val results = repository.extractArchive(archive, destinationPath).toList()
 
@@ -111,7 +152,7 @@ class ArchiveRepositoryImplTest {
         val destinationPath = ResourcePath.FileSystem("file:///downloads")
         val inputStream = ByteArrayInputStream(byteArrayOf())
 
-        every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns inputStream
+        every { contentResolver.openInputStream(any()) } returns inputStream
         coEvery {
             zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } returns ExtractionResult.Success("/downloads/test", 5)
@@ -130,7 +171,7 @@ class ArchiveRepositoryImplTest {
         val destinationPath = ResourcePath.FileSystem("file:///downloads")
         val inputStream = ByteArrayInputStream(byteArrayOf())
 
-        every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns inputStream
+        every { contentResolver.openInputStream(any()) } returns inputStream
         coEvery {
             zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } returns ExtractionResult.Failure("Corrupted archive", null)
@@ -144,13 +185,12 @@ class ArchiveRepositoryImplTest {
 
     @Test
     fun `should use destination path directly`() = runTest {
-        val archive = createTestArchive()
-        // Create temp destination file for cross-platform compatibility
         val tempDir = temporaryFolder.newFolder("test")
-        val destinationPath = ResourcePathConverter.fromUri(Uri.fromFile(tempDir))
+        val destinationPath = ResourcePath.FileSystem(tempDir.absolutePath)
+        val archive = createTestArchive()
         val inputStream = ByteArrayInputStream(byteArrayOf())
 
-        every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns inputStream
+        every { contentResolver.openInputStream(any()) } returns inputStream
         coEvery {
             zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } answers {
@@ -168,7 +208,7 @@ class ArchiveRepositoryImplTest {
         val destinationPath = ResourcePath.FileSystem("file:///downloads")
         val inputStream = ByteArrayInputStream(byteArrayOf())
 
-        every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns inputStream
+        every { contentResolver.openInputStream(any()) } returns inputStream
         coEvery {
             zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } answers {
@@ -180,7 +220,6 @@ class ArchiveRepositoryImplTest {
 
         val results = repository.extractArchive(archive, destinationPath).toList()
 
-        // Should emit: Idle, Extracting(1), Extracting(2), Success
         assertTrue("Should have at least 4 events, got ${results.size}: ${results.map { it::class.simpleName }}", results.size >= 4)
         assertTrue("First event should be Idle", results[0] is ExtractionProgress.Idle)
         assertTrue("Should contain Extracting events", results.any { it is ExtractionProgress.Extracting })
@@ -193,14 +232,13 @@ class ArchiveRepositoryImplTest {
         val destinationPath = ResourcePath.FileSystem("file:///downloads")
         val inputStream = ByteArrayInputStream(byteArrayOf())
 
-        every { contentResolver.openInputStream(ResourcePathConverter.toUri(archive.path)) } returns inputStream
+        every { contentResolver.openInputStream(any()) } returns inputStream
         coEvery {
             zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } throws kotlinx.coroutines.CancellationException("Extraction cancelled")
 
         val results = repository.extractArchive(archive, destinationPath).toList()
 
-        // Flow should close cleanly on cancellation (just Idle event)
         assertTrue("Should emit Idle before cancellation", results.isNotEmpty())
         assertTrue("First event should be Idle", results[0] is ExtractionProgress.Idle)
     }
@@ -235,7 +273,7 @@ class ArchiveRepositoryImplTest {
         val inputStream = ByteArrayInputStream(byteArrayOf())
 
         every { contentResolver.openInputStream(any()) } returns inputStream
-        var capturedSelectedItems: List<String>? = listOf("placeholder") // non-null default to verify null is passed
+        var capturedSelectedItems: List<String>? = listOf("placeholder")
         coEvery {
             zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } answers {
@@ -275,7 +313,7 @@ class ArchiveRepositoryImplTest {
     fun `should pass non-null sourceFile when archive uri resolves to existing file`() = runTest {
         val realFile = temporaryFolder.newFile("real_archive.zip")
         val archive = ArchiveFile(
-            path = ResourcePath.FileSystem(Uri.fromFile(realFile).toString()),
+            path = ResourcePath.FileSystem(realFile.absolutePath),
             name = realFile.name,
             sizeBytes = realFile.length(),
             mimeType = "application/zip",
@@ -300,7 +338,7 @@ class ArchiveRepositoryImplTest {
 
     @Test
     fun `should pass null sourceFile when archive uri path does not exist on disk`() = runTest {
-        val archive = createTestArchive() // file:///test.zip — does not exist on Robolectric FS
+        val archive = createTestArchive() // file:///test.zip — does not exist on FS
         val destinationPath = ResourcePath.FileSystem("file:///downloads")
         every { contentResolver.openInputStream(any()) } returns ByteArrayInputStream(byteArrayOf())
 
@@ -321,34 +359,24 @@ class ArchiveRepositoryImplTest {
 
     @Test
     fun `should emit Error when destination path is null`() = runTest {
-        // Intercept ResourcePathConverter.toUri to return a mock URI with null path for
-        // the destination, exercising the null-path guard in ArchiveRepositoryImpl.
         val archive = createTestArchive()
         val destinationPath = ResourcePath.FileSystem("content://test/destination")
 
-        val mockDestUri = mockk<android.net.Uri>()
+        val mockDestUri = mockk<Uri>()
         every { mockDestUri.path } returns null
+        every { ResourcePathConverter.toUri(destinationPath) } returns mockDestUri
 
-        mockkObject(ResourcePathConverter)
-        try {
-            every { ResourcePathConverter.toUri(archive.path) } returns
-                android.net.Uri.parse("file:///test.zip")
-            every { ResourcePathConverter.toUri(destinationPath) } returns mockDestUri
+        val results = repository.extractArchive(archive, destinationPath).toList()
 
-            val results = repository.extractArchive(archive, destinationPath).toList()
-
-            assertTrue(
-                "Should emit Error for null destination path",
-                results.any { it is ExtractionProgress.Error }
-            )
-            val error = results.filterIsInstance<ExtractionProgress.Error>().first()
-            assertTrue(
-                "Error message should mention destination path",
-                error.message.contains("destination") || error.message.contains("Invalid")
-            )
-        } finally {
-            unmockkObject(ResourcePathConverter)
-        }
+        assertTrue(
+            "Should emit Error for null destination path",
+            results.any { it is ExtractionProgress.Error }
+        )
+        val error = results.filterIsInstance<ExtractionProgress.Error>().first()
+        assertTrue(
+            "Error message should mention destination path",
+            error.message.contains("destination") || error.message.contains("Invalid")
+        )
     }
 
     // ========== DISPLAY_NAME cursor ==========
@@ -359,7 +387,6 @@ class ArchiveRepositoryImplTest {
         val destinationPath = ResourcePath.FileSystem("file:///downloads")
         val inputStream = ByteArrayInputStream(byteArrayOf())
 
-        // Mock cursor with DISPLAY_NAME
         val mockCursor = mockk<Cursor>(relaxed = true)
         every { mockCursor.moveToFirst() } returns true
         every { mockCursor.getColumnIndex(OpenableColumns.DISPLAY_NAME) } returns 0
@@ -372,7 +399,7 @@ class ArchiveRepositoryImplTest {
         coEvery {
             zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } answers {
-            capturedSourceFileName = arg(3) // sourceFileName is arg index 3
+            capturedSourceFileName = arg(3)
             ExtractionResult.Success("/downloads/test", 1)
         }
 
@@ -391,7 +418,6 @@ class ArchiveRepositoryImplTest {
         val destinationPath = ResourcePath.FileSystem("file:///downloads")
         val inputStream = ByteArrayInputStream(byteArrayOf())
 
-        // query returns null → fallback to uri.lastPathSegment
         every { contentResolver.query(any(), any(), null, null, null) } returns null
         every { contentResolver.openInputStream(any()) } returns inputStream
 
@@ -399,7 +425,7 @@ class ArchiveRepositoryImplTest {
         coEvery {
             zipExtractor.extract(any(), any(), any(), any(), any(), any())
         } answers {
-            capturedSourceFileName = arg(3) // sourceFileName is arg index 3
+            capturedSourceFileName = arg(3)
             ExtractionResult.Success("/downloads/test", 1)
         }
 
@@ -420,4 +446,3 @@ class ArchiveRepositoryImplTest {
         type = ArchiveType.ZIP
     )
 }
-

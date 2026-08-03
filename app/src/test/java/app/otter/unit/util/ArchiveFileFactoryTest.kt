@@ -10,17 +10,16 @@ import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import io.mockk.every
+import io.mockk.mockkStatic
+import io.mockk.unmockkAll
+import org.junit.After
 import org.junit.rules.TemporaryFolder
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.File
 
 /**
  * Unit tests for ArchiveFileFactory.
  */
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
 class ArchiveFileFactoryTest {
 
     @get:Rule
@@ -32,9 +31,32 @@ class ArchiveFileFactoryTest {
 
     @Before
     fun setup() {
+        mockkStatic(Uri::class)
+        every { Uri.parse(any<String>()) } answers { mockUri(firstArg()) }
         context = mockk(relaxed = true)
         mimeTypeUtil = MimeTypeUtil()
         factory = ArchiveFileFactory(context, mimeTypeUtil)
+    }
+
+    @After
+    fun tearDown() {
+        unmockkAll()
+    }
+
+    private fun mockUri(uriString: String): Uri {
+        val uriScheme = if (uriString.contains("://")) uriString.substringBefore("://") else ""
+        val uriPath = when {
+            uriString.startsWith("file:///") -> uriString.removePrefix("file://")
+            uriString.startsWith("file://") -> null
+            uriString.startsWith("content://") -> "/${uriString.substringAfter("://").substringAfter("/")}"
+            else -> null
+        }
+        return mockk<Uri>(relaxed = true).also { mock ->
+            every { mock.scheme } returns uriScheme
+            every { mock.toString() } returns uriString
+            every { mock.path } returns uriPath
+            every { mock.lastPathSegment } returns uriString.substringAfterLast("/").takeIf { it.isNotBlank() }
+        }
     }
 
     /**
@@ -224,10 +246,9 @@ class ArchiveFileFactoryTest {
     @Test
     fun `createFromContentUri with missing SIZE column should store unknown size sentinel`() {
         // Arrange: cursor without SIZE column (Google Files / some Samsung URIs)
-        val cursor = android.database.MatrixCursor(
-            arrayOf(android.provider.OpenableColumns.DISPLAY_NAME)
-        )
-        cursor.addRow(arrayOf("archive.zip"))
+        val cursor = io.mockk.mockk<android.database.Cursor>(relaxed = true)
+        io.mockk.every { cursor.moveToFirst() } returns true
+        io.mockk.every { cursor.getColumnIndex(android.provider.OpenableColumns.SIZE) } returns -1
 
         val mockContentResolver = io.mockk.mockk<android.content.ContentResolver>(relaxed = true)
         io.mockk.every { context.contentResolver } returns mockContentResolver
@@ -251,10 +272,10 @@ class ArchiveFileFactoryTest {
 
     @Test
     fun `createFromContentUri with SIZE column present and non-zero should store actual size`() {
-        val cursor = android.database.MatrixCursor(
-            arrayOf(android.provider.OpenableColumns.SIZE, android.provider.OpenableColumns.DISPLAY_NAME)
-        )
-        cursor.addRow(arrayOf(4096L, "archive.zip"))
+        val cursor = io.mockk.mockk<android.database.Cursor>(relaxed = true)
+        io.mockk.every { cursor.moveToFirst() } returns true
+        io.mockk.every { cursor.getColumnIndex(android.provider.OpenableColumns.SIZE) } returns 0
+        io.mockk.every { cursor.getLong(0) } returns 4096L
 
         val mockContentResolver = io.mockk.mockk<android.content.ContentResolver>(relaxed = true)
         io.mockk.every { context.contentResolver } returns mockContentResolver
@@ -316,11 +337,11 @@ class ArchiveFileFactoryTest {
         val mockContentResolver = io.mockk.mockk<android.content.ContentResolver>(relaxed = true)
         io.mockk.every { context.contentResolver } returns mockContentResolver
 
-        // Simulate cursor with file size and display name
-        val cursor = android.database.MatrixCursor(
-            arrayOf(android.provider.OpenableColumns.SIZE, android.provider.OpenableColumns.DISPLAY_NAME)
-        )
-        cursor.addRow(arrayOf(1024L, "test.zip"))
+        // Simulate cursor with file size
+        val cursor = io.mockk.mockk<android.database.Cursor>(relaxed = true)
+        io.mockk.every { cursor.moveToFirst() } returns true
+        io.mockk.every { cursor.getColumnIndex(android.provider.OpenableColumns.SIZE) } returns 0
+        io.mockk.every { cursor.getLong(0) } returns 1024L
         io.mockk.every { mockContentResolver.query(any(), any(), any(), any(), any()) } returns cursor
         io.mockk.every { mockContentResolver.getType(any()) } returns "application/zip"
 

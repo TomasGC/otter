@@ -1,8 +1,10 @@
 package app.otter.integration.viewmodel
 
+import android.net.Uri
 import app.otter.data.browser.ArchiveBrowser
 import app.otter.data.extractor.ArchiveLibraryManager
 import app.otter.data.inspector.ArchiveInspectorFactory
+import app.otter.data.util.ResourcePathConverter
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.ResourcePath
@@ -12,7 +14,10 @@ import app.otter.service.ExtractionQueue
 import app.otter.ui.viewmodel.FileBrowserUiState
 import app.otter.ui.viewmodel.FileBrowserViewModel
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -25,9 +30,6 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -41,8 +43,6 @@ import java.util.zip.ZipOutputStream
  * sliding window behaviour end-to-end without coroutine-dispatcher timing issues.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
 class FileBrowserViewModelRealArchiveMockIntegrationTest {
 
     @get:Rule
@@ -64,6 +64,8 @@ class FileBrowserViewModelRealArchiveMockIntegrationTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        mockkObject(ResourcePathConverter)
+        every { ResourcePathConverter.toUri(any()) } returns mockk<Uri>(relaxed = true)
         archiveFile = createZipWith300Files()
         realItems = readRealArchiveItems(archiveFile)
         assertEquals("ZIP must produce exactly 300 items", 300, realItems.size)
@@ -84,7 +86,9 @@ class FileBrowserViewModelRealArchiveMockIntegrationTest {
             }
         }
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
     }
 
     private fun createZipWith300Files(): File {
@@ -118,6 +122,7 @@ class FileBrowserViewModelRealArchiveMockIntegrationTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkAll()
     }
 
     private fun successState() = viewModel.uiState.value as? FileBrowserUiState.Success
@@ -233,7 +238,9 @@ class FileBrowserViewModelRealArchiveMockIntegrationTest {
         coEvery { browseItemsUseCase.invoke(any(), any(), any()) } returns
             Result.success(BrowseResult.Complete(listOf(dirItem, archiveItem, fileItem)))
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
 
         // Apply archives-only filter
         viewModel.toggleArchiveFilter()
@@ -268,7 +275,9 @@ class FileBrowserViewModelRealArchiveMockIntegrationTest {
         coEvery { browseItemsUseCase.invoke(any(), any(), any()) } returns
             Result.success(BrowseResult.Complete(numericItems))
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
         viewModel.setSortOrder(app.otter.ui.viewmodel.SortOrder.NAME_ASC)
 
         val names = successState()!!.items.map { it.name }

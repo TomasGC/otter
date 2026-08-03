@@ -8,9 +8,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Ignore
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
+import app.otter.domain.model.ResourcePath
 
 /**
  * Tests for FileBrowserViewModel concurrent access and race conditions.
@@ -31,8 +29,6 @@ import org.robolectric.annotation.Config
  * - Double load prevention (isLoadingPage flag)
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
 class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
 
     // ========== RED Phase: Concurrent Access Tests ==========
@@ -49,6 +45,8 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Simulate concurrent reads from multiple collectors
@@ -93,6 +91,8 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Simulate rapid filter toggles from UI thread
@@ -118,6 +118,8 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Simulate rapid navigation (back and forth)
@@ -142,6 +144,8 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Simulate rapid sort order changes
@@ -175,6 +179,8 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         val uiState = getCurrentSuccessState()
@@ -214,6 +220,8 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Simulate rapid scroll that would trigger multiple page loads
@@ -254,6 +262,8 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Trigger page load and cleanup simultaneously
@@ -297,6 +307,8 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Fire many scroll events rapidly
@@ -332,6 +344,8 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Interleave scroll and filter operations
@@ -377,6 +391,8 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Interleave navigation and scroll operations
@@ -425,6 +441,8 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         val initialLoadCount = loadCount

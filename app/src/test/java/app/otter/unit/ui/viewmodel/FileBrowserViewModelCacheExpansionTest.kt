@@ -6,9 +6,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
+import app.otter.domain.model.ResourcePath
 
 /**
  * Tests for FileBrowserViewModel cache expansion.
@@ -22,8 +20,6 @@ import org.robolectric.annotation.Config
  * - Data preservation during expansion
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
 class FileBrowserViewModelCacheExpansionTest : BaseFileBrowserViewModelTest() {
 
     @Test
@@ -46,6 +42,8 @@ class FileBrowserViewModelCacheExpansionTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Assert - Initial state should have WINDOW_SIZE items loaded
@@ -91,6 +89,8 @@ class FileBrowserViewModelCacheExpansionTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Scroll down to trigger next page load
@@ -122,6 +122,8 @@ class FileBrowserViewModelCacheExpansionTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Assert - Window should not exceed WINDOW_SIZE
@@ -166,6 +168,8 @@ class FileBrowserViewModelCacheExpansionTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Scroll to trigger loading last page
@@ -209,6 +213,8 @@ class FileBrowserViewModelCacheExpansionTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Scroll down to expand cache
