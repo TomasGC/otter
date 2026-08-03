@@ -133,6 +133,11 @@ potential-bugs:
 
 style:
   active: true
+  FunctionOnlyReturningConstant:
+    active: true
+    # Hilt @Provides functions must be functions even when returning a constant
+    # (e.g., provideStartPath returning null for default injection).
+    ignoreAnnotated: ['Provides']
   MagicNumber:
     active: false
   MaxLineLength:

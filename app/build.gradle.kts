@@ -16,8 +16,8 @@ android {
         applicationId = "app.otter"
         minSdk = 26
         targetSdk = 35
-        versionCode = 271
-        versionName = "0.0.271"
+        versionCode = 272
+        versionName = "0.0.272"
 
         testInstrumentationRunner = "app.otter.HiltTestRunner"
         vectorDrawables {
@@ -315,6 +315,17 @@ tasks.named("testDebugUnitTest", Test::class.java) {
         "integration-real" -> filter {
             includeTestsMatching("*RealIntegrationTest*")
             excludeTestsMatching("*UnitTest*")
+            excludeTestsMatching("*InstrumentedTest*")
+        }
+        "unit-only" -> filter {
+            includeTestsMatching("app.otter.*")
+            excludeTestsMatching("*IntegrationTest*")
+            excludeTestsMatching("*InstrumentedTest*")
+        }
+        "integration-mock-only" -> filter {
+            includeTestsMatching("app.otter.*")
+            excludeTestsMatching("*UnitTest*")
+            excludeTestsMatching("*RealIntegrationTest*")
             excludeTestsMatching("*InstrumentedTest*")
         }
         // "all" → no filter, runs everything (default for local development)
