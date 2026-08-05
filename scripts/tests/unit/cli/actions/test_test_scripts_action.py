@@ -34,6 +34,7 @@ class TestTestScriptsActionRun:
         assert "pytest" in " ".join(runner.last_call())
         assert "-m" not in flags
         assert "--cov" not in " ".join(flags)
+        assert "-n" not in flags
 
     def test_unit_suite_adds_unit_mark(self):
         action, runner = make_action()
@@ -42,6 +43,8 @@ class TestTestScriptsActionRun:
         assert "-m" in flags
         idx = flags.index("-m")
         assert "unit" in flags[idx + 1]
+        assert "-n" in flags
+        assert flags[flags.index("-n") + 1] == "auto"
 
     def test_integration_mock_adds_mark(self):
         action, runner = make_action()
@@ -50,6 +53,8 @@ class TestTestScriptsActionRun:
         assert "-m" in flags
         idx = flags.index("-m")
         assert "integration_mock" in flags[idx + 1]
+        assert "-n" in flags
+        assert flags[flags.index("-n") + 1] == "auto"
 
     def test_integration_real_adds_mark(self):
         action, runner = make_action()
@@ -58,6 +63,7 @@ class TestTestScriptsActionRun:
         assert "-m" in flags
         idx = flags.index("-m")
         assert "integration_real" in flags[idx + 1]
+        assert "-n" not in flags
 
     def test_e2e_adds_mark(self):
         action, runner = make_action()
@@ -66,6 +72,7 @@ class TestTestScriptsActionRun:
         assert "-m" in flags
         idx = flags.index("-m")
         assert "e2e" in flags[idx + 1]
+        assert "-n" not in flags
 
     def test_multiple_suites_joined_with_or(self):
         action, runner = make_action()
@@ -77,6 +84,20 @@ class TestTestScriptsActionRun:
         assert "unit" in mark
         assert "integration_mock" in mark
         assert " or " in mark
+        assert "-n" in flags
+        assert flags[flags.index("-n") + 1] == "auto"
+
+    def test_integration_real_does_not_parallelize(self):
+        action, runner = make_action()
+        action.run(suites=["integration-real"])
+        flags = pytest_flags(runner.last_call())
+        assert "-n" not in flags
+
+    def test_mixed_parallelizable_and_real_does_not_parallelize(self):
+        action, runner = make_action()
+        action.run(suites=["unit", "integration-real"])
+        flags = pytest_flags(runner.last_call())
+        assert "-n" not in flags
 
     def test_coverage_adds_cov_flags(self):
         action, runner = make_action()
@@ -84,6 +105,7 @@ class TestTestScriptsActionRun:
         cmd = runner.last_call()
         assert any("--cov=" in arg for arg in cmd)
         assert "--cov-report=term-missing" in cmd
+        assert "-n" not in pytest_flags(cmd)
 
     def test_coverage_overrides_other_suites(self):
         action, runner = make_action()
@@ -117,6 +139,7 @@ class TestTestScriptsActionRun:
         flags = pytest_flags(runner.last_call())
         assert "-m" not in flags
         assert "--cov" not in " ".join(flags)
+        assert "-n" not in flags
 
     def test_coverage_suite_no_marker_flag(self):
         action, runner = make_action()

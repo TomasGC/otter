@@ -55,16 +55,10 @@ class TestSuitesConstant:
 
 
 class TestRunUnit:
-    def test_calls_three_stages(self, tmp_path):
+    def test_calls_single_stage(self, tmp_path):
         action, gradle, _, _, _ = make_action(tmp_path)
         action.run_unit()
-        assert gradle.run_task.call_count == 3
-        for call, expected_type in zip(
-            gradle.run_task.call_args_list,
-            ["unit-domain-service", "unit-data", "unit-ui"],
-        ):
-            assert call.args == ("testDebugUnitTest",)
-            assert call.kwargs["extra_args"] == [f"-DtestType={expected_type}"]
+        gradle.run_task.assert_called_once_with("testDebugUnitTest", extra_args=["-DtestType=unit-only"])
 
     def test_returns_true_on_success(self, tmp_path):
         action, _, _, _, _ = make_action(tmp_path)
@@ -77,19 +71,14 @@ class TestRunUnit:
 
 
 class TestRunIntegrationMocks:
-    def test_calls_two_stages(self, tmp_path):
+    def test_calls_single_stage(self, tmp_path):
         action, gradle, _, _, _ = make_action(tmp_path)
         action.run_integration_mocks()
-        assert gradle.run_task.call_count == 2
-        types = [c.kwargs["extra_args"][0] for c in gradle.run_task.call_args_list]
-        assert types == [
-            "-DtestType=integration-mock-extractor",
-            "-DtestType=integration-mock-other",
-        ]
+        gradle.run_task.assert_called_once_with("testDebugUnitTest", extra_args=["-DtestType=integration-mock-only"])
 
-    def test_returns_false_if_any_stage_fails(self, tmp_path):
+    def test_returns_false_on_failure(self, tmp_path):
         action, gradle, _, _, _ = make_action(tmp_path)
-        gradle.run_task.side_effect = [False, True]
+        gradle.run_task.return_value = False
         assert action.run_integration_mocks() is False
 
     def test_returns_true_when_all_pass(self, tmp_path):
@@ -254,26 +243,20 @@ class TestTestActionRun:
         action._grant_manage_external_storage = MagicMock(return_value=True)
         runner.add_run(returncode=0)
         action.run()
-        # 3 unit + 2 integ-mock + 1 integ-real + 2 instrumented
-        assert gradle.run_task.call_count == 8
+        # 1 unit-only + 1 integration-mock-only + 1 integration-real + 2 instrumented
+        assert gradle.run_task.call_count == 5
 
     def test_no_args_runs_all(self, tmp_path):
         action, gradle, _, runner, _ = make_action(tmp_path)
         action._grant_manage_external_storage = MagicMock(return_value=True)
         runner.add_run(returncode=0)
         action.run()
-        assert gradle.run_task.call_count == 8
+        assert gradle.run_task.call_count == 5
 
     def test_unit_suite_runs_only_unit(self, tmp_path):
         action, gradle, adb, _, _ = make_action(tmp_path)
         action.run(suites=["unit"])
-        assert gradle.run_task.call_count == 3
-        for call, expected_type in zip(
-            gradle.run_task.call_args_list,
-            ["unit-domain-service", "unit-data", "unit-ui"],
-        ):
-            assert call.args == ("testDebugUnitTest",)
-            assert call.kwargs["extra_args"] == [f"-DtestType={expected_type}"]
+        gradle.run_task.assert_called_once_with("testDebugUnitTest", extra_args=["-DtestType=unit-only"])
         adb.get_connected.assert_not_called()
 
     def test_instrumented_suite_runs_only_instrumented(self, tmp_path):
@@ -289,13 +272,13 @@ class TestTestActionRun:
     def test_integrations_suite_runs_mocks_and_reals(self, tmp_path):
         action, gradle, adb, _, _ = make_action(tmp_path)
         action.run(suites=["integrations"])
-        assert gradle.run_task.call_count == 3  # 2 mock + 1 real
+        assert gradle.run_task.call_count == 2  # 1 mock + 1 real
         adb.get_connected.assert_not_called()
 
     def test_integration_mocks_suite_runs_only_mocks(self, tmp_path):
         action, gradle, adb, _, _ = make_action(tmp_path)
         action.run(suites=["integration-mocks"])
-        assert gradle.run_task.call_count == 2
+        gradle.run_task.assert_called_once_with("testDebugUnitTest", extra_args=["-DtestType=integration-mock-only"])
         adb.get_connected.assert_not_called()
 
     def test_integration_reals_suite_runs_only_reals(self, tmp_path):
@@ -362,8 +345,8 @@ class TestInstrumentedFailure:
         action, gradle, _, runner, _ = make_action(tmp_path)
         action._grant_manage_external_storage = MagicMock(return_value=True)
         runner.add_run(returncode=0)  # send_archives mkdir
-        # 3 unit + 2 integ-mock + 1 integ-real all OK; instrumented main fails, isolated OK
-        gradle.run_task.side_effect = [True, True, True, True, True, True, False, True]
+        # 1 unit-only + 1 integ-mock-only + 1 integ-real all OK; instrumented main fails, isolated OK
+        gradle.run_task.side_effect = [True, True, True, False, True]
         assert action.run() == 1
 
 

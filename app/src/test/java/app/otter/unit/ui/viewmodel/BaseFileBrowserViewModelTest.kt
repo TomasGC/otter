@@ -1,12 +1,16 @@
 package app.otter.ui.viewmodel
 
 import android.net.Uri
+import app.otter.data.util.ResourcePathConverter
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.ResourcePath
 import app.otter.domain.usecase.BrowseItemsUseCase
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -15,17 +19,12 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /**
  * Base class for FileBrowserViewModel tests.
  * Provides common setup, teardown, and helper methods.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
 abstract class BaseFileBrowserViewModelTest {
 
     protected lateinit var browseItemsUseCase: BrowseItemsUseCase
@@ -38,6 +37,9 @@ abstract class BaseFileBrowserViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
+        mockkObject(ResourcePathConverter)
+        every { ResourcePathConverter.toUri(any()) } returns mockk<Uri>(relaxed = true)
+
         browseItemsUseCase = mockk()
         eventBus = app.otter.service.ExtractionEventBus()
         extractionQueue = app.otter.service.ExtractionQueue()
@@ -46,6 +48,7 @@ abstract class BaseFileBrowserViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkAll()
     }
 
     // ========== Helper Methods ==========
@@ -79,5 +82,35 @@ abstract class BaseFileBrowserViewModelTest {
         val state = viewModel.uiState.value
         assertTrue("State should be Success", state is FileBrowserUiState.Success)
         return state as FileBrowserUiState.Success
+    }
+
+    protected fun createBrowsableItem(
+        name: String,
+        isDirectory: Boolean = false,
+        isArchive: Boolean = false
+    ): BrowsableItem {
+        return when {
+            isArchive -> BrowsableItem.ArchiveFile(
+                path = ResourcePath.ArchiveEntry(archivePath = "file:///$name", entryPath = ""),
+                name = name,
+                sizeBytes = 1024L,
+                lastModified = System.currentTimeMillis(),
+                archivePath = ResourcePath.ArchiveEntry(archivePath = "file:///$name", entryPath = ""),
+                mimeType = "application/zip"
+            )
+            isDirectory -> BrowsableItem.FileSystemDirectory(
+                path = ResourcePath.FileSystem("file:///$name"),
+                name = name,
+                sizeBytes = 0L,
+                lastModified = System.currentTimeMillis()
+            )
+            else -> BrowsableItem.FileSystemFile(
+                path = ResourcePath.FileSystem("file:///$name"),
+                name = name,
+                sizeBytes = 1024L,
+                lastModified = System.currentTimeMillis(),
+                mimeType = "text/plain"
+            )
+        }
     }
 }

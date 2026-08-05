@@ -132,7 +132,7 @@ unit-ui             ─┘  integ-mock-other     ─┼→ integ-real → build 
                                                └──────────→ coverage
 ```
 
-**Parallelization constraint**: `maxParallelForks=1` (Robolectric compatibility). Parallelization only via separate CI jobs (each a separate JVM process).
+**Parallelization**: JVM forks default to 1 (no `maxParallelForks` set — Robolectric incompatibility + net negative on 2-core CI runners). CI parallelism via separate runners per job only.
 
 ### Test Archives
 
@@ -262,6 +262,11 @@ cd scripts && pytest
 cd scripts && pytest --cov=src --cov-report=term-missing
 cd scripts && pytest -m unit
 ```
+
+### Parallelization
+
+`unit` and `integration-mock` suites run with `pytest-xdist` (`-n auto`) for ~4x speedup locally and in CI.
+`integration-real`, `e2e`, and `coverage` run single-threaded (real subprocess / Docker / coverage not safe for distributed execution).
 
 ### Coverage Target
 

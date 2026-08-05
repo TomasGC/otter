@@ -32,6 +32,7 @@ class FileBrowserViewModel @Inject constructor(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     val eventBus: ExtractionEventBus,
     val extractionQueue: app.otter.service.ExtractionQueue,
+    startPath: ResourcePath? = null,
 ) : ViewModel() {
 
     companion object {
@@ -73,7 +74,7 @@ class FileBrowserViewModel @Inject constructor(
     val uiState: StateFlow<FileBrowserUiState> = _uiState.asStateFlow()
 
     private val navigationStack = Stack<ResourcePath>()
-    private var currentPath: ResourcePath = getDefaultStartPath()
+    private var currentPath: ResourcePath = startPath ?: getDefaultStartPath()
     private var allItems: List<BrowsableItem> = emptyList()
     private var filterArchivesOnly: Boolean = false
     private var sortOrder: SortOrder = SortOrder.ARCHIVES_FIRST

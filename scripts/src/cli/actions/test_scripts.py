@@ -14,6 +14,8 @@ _MARK_MAP = {
     "e2e": "e2e",
 }
 
+_PARALLELIZABLE = frozenset({"unit", "integration-mock"})
+
 _SCRIPTS_ROOT = Path(__file__).parent.parent.parent.parent
 
 
@@ -40,6 +42,8 @@ class TestScriptsAction:
             marks = " or ".join(_MARK_MAP[s] for s in suites if s in _MARK_MAP)
             if marks:
                 cmd += ["-m", marks]
+            if set(suites) <= _PARALLELIZABLE:
+                cmd += ["-n", "auto"]
 
         result = self._runner.run(cmd, cwd=str(_SCRIPTS_ROOT))
         return result.returncode

@@ -1,5 +1,7 @@
 package app.otter.integration.viewmodel
 
+import android.net.Uri
+import app.otter.data.util.ResourcePathConverter
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.ResourcePath
@@ -9,7 +11,10 @@ import app.otter.service.ExtractionQueue
 import app.otter.ui.viewmodel.FileBrowserUiState
 import app.otter.ui.viewmodel.FileBrowserViewModel
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -20,9 +25,6 @@ import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /**
  * Integration tests for the 200-item sliding window with mock repository.
@@ -31,8 +33,6 @@ import org.robolectric.annotation.Config
  * All I/O is mocked; tests verify correct window behavior end-to-end.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
 class FileBrowserViewModelWindowMockIntegrationTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
@@ -55,6 +55,8 @@ class FileBrowserViewModelWindowMockIntegrationTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        mockkObject(ResourcePathConverter)
+        every { ResourcePathConverter.toUri(any()) } returns mockk<Uri>(relaxed = true)
         coEvery { browseItemsUseCase.invoke(any(), any(), any()) } answers {
             val offset = arg<Int>(1)
             val limit = arg<Int>(2)
@@ -70,12 +72,15 @@ class FileBrowserViewModelWindowMockIntegrationTest {
             }
         }
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkAll()
     }
 
     private fun successState() = viewModel.uiState.value as? FileBrowserUiState.Success

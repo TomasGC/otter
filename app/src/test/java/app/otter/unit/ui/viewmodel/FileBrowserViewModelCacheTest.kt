@@ -6,9 +6,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
+import app.otter.domain.model.ResourcePath
 
 /**
  * Tests for FileBrowserViewModel cache boundary conditions and empty results.
@@ -24,8 +22,6 @@ import org.robolectric.annotation.Config
  * - Selection in empty archive
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
 class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
 
     // ========== RED Phase: Boundary Condition Tests ==========
@@ -42,6 +38,8 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Get current state
@@ -65,6 +63,8 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         val uiState = getCurrentSuccessState()
@@ -87,6 +87,8 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         val uiState = getCurrentSuccessState()
@@ -113,6 +115,8 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         val uiState = getCurrentSuccessState()
@@ -139,6 +143,8 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Get current state
@@ -162,6 +168,8 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Simulate search with no results (filter that matches nothing)
@@ -186,6 +194,8 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
             testDispatcher,
             eventBus,
             extractionQueue
+        ,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
         // Attempt to toggle selection mode with 0 items

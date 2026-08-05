@@ -10,9 +10,6 @@ import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import timber.log.Timber
 import java.io.File
 import kotlin.io.path.createTempDirectory
@@ -21,8 +18,6 @@ import kotlin.io.path.createTempDirectory
  * Unit tests for FileLoggingTree (Robolectric)
  * Tests log path generation and filename format without actual file I/O
  */
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
 class FileLoggingTreeTest {
 
     private lateinit var context: Context

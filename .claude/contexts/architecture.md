@@ -1,7 +1,7 @@
 # Project Architecture - Otter (Android Archive Extractor)
 
 **Purpose**: System architecture and design decisions for Otter (ZIP + RAR + 7z + TAR + RPA extraction with background service)
-**Last Updated**: 2026-07-31
+**Last Updated**: 2026-08-04
 
 ---
 
@@ -17,7 +17,7 @@
 | **DI** | Hilt (Dagger) | Dependency injection |
 | **Async** | Kotlin Coroutines | Asynchronous programming |
 | **Reactive** | Flow | Reactive data streams |
-| **Build** | Gradle (KTS) + Python scripts (manage.py) | Kotlin DSL + cross-platform build/test/ADB automation via OOP DI scripts |
+| **Build** | Gradle (KTS) + Python scripts (manage.py) | Kotlin DSL + cross-platform build/test/ADB automation via OOP DI scripts; pytest-xdist (-n auto) for unit + integ-mock Python suites |
 | **Testing** | JUnit + MockK + Coroutines Test | 698 tests (495 unit + 111 integ-mock + 2 integ-real + 90 instrumented) + 628 Python script tests |
 | **ZIP Extraction** | java.util.zip + IZipFileReader | Native ZIP (testable via interface) |
 | **RAR Extraction** | 7-Zip-JBinding + MultiVolumeCallback | RAR4/RAR5 + split-archive (.part1.rar) support |
@@ -560,6 +560,17 @@ GitHub Actions with language-prefixed workflows (GitHub does not support subdire
 **Coverage**: ≥80% enforced via Kover
 **Test Count**: 698 Kotlin + 628 Python script tests
 **Success Rate**: 95-100% (Gradle Managed Devices)
+
+---
+
+## DI Modules
+
+| Module | Scope | Purpose |
+|--------|-------|---------|
+| `AppModule` | `SingletonComponent` | Extractors, repositories, use cases, managers |
+| `ViewModelModule` | `ViewModelComponent` | `startPath: ResourcePath?` — injectable initial navigation path (default `null` = file system root) |
+
+`ViewModelModule` uses `@Provides fun provideStartPath(): ResourcePath? = null` so the start path can be overridden in tests or future deep-link flows without touching `FileBrowserViewModel`.
 
 ---
 

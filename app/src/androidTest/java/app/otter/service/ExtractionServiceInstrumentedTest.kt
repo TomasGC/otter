@@ -9,7 +9,9 @@ import app.otter.data.util.ResourcePathConverter
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import javax.inject.Inject
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -62,7 +64,7 @@ class ExtractionServiceInstrumentedTest {
         context.startService(stopIntent)
 
         // Wait a bit for service to stop
-        runBlocking { delay(500) }
+        runBlocking { delay(2000) }
 
         // Clean up all test files
         testFiles.forEach { file ->
@@ -151,7 +153,7 @@ class ExtractionServiceInstrumentedTest {
         // Start collecting events BEFORE starting service to avoid race condition
         val processedFiles = mutableSetOf<String>()
         val collectionJob = launch {
-            eventBus.progressState.collect { event ->
+            eventBus.progressState.buffer(Channel.UNLIMITED).collect { event ->
                 if (event == null) return@collect
                 processedFiles.add(event.fileName)
             }

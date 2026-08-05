@@ -4,6 +4,21 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ---
 
+2026-08-05 - [#38] Enable Test Parallelization
+- Added pytest-xdist (-n auto) for unit and integration-mock Python suites; skipped for integration-real, e2e, coverage
+- Added startPath injectable parameter to FileBrowserViewModel + ViewModelModule (@Provides returning null)
+- Added unit/integration-mock testType Gradle filters to consolidate local runs from 5 invocations to 2
+- Fixed detekt FunctionOnlyReturningConstant: added ignoreAnnotated: ['Provides'] for Hilt @Provides methods
+- Fixed ExtractionServiceInstrumentedTest flakiness: StateFlow conflation via .buffer(Channel.UNLIMITED) + 2000ms teardown
+- Removed maxParallelForks (net regression on 2-core CI: +133s integ-mock vs -43s unit)
+- Condor: self-contained shards (no avd-setup job); explicit sdkmanager emulator install + system image cache; 2-shard parallel execution (~11min saved on cache hit)
+- Refactored FileBrowserViewModelTest + FileBrowserViewModelSelectionTest to extend BaseFileBrowserViewModelTest; moved createBrowsableItem to base class (-112 lines of duplication)
+tags: #parallelization #python #testing #detekt #instrumented-tests #ci-cd #condor #refactoring
+Ref: https://github.com/TomasGC/otter/issues/38
+Commits: 7d81ed6, a408602
+
+---
+
 2026-07-31 - [#49] Multi-Volume RAR/7z Extraction
 - Added MultiVolumeCallback + ExtractionOptions for split-archive extraction (RAR .part1.rar, 7z .7z.001) via 7-Zip-JBinding volume chaining
 - Replaced emulator polling loop with event-driven AdbManager.wait_for_emulator() (adb wait-for-device + getprop -w sys.boot_completed)

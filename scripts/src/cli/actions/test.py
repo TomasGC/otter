@@ -62,18 +62,10 @@ class TestAction:
         return self._settings
 
     def run_unit(self) -> bool:
-        ok = True
-        for test_type in ["unit-domain-service", "unit-data", "unit-ui"]:
-            if not self._gradle.run_task("testDebugUnitTest", extra_args=[f"-DtestType={test_type}"]):
-                ok = False
-        return ok
+        return self._gradle.run_task("testDebugUnitTest", extra_args=["-DtestType=unit-only"])
 
     def run_integration_mocks(self) -> bool:
-        ok = True
-        for test_type in ["integration-mock-extractor", "integration-mock-other"]:
-            if not self._gradle.run_task("testDebugUnitTest", extra_args=[f"-DtestType={test_type}"]):
-                ok = False
-        return ok
+        return self._gradle.run_task("testDebugUnitTest", extra_args=["-DtestType=integration-mock-only"])
 
     def run_integration_reals(self) -> bool:
         return self._gradle.run_task("testDebugUnitTest", extra_args=["-DtestType=integration-real"])

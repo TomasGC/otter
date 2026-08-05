@@ -3,25 +3,14 @@ package app.otter.ui.viewmodel
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.ResourcePath
-import app.otter.domain.usecase.BrowseItemsUseCase
 import io.mockk.coEvery
-import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /**
  * Phase 6: Selection Logic Tests
@@ -30,35 +19,17 @@ import org.robolectric.annotation.Config
  * Task #77: Select all in paginated views
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
-class FileBrowserViewModelSelectionTest {
-
-    private lateinit var browseItemsUseCase: BrowseItemsUseCase
-    private lateinit var eventBus: app.otter.service.ExtractionEventBus
-    private lateinit var extractionQueue: app.otter.service.ExtractionQueue
-    private lateinit var viewModel: FileBrowserViewModel
-    private val testDispatcher = UnconfinedTestDispatcher()
+class FileBrowserViewModelSelectionTest : BaseFileBrowserViewModelTest() {
 
     @Before
-    fun setup() {
-        Dispatchers.setMain(testDispatcher)
-
-        browseItemsUseCase = mockk()
-        eventBus = app.otter.service.ExtractionEventBus()
-        extractionQueue = app.otter.service.ExtractionQueue()
-
-        // Mock default start directory (external storage root)
+    fun setupTest() {
         coEvery { browseItemsUseCase(any(), any(), any()) } returns Result.success(
             BrowseResult.Complete(emptyList())
         )
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue)
-    }
-
-    @After
-    fun tearDown() {
-        Dispatchers.resetMain()
+        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+            startPath = ResourcePath.FileSystem("/storage/emulated/0")
+        )
     }
 
     // ========================================
