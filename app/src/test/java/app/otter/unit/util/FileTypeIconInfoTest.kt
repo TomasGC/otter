@@ -7,6 +7,9 @@ import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Slideshow
+import androidx.compose.material.icons.filled.TableChart
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -54,17 +57,17 @@ class FileTypeIconInfoTest {
     }
 
     @Test
-    fun `pdf returns Description icon with Orange tint`() {
+    fun `pdf returns PictureAsPdf icon with Red tint`() {
         val info = FileTypeIconInfo.forMimeType("application/pdf")
-        assertEquals(Icons.Default.Description, info.icon)
-        assertEquals(FileTypeIconInfo.TintKey.Orange, info.tint)
+        assertEquals(Icons.Default.PictureAsPdf, info.icon)
+        assertEquals(FileTypeIconInfo.TintKey.Red, info.tint)
     }
 
     @Test
-    fun `text prefix returns Description icon`() {
+    fun `text prefix returns Description icon with Blue tint`() {
         val info = FileTypeIconInfo.forMimeType("text/plain")
         assertEquals(Icons.Default.Description, info.icon)
-        assertEquals(FileTypeIconInfo.TintKey.Orange, info.tint)
+        assertEquals(FileTypeIconInfo.TintKey.Blue, info.tint)
     }
 
     @Test
@@ -74,27 +77,95 @@ class FileTypeIconInfoTest {
     }
 
     @Test
-    fun `ooxml returns Description icon`() {
+    fun `ooxml word returns Description icon`() {
         val info = FileTypeIconInfo.forMimeType("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
         assertEquals(Icons.Default.Description, info.icon)
     }
 
     @Test
-    fun `ms office format returns Description icon`() {
+    fun `ms excel returns TableChart icon with Green tint`() {
         val info = FileTypeIconInfo.forMimeType("application/vnd.ms-excel")
-        assertEquals(Icons.Default.Description, info.icon)
+        assertEquals(Icons.Default.TableChart, info.icon)
+        assertEquals(FileTypeIconInfo.TintKey.Green, info.tint)
     }
 
     @Test
-    fun `odf returns Description icon`() {
+    fun `odf text returns Description icon`() {
         val info = FileTypeIconInfo.forMimeType("application/vnd.oasis.opendocument.text")
         assertEquals(Icons.Default.Description, info.icon)
     }
 
     @Test
     fun `first matching rule wins for ambiguous prefix`() {
-        // image/ matches before text/
         val imageInfo = FileTypeIconInfo.forMimeType("image/svg+xml")
         assertEquals(FileTypeIconInfo.TintKey.Green, imageInfo.tint)
+    }
+
+    @Test
+    fun `audio ogg returns MusicNote icon with Blue tint`() {
+        val info = FileTypeIconInfo.forMimeType("audio/ogg")
+        assertEquals(Icons.Default.MusicNote, info.icon)
+        assertEquals(FileTypeIconInfo.TintKey.Blue, info.tint)
+    }
+
+    @Test
+    fun `audio wav returns MusicNote icon`() {
+        val info = FileTypeIconInfo.forMimeType("audio/wav")
+        assertEquals(Icons.Default.MusicNote, info.icon)
+    }
+
+    @Test
+    fun `video webm returns Movie icon with Red tint`() {
+        val info = FileTypeIconInfo.forMimeType("video/webm")
+        assertEquals(Icons.Default.Movie, info.icon)
+        assertEquals(FileTypeIconInfo.TintKey.Red, info.tint)
+    }
+
+    @Test
+    fun `video quicktime returns Movie icon`() {
+        val info = FileTypeIconInfo.forMimeType("video/quicktime")
+        assertEquals(Icons.Default.Movie, info.icon)
+    }
+
+    @Test
+    fun `text html returns Description icon with Blue tint`() {
+        val info = FileTypeIconInfo.forMimeType("text/html")
+        assertEquals(Icons.Default.Description, info.icon)
+        assertEquals(FileTypeIconInfo.TintKey.Blue, info.tint)
+    }
+
+    @Test
+    fun `text csv returns TableChart icon with Green tint`() {
+        val info = FileTypeIconInfo.forMimeType("text/csv")
+        assertEquals(Icons.Default.TableChart, info.icon)
+        assertEquals(FileTypeIconInfo.TintKey.Green, info.tint)
+    }
+
+    @Test
+    fun `empty string mimeType returns default help icon with Surface tint`() {
+        val info = FileTypeIconInfo.forMimeType("")
+        assertEquals(Icons.Default.Help, info.icon)
+        assertEquals(FileTypeIconInfo.TintKey.Surface, info.tint)
+    }
+
+    @Test
+    fun `xlsx spreadsheet ooxml returns TableChart icon with Green tint`() {
+        val info = FileTypeIconInfo.forMimeType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        assertEquals(Icons.Default.TableChart, info.icon)
+        assertEquals(FileTypeIconInfo.TintKey.Green, info.tint)
+    }
+
+    @Test
+    fun `odf spreadsheet returns TableChart icon with Green tint`() {
+        val info = FileTypeIconInfo.forMimeType("application/vnd.oasis.opendocument.spreadsheet")
+        assertEquals(Icons.Default.TableChart, info.icon)
+        assertEquals(FileTypeIconInfo.TintKey.Green, info.tint)
+    }
+
+    @Test
+    fun `ms powerpoint returns Slideshow icon with Orange tint`() {
+        val info = FileTypeIconInfo.forMimeType("application/vnd.ms-powerpoint")
+        assertEquals(Icons.Default.Slideshow, info.icon)
+        assertEquals(FileTypeIconInfo.TintKey.Orange, info.tint)
     }
 }

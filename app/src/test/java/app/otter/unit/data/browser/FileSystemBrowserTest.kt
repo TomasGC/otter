@@ -258,6 +258,32 @@ class FileSystemBrowserTest {
     }
 
     @Test
+    fun `countChildren counts only files when directory has no subdirectories`() = runTest {
+        val dir = tempFolder.newFolder("files-only-dir")
+        tempFolder.newFile("files-only-dir/file1.txt")
+        tempFolder.newFile("files-only-dir/file2.pdf")
+        tempFolder.newFile("files-only-dir/file3.mp3")
+        val result = browser.countChildren(dir.absolutePath)
+        assertEquals(FolderCounts(folderCount = 0, fileCount = 3), result)
+    }
+
+    @Test
+    fun `countChildren counts only folders when directory has no files`() = runTest {
+        val dir = tempFolder.newFolder("dirs-only-dir")
+        File(dir, "sub1").mkdir()
+        File(dir, "sub2").mkdir()
+        val result = browser.countChildren(dir.absolutePath)
+        assertEquals(FolderCounts(folderCount = 2, fileCount = 0), result)
+    }
+
+    @Test
+    fun `countChildren returns zero when path points to a file`() = runTest {
+        val file = tempFolder.newFile("regular-file-for-count.txt")
+        val result = browser.countChildren(file.absolutePath)
+        assertEquals(FolderCounts(folderCount = 0, fileCount = 0), result)
+    }
+
+    @Test
     fun `browse returns failure when directory is unreadable (Linux only)`() = runTest {
         val os = System.getProperty("os.name", "").lowercase()
         org.junit.Assume.assumeTrue("Test only runs on Linux", os.contains("linux"))

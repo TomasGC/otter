@@ -7,11 +7,13 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.otter.domain.model.BrowsableItem
+import app.otter.domain.model.FolderCounts
 import app.otter.domain.model.ResourcePath
 import app.otter.ui.theme.OtterTheme
 import app.otter.util.FileFormatters
@@ -47,6 +49,7 @@ class BrowsableItemRowTest {
         isSelected: Boolean = false,
         onClick: () -> Unit = {},
         onLongClick: () -> Unit = {},
+        folderCounts: FolderCounts? = null,
     ) {
         composeTestRule.setContent {
             OtterTheme {
@@ -55,7 +58,8 @@ class BrowsableItemRowTest {
                     isSelectionMode = isSelectionMode,
                     isSelected = isSelected,
                     onClick = onClick,
-                    onLongClick = onLongClick
+                    onLongClick = onLongClick,
+                    folderCounts = folderCounts,
                 )
             }
         }
@@ -138,5 +142,41 @@ class BrowsableItemRowTest {
         composeTestRule.onNodeWithText("notes.txt").performTouchInput { longClick() }
 
         assertTrue("Row long-click must invoke onLongClick", longClicked)
+    }
+
+    @Test
+    fun folderCountsDisplayedForDirectoryWithNonNullCounts() {
+        setRow(directory, folderCounts = FolderCounts(3, 7))
+
+        composeTestRule.onNodeWithText("3").assertIsDisplayed()
+        composeTestRule.onNodeWithText("7").assertIsDisplayed()
+    }
+
+    @Test
+    fun folderCountsNotShownForDirectoryWhenNull() {
+        setRow(directory, folderCounts = null)
+
+        composeTestRule.onNodeWithText("0").assertDoesNotExist()
+    }
+
+    @Test
+    fun folderCountZerosShownWhenFolderCountsNonNull() {
+        setRow(directory, folderCounts = FolderCounts(0, 0))
+
+        composeTestRule.onAllNodesWithText("0", useUnmergedTree = true).assertCountEquals(2)
+    }
+
+    @Test
+    fun imageMimeTypeFileRendersCorrectly() {
+        val imageFile = BrowsableItem.FileSystemFile(
+            path = ResourcePath.FileSystem("/sdcard/photo.jpg"),
+            name = "photo.jpg",
+            sizeBytes = 2048L,
+            lastModified = 1_700_000_000_000L,
+            mimeType = "image/jpeg"
+        )
+        setRow(imageFile)
+
+        composeTestRule.onNodeWithText("photo.jpg").assertIsDisplayed()
     }
 }

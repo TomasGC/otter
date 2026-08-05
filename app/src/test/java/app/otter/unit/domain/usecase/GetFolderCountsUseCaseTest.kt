@@ -80,4 +80,27 @@ class GetFolderCountsUseCaseTest {
 
         paths.forEach { path -> coVerify(exactly = 1) { repository.getFolderCounts(path) } }
     }
+
+    @Test
+    fun `all paths failing emits nothing`() = runTest {
+        val paths = listOf("/bad1", "/bad2")
+        paths.forEach { coEvery { repository.getFolderCounts(it) } throws RuntimeException("IO error") }
+
+        val results = useCase(paths).toList()
+
+        assertTrue(results.isEmpty())
+    }
+
+    @Test
+    fun `duplicate paths each invoke repository separately`() = runTest {
+        val path = "/storage/emulated/0/Documents"
+        val counts = FolderCounts(1, 1)
+        coEvery { repository.getFolderCounts(path) } returns counts
+
+        val results = useCase(listOf(path, path)).toList()
+
+        assertEquals(2, results.size)
+        results.forEach { assertEquals(path to counts, it) }
+        coVerify(exactly = 2) { repository.getFolderCounts(path) }
+    }
 }
