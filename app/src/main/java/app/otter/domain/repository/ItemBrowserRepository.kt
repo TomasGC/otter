@@ -1,6 +1,7 @@
 package app.otter.domain.repository
 
 import app.otter.domain.model.BrowseResult
+import app.otter.domain.model.FolderCounts
 import app.otter.domain.model.ResourcePath
 
 /**
@@ -53,4 +54,10 @@ interface ItemBrowserRepository {
      * @return true if path is root (no parent), false otherwise
      */
     fun isRoot(path: ResourcePath): Boolean
+
+    /**
+     * Returns the count of folders and files inside a file system directory.
+     * Only applies to FileSystem paths; returns FolderCounts(0, 0) for other path types.
+     */
+    suspend fun getFolderCounts(path: String): FolderCounts
 }

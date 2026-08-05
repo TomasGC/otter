@@ -2,6 +2,7 @@ package app.otter.data.browser
 
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
+import app.otter.domain.model.FolderCounts
 import app.otter.domain.model.ResourcePath
 import app.otter.util.MimeTypeUtil
 import kotlinx.coroutines.Dispatchers
@@ -91,6 +92,17 @@ class FileSystemBrowser @Inject constructor(
     fun isRoot(path: ResourcePath.FileSystem): Boolean {
         val file = File(path.path)
         return file.parentFile == null || file.parentFile?.path == file.path
+    }
+
+    /**
+     * Counts the number of sub-folders and files in a directory.
+     */
+    suspend fun countChildren(path: String): FolderCounts = withContext(Dispatchers.IO) {
+        val files = File(path).listFiles() ?: return@withContext FolderCounts(0, 0)
+        var folderCount = 0
+        var fileCount = 0
+        files.forEach { if (it.isDirectory) folderCount++ else fileCount++ }
+        FolderCounts(folderCount, fileCount)
     }
 
     /**

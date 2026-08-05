@@ -3,6 +3,7 @@ package app.otter.data.browser
 import android.content.Context
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
+import app.otter.domain.model.FolderCounts
 import app.otter.domain.model.ResourcePath
 import app.otter.util.MimeTypeUtil
 import io.mockk.mockk
@@ -228,6 +229,32 @@ class FileSystemBrowserTest {
         val browseResult = result.getOrThrow()
         assertTrue(browseResult is BrowseResult.Complete)
         assertEquals(0, (browseResult as BrowseResult.Complete).items.size)
+    }
+
+    // ========== countChildren ==========
+
+    @Test
+    fun `countChildren returns zero for empty directory`() = runTest {
+        val dir = tempFolder.newFolder("empty-count-dir")
+        val result = browser.countChildren(dir.absolutePath)
+        assertEquals(FolderCounts(folderCount = 0, fileCount = 0), result)
+    }
+
+    @Test
+    fun `countChildren counts files and folders separately`() = runTest {
+        val dir = tempFolder.newFolder("mixed-dir")
+        tempFolder.newFile("mixed-dir/file1.txt")
+        tempFolder.newFile("mixed-dir/file2.txt")
+        File(dir, "sub1").mkdir()
+        File(dir, "sub2").mkdir()
+        val result = browser.countChildren(dir.absolutePath)
+        assertEquals(FolderCounts(folderCount = 2, fileCount = 2), result)
+    }
+
+    @Test
+    fun `countChildren returns zero for non-existent path`() = runTest {
+        val result = browser.countChildren("/nonexistent/path/xyz")
+        assertEquals(FolderCounts(folderCount = 0, fileCount = 0), result)
     }
 
     @Test

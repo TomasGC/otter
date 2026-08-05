@@ -75,6 +75,7 @@ fun FileBrowserScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val folderCounts by viewModel.folderCounts.collectAsStateWithLifecycle()
 
     // Navigate directly into archive when opened with "Open with Browser"
     LaunchedEffect(initialArchiveUri) {
@@ -203,6 +204,7 @@ fun FileBrowserScreen(
                 isFileSelected = { file -> viewModel.isFileSelected(file) },
                 onMoveExtractionToBackground = { viewModel.moveExtractionToBackground() },
                 onScrollPositionChanged = { firstVisibleIndex -> viewModel.onScrollPositionChanged(firstVisibleIndex) },
+                folderCounts = folderCounts,
                 onFileClick = { item ->
                     val state = uiState as? FileBrowserUiState.Success
                     if (state?.isSelectionMode == true) {

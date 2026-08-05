@@ -6,6 +6,7 @@ import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.ResourcePath
 import app.otter.domain.usecase.BrowseItemsUseCase
+import app.otter.domain.usecase.GetFolderCountsUseCase
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -13,6 +14,7 @@ import io.mockk.mockkObject
 import io.mockk.unmockkAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -28,6 +30,7 @@ import org.junit.Before
 abstract class BaseFileBrowserViewModelTest {
 
     protected lateinit var browseItemsUseCase: BrowseItemsUseCase
+    protected lateinit var getFolderCountsUseCase: GetFolderCountsUseCase
     protected lateinit var eventBus: app.otter.service.ExtractionEventBus
     protected lateinit var extractionQueue: app.otter.service.ExtractionQueue
     protected lateinit var viewModel: FileBrowserViewModel
@@ -41,6 +44,8 @@ abstract class BaseFileBrowserViewModelTest {
         every { ResourcePathConverter.toUri(any()) } returns mockk<Uri>(relaxed = true)
 
         browseItemsUseCase = mockk()
+        getFolderCountsUseCase = mockk()
+        every { getFolderCountsUseCase(any()) } returns emptyFlow()
         eventBus = app.otter.service.ExtractionEventBus()
         extractionQueue = app.otter.service.ExtractionQueue()
     }

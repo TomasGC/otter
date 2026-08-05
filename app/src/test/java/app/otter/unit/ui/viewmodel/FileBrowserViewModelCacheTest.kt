@@ -35,6 +35,7 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel (which will browse and populate cache)
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -60,6 +61,7 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -84,6 +86,7 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -112,6 +115,7 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -140,6 +144,7 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -165,6 +170,7 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -191,6 +197,7 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue

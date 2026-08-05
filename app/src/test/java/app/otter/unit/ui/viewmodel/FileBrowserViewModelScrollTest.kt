@@ -42,6 +42,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel (starts with first 100 items)
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -78,6 +79,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -103,6 +105,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel (Complete result, no pagination)
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -138,6 +141,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -163,6 +167,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -203,7 +208,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             }
         }
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -232,7 +237,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 nextOffset = offset + limit
             ))
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -265,7 +270,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             ))
         }
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -295,7 +300,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             )
         )
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -328,7 +333,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             )
         )
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -371,7 +376,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             }
         }
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -407,7 +412,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             )
         )
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -473,7 +478,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 nextOffset = offset + limit
             ))
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
         val initialItemCount = getCurrentSuccessState().items.size
@@ -501,7 +506,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 nextOffset = 100
             )
         )
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
         val stateBeforeScroll = getCurrentSuccessState()
@@ -531,7 +536,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 nextOffset = offset + limit
             ))
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -562,7 +567,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 else -> Result.success(BrowseResult.Complete(items = allItems.drop(100)))
             }
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -591,7 +596,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 nextOffset = offset + limit
             ))
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -617,7 +622,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 nextOffset = 100
             )
         )
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -641,7 +646,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
         coEvery { browseItemsUseCase.invoke(any(), any(), any()) } returns Result.success(
             BrowseResult.Paginated(items = allItems.take(100), hasMore = true, totalEstimate = 200, nextOffset = 100)
         )
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -660,7 +665,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
         coEvery { browseItemsUseCase.invoke(any(), any(), any()) } returns Result.success(
             BrowseResult.Paginated(items = allItems.take(100), hasMore = true, totalEstimate = 200, nextOffset = 100)
         )
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -680,7 +685,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
         coEvery { browseItemsUseCase.invoke(any(), any(), any()) } returns Result.success(
             BrowseResult.Paginated(items = items, hasMore = true, totalEstimate = 1000, nextOffset = 100)
         )
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -705,7 +710,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 nextOffset = offset + limit
             ))
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -740,7 +745,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 ))
             }
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
         viewModel.enterSelectionMode()
@@ -761,7 +766,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
         coEvery { browseItemsUseCase.invoke(any(), any(), any()) } returns Result.success(
             BrowseResult.Paginated(items = allItems.take(100), hasMore = true, totalEstimate = 1000, nextOffset = 100)
         )
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -794,7 +799,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
             BrowseResult.Paginated(items = page2, hasMore = true, totalEstimate = 1000, nextOffset = 200)
         )
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
         viewModel.toggleArchiveFilter()
@@ -821,7 +826,7 @@ class FileBrowserViewModelScrollTest : BaseFileBrowserViewModelTest() {
                 nextOffset = offset + limit
             ))
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 

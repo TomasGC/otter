@@ -36,6 +36,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.otter.domain.model.BrowsableItem
+import app.otter.domain.model.FolderCounts
+import app.otter.domain.model.ResourcePath
 import app.otter.service.ExtractionEventBus
 import app.otter.ui.component.BrowsableItemRow
 import app.otter.ui.component.ExtractionScreen
@@ -180,6 +182,7 @@ fun FileBrowserContent(
     onFileClick: (BrowsableItem) -> Unit,
     onFileLongClick: (BrowsableItem) -> Unit,
     onScrollPositionChanged: (Int) -> Unit = {},
+    folderCounts: Map<String, FolderCounts> = emptyMap(),
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         when (val state = uiState) {
@@ -206,7 +209,8 @@ fun FileBrowserContent(
                         isFileSelected = isFileSelected,
                         onFileClick = onFileClick,
                         onFileLongClick = onFileLongClick,
-                        onScrollPositionChanged = onScrollPositionChanged
+                        onScrollPositionChanged = onScrollPositionChanged,
+                        folderCounts = folderCounts,
                     )
                 }
             }
@@ -230,6 +234,7 @@ private fun FileList(
     onFileClick: (app.otter.domain.model.BrowsableItem) -> Unit,
     onFileLongClick: (app.otter.domain.model.BrowsableItem) -> Unit,
     onScrollPositionChanged: (Int) -> Unit = {},
+    folderCounts: Map<String, FolderCounts> = emptyMap(),
 ) {
     val listState = rememberLazyListState()
 
@@ -254,7 +259,8 @@ private fun FileList(
                 isSelectionMode = isSelectionMode,
                 isSelected = isFileSelected(file),
                 onClick = { onFileClick(file) },
-                onLongClick = { onFileLongClick(file) }
+                onLongClick = { onFileLongClick(file) },
+                folderCounts = (file.path as? ResourcePath.FileSystem)?.path?.let { folderCounts[it] },
             )
         }
     }

@@ -21,7 +21,7 @@ class FileBrowserViewModelStartPathTest : BaseFileBrowserViewModelTest() {
     }
 
     private fun createViewModel(startPath: ResourcePath) = FileBrowserViewModel(
-        browseItemsUseCase, testDispatcher, eventBus, extractionQueue, startPath = startPath
+        browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue, startPath = startPath
     )
 
     // ========== startPath routing ==========

@@ -4,6 +4,7 @@ import app.otter.data.browser.ArchiveBrowser
 import app.otter.data.browser.FileSystemBrowser
 import app.otter.data.inspector.ArchiveInspectorFactory
 import app.otter.domain.model.BrowseResult
+import app.otter.domain.model.FolderCounts
 import app.otter.domain.model.ResourcePath
 import app.otter.domain.repository.ItemBrowserRepository
 import java.io.File
@@ -85,6 +86,9 @@ class ItemBrowserRepositoryImpl @Inject constructor(
             }
         }
     }
+
+    override suspend fun getFolderCounts(path: String): FolderCounts =
+        fileSystemBrowser.countChildren(path)
 
     override fun isRoot(path: ResourcePath): Boolean {
         return when (path) {
