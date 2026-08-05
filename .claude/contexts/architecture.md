@@ -1,7 +1,7 @@
 # Project Architecture - Otter (Android Archive Extractor)
 
 **Purpose**: System architecture and design decisions for Otter (ZIP + RAR + 7z + TAR + RPA extraction with background service)
-**Last Updated**: 2026-08-04
+**Last Updated**: 2026-08-05
 
 ---
 
@@ -18,7 +18,7 @@
 | **Async** | Kotlin Coroutines | Asynchronous programming |
 | **Reactive** | Flow | Reactive data streams |
 | **Build** | Gradle (KTS) + Python scripts (manage.py) | Kotlin DSL + cross-platform build/test/ADB automation via OOP DI scripts; pytest-xdist (-n auto) for unit + integ-mock Python suites |
-| **Testing** | JUnit + MockK + Coroutines Test | 698 tests (495 unit + 111 integ-mock + 2 integ-real + 90 instrumented) + 628 Python script tests |
+| **Testing** | JUnit + MockK + Coroutines Test | See `contexts/tests.md` for current counts |
 | **ZIP Extraction** | java.util.zip + IZipFileReader | Native ZIP (testable via interface) |
 | **RAR Extraction** | 7-Zip-JBinding + MultiVolumeCallback | RAR4/RAR5 + split-archive (.part1.rar) support |
 | **7z Extraction** | 7-Zip-JBinding + MultiVolumeCallback | 7-Zip format + split-archive (.7z.001) support |
