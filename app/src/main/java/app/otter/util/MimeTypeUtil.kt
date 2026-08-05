@@ -49,6 +49,14 @@ class MimeTypeUtil @Inject constructor() {
             "mkv" to "video/x-matroska",
             "mp3" to "audio/mpeg",
             "flac" to "audio/flac",
+            "wav" to "audio/wav",
+            "ogg" to "audio/ogg",
+            "webm" to "video/webm",
+            "mov" to "video/quicktime",
+            "avi" to "video/x-msvideo",
+            "webp" to "image/webp",
+            "svg" to "image/svg+xml",
+            "csv" to "text/csv",
         )
     }
 }
