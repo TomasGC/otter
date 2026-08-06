@@ -3,6 +3,7 @@ package app.otter.unit.util
 import app.otter.util.FileTypeIconInfo
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Movie
@@ -166,6 +167,48 @@ class FileTypeIconInfoTest {
     fun `ms powerpoint returns Slideshow icon with Orange tint`() {
         val info = FileTypeIconInfo.forMimeType("application/vnd.ms-powerpoint")
         assertEquals(Icons.Default.Slideshow, info.icon)
+        assertEquals(FileTypeIconInfo.TintKey.Orange, info.tint)
+    }
+
+    @Test
+    fun `zip returns FolderZip icon with Orange tint`() {
+        val info = FileTypeIconInfo.forMimeType("application/zip")
+        assertEquals(Icons.Default.FolderZip, info.icon)
+        assertEquals(FileTypeIconInfo.TintKey.Orange, info.tint)
+    }
+
+    @Test
+    fun `rar returns FolderZip icon with Orange tint`() {
+        val info = FileTypeIconInfo.forMimeType("application/x-rar-compressed")
+        assertEquals(Icons.Default.FolderZip, info.icon)
+        assertEquals(FileTypeIconInfo.TintKey.Orange, info.tint)
+    }
+
+    @Test
+    fun `7z returns FolderZip icon with Orange tint`() {
+        val info = FileTypeIconInfo.forMimeType("application/x-7z-compressed")
+        assertEquals(Icons.Default.FolderZip, info.icon)
+        assertEquals(FileTypeIconInfo.TintKey.Orange, info.tint)
+    }
+
+    @Test
+    fun `tar returns FolderZip icon with Orange tint`() {
+        val info = FileTypeIconInfo.forMimeType("application/x-tar")
+        assertEquals(Icons.Default.FolderZip, info.icon)
+        assertEquals(FileTypeIconInfo.TintKey.Orange, info.tint)
+    }
+
+    @Test
+    fun `gzip returns FolderZip icon with Orange tint`() {
+        val info = FileTypeIconInfo.forMimeType("application/gzip")
+        assertEquals(Icons.Default.FolderZip, info.icon)
+        assertEquals(FileTypeIconInfo.TintKey.Orange, info.tint)
+    }
+
+    @Test
+    fun `rpa returns FolderZip icon with Orange tint`() {
+        val info = FileTypeIconInfo.forMimeType("application/x-rpa")
+        assertEquals(Icons.Default.FolderZip, info.icon)
         assertEquals(FileTypeIconInfo.TintKey.Orange, info.tint)
     }
 }

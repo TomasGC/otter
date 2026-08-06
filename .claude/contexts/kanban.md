@@ -4,16 +4,19 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ---
 
-2026-08-05 - [#36] File Type Icons and Folder Content Counts
+2026-08-06 - [#36] File Type Icons and Folder Content Counts
 - Added file type icon differentiation: FileTypeIconInfo.kt maps MIME types to distinct icons (image, video, audio, PDF, code, archive, etc.)
 - Extended MimeTypeUtil with additional MIME type mappings
 - Added GetFolderCountsUseCase + FolderCounts domain model; FileBrowserViewModel loads folder counts lazily per visible directory
 - Fixed CI failure: BrowsableItemRowTest.folderCountZerosShownWhenFolderCountsNonNull — combinedClickable merges descendant semantics; fixed with useUnmergedTree = true
 - Fixed CI failure: ExtractionServiceInstrumentedTest.serviceShouldEmitProgressEvents — StateFlow race condition; replaced all withTimeout usages with CompletableDeferred (event-driven, no internal timeout)
-- Added coverage: FileTypeIconInfoTest, FileBrowserViewModelFolderCountsTest, GetFolderCountsUseCaseTest, ItemBrowserRepositoryFolderCountsMockIntegrationTest
-tags: #icons #folder-counts #instrumented-tests #compose #stateflow
+- Added coverage: FileTypeIconInfoTest (29 tests), FileBrowserViewModelFolderCountsTest, GetFolderCountsUseCaseTest, ItemBrowserRepositoryFolderCountsMockIntegrationTest
+- Fixed gap: archive MIME types (zip/rar/7z/tar/rpa/gzip) had no icon rule → mapped to FolderZip + Orange tint; added 6 archive icon tests
+- Phase 2 (folder counts in archive sub-directories) deferred → issue #56 created
+- CI: skip pipelines on markdown-only commits (docs-only detection via push SHA diff)
+tags: #icons #folder-counts #instrumented-tests #compose #stateflow #ci-cd
 Ref: https://github.com/TomasGC/otter/issues/36
-Commits: d2d1ac9, c65d35f, 708b6b5
+Commits: d2d1ac9, c65d35f, 708b6b5, f9b8426, dafc0ce
 
 ---
 

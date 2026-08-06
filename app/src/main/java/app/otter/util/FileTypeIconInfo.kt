@@ -2,6 +2,7 @@ package app.otter.util
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Movie
@@ -29,6 +30,20 @@ object FileTypeIconInfo {
         listOf("image/") to IconInfo(Icons.Default.Image, TintKey.Green),
         listOf("video/") to IconInfo(Icons.Default.Movie, TintKey.Red),
         listOf("audio/") to IconInfo(Icons.Default.MusicNote, TintKey.Blue),
+        listOf(
+            "application/zip",
+            "application/x-zip",
+            "application/x-rar",
+            "application/vnd.rar",
+            "application/x-7z-compressed",
+            "application/x-tar",
+            "application/gzip",
+            "application/x-bzip",
+            "application/x-compressed-tar",
+            "application/x-bzip-compressed-tar",
+            "application/x-xz-compressed-tar",
+            "application/x-rpa",
+        ) to IconInfo(Icons.Default.FolderZip, TintKey.Orange),
         listOf("application/pdf") to IconInfo(Icons.Default.PictureAsPdf, TintKey.Red),
         listOf(
             "text/csv",
