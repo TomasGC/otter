@@ -1,6 +1,6 @@
 # Tests - Otter
 
-**Last Updated**: 2026-07-31
+**Last Updated**: 2026-08-05
 
 ---
 
@@ -10,11 +10,11 @@
 
 | Category | Tests | Runner | Description |
 |----------|-------|--------|-------------|
-| Unit (JVM) | 495 | JUnit + MockK | Pure JVM, no Android deps |
-| Integration mock (JVM) | 111 | JUnit + MockK + real files | Real archives, mocked Android |
-| Integration real (JVM) | 2 | JUnit, no mocks | Real archives, no mocks at all |
-| Instrumented (device) | 90 | AndroidJUnit4 + Hilt | Requires connected device or Android Emulator (AVD) |
-| **Total** | **698** | | |
+| Unit (JVM) | 760 | JUnit + MockK | Pure JVM, no Android deps |
+| Integration mock (JVM) | 177 | JUnit + MockK + real files | Real archives, mocked Android |
+| Integration real (JVM) | 17 | JUnit, no mocks | Real archives, no mocks at all |
+| Instrumented (device) | 170 | AndroidJUnit4 + Hilt | Requires connected device or Android Emulator (AVD) |
+| **Total** | **1124** | | |
 
 ### Directory Structure
 

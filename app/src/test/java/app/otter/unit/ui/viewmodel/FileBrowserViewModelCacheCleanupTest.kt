@@ -54,6 +54,7 @@ class FileBrowserViewModelCacheCleanupTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -89,6 +90,7 @@ class FileBrowserViewModelCacheCleanupTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -116,6 +118,7 @@ class FileBrowserViewModelCacheCleanupTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -151,6 +154,7 @@ class FileBrowserViewModelCacheCleanupTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -191,6 +195,7 @@ class FileBrowserViewModelCacheCleanupTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -251,6 +256,7 @@ class FileBrowserViewModelCacheCleanupTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel and scroll extensively
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue

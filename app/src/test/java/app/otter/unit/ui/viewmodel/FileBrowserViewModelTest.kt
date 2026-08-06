@@ -27,7 +27,7 @@ class FileBrowserViewModelTest : BaseFileBrowserViewModelTest() {
         )
         coEvery { browseItemsUseCase(any(), any(), any()) } returns Result.success(BrowseResult.Complete(mockItems))
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
     }
@@ -275,7 +275,7 @@ class FileBrowserViewModelTest : BaseFileBrowserViewModelTest() {
             createBrowsableItem("file.txt", isDirectory = false, isArchive = false)
         )
         coEvery { browseItemsUseCase(any(), any(), any()) } returns Result.success(BrowseResult.Complete(mockItems))
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -293,7 +293,7 @@ class FileBrowserViewModelTest : BaseFileBrowserViewModelTest() {
     fun `selectAllArchives with empty list should handle gracefully`() {
         // Given
         coEvery { browseItemsUseCase(any(), any(), any()) } returns Result.success(BrowseResult.Complete(emptyList()))
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -314,7 +314,7 @@ class FileBrowserViewModelTest : BaseFileBrowserViewModelTest() {
         coEvery { browseItemsUseCase(any(), any(), any()) } returns Result.failure(SecurityException(errorMessage))
 
         // When
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -383,7 +383,7 @@ class FileBrowserViewModelTest : BaseFileBrowserViewModelTest() {
             Result.success(BrowseResult.Complete(items))
 
         // When
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -579,7 +579,7 @@ class FileBrowserViewModelTest : BaseFileBrowserViewModelTest() {
         coEvery { browseItemsUseCase(any(), any(), any()) } returns Result.success(
             BrowseResult.Complete(items = allItems.take(3))
         )
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -604,7 +604,7 @@ class FileBrowserViewModelTest : BaseFileBrowserViewModelTest() {
         coEvery { browseItemsUseCase(any(), any(), any()) } returns Result.success(
             BrowseResult.Paginated(items = allItems.take(100), hasMore = true, totalEstimate = 200, nextOffset = 100)
         )
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -640,7 +640,7 @@ class FileBrowserViewModelTest : BaseFileBrowserViewModelTest() {
                 Result.failure(Exception("Load failed"))
             }
         }
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -654,7 +654,7 @@ class FileBrowserViewModelTest : BaseFileBrowserViewModelTest() {
     fun `getSelectedPaths returns correct paths after selection`() = runTest {
         val items = (0 until 10).map { i -> createBrowsableItem("file_$i.txt") }
         coEvery { browseItemsUseCase(any(), any(), any()) } returns Result.success(BrowseResult.Complete(items = items))
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -675,7 +675,7 @@ class FileBrowserViewModelTest : BaseFileBrowserViewModelTest() {
     fun `isFileSelected accurate after multiple toggles`() = runTest {
         val items = (0 until 5).map { i -> createBrowsableItem("file_$i.txt") }
         coEvery { browseItemsUseCase(any(), any(), any()) } returns Result.success(BrowseResult.Complete(items = items))
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 

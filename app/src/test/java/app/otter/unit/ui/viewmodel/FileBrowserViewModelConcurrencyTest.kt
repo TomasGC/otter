@@ -42,6 +42,7 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -88,6 +89,7 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -115,6 +117,7 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -141,6 +144,7 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -176,6 +180,7 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -217,6 +222,7 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -259,6 +265,7 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -304,6 +311,7 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -341,6 +349,7 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -388,6 +397,7 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -438,6 +448,7 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue

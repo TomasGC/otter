@@ -9,6 +9,7 @@ import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.ResourcePath
 import app.otter.domain.usecase.BrowseItemsUseCase
+import app.otter.domain.usecase.GetFolderCountsUseCase
 import app.otter.service.ExtractionEventBus
 import app.otter.service.ExtractionQueue
 import app.otter.ui.viewmodel.FileBrowserUiState
@@ -20,6 +21,7 @@ import io.mockk.mockkObject
 import io.mockk.unmockkAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -52,6 +54,7 @@ class FileBrowserViewModelRealArchiveMockIntegrationTest {
     private val eventBus = ExtractionEventBus()
     private val extractionQueue = ExtractionQueue()
     private val browseItemsUseCase = mockk<BrowseItemsUseCase>()
+    private val getFolderCountsUseCase = mockk<GetFolderCountsUseCase>()
     private lateinit var viewModel: FileBrowserViewModel
     private lateinit var archiveFile: File
 
@@ -66,6 +69,7 @@ class FileBrowserViewModelRealArchiveMockIntegrationTest {
         Dispatchers.setMain(testDispatcher)
         mockkObject(ResourcePathConverter)
         every { ResourcePathConverter.toUri(any()) } returns mockk<Uri>(relaxed = true)
+        every { getFolderCountsUseCase(any()) } returns emptyFlow()
         archiveFile = createZipWith300Files()
         realItems = readRealArchiveItems(archiveFile)
         assertEquals("ZIP must produce exactly 300 items", 300, realItems.size)
@@ -86,7 +90,7 @@ class FileBrowserViewModelRealArchiveMockIntegrationTest {
             }
         }
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
     }
@@ -238,7 +242,7 @@ class FileBrowserViewModelRealArchiveMockIntegrationTest {
         coEvery { browseItemsUseCase.invoke(any(), any(), any()) } returns
             Result.success(BrowseResult.Complete(listOf(dirItem, archiveItem, fileItem)))
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
@@ -275,7 +279,7 @@ class FileBrowserViewModelRealArchiveMockIntegrationTest {
         coEvery { browseItemsUseCase.invoke(any(), any(), any()) } returns
             Result.success(BrowseResult.Complete(numericItems))
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
         viewModel.setSortOrder(app.otter.ui.viewmodel.SortOrder.NAME_ASC)

@@ -5,6 +5,7 @@ import app.otter.data.inspector.ArchiveInspectorFactory
 import app.otter.domain.inspector.ArchiveInspector
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
+import app.otter.domain.model.FolderCounts
 import app.otter.domain.model.ResourcePath
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -643,5 +644,21 @@ class ItemBrowserRepositoryImplTest {
         // Then
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is ConcurrentModificationException)
+    }
+
+    // ============================
+    // getFolderCounts() tests
+    // ============================
+
+    @Test
+    fun `getFolderCounts delegates to fileSystemBrowser countChildren`() = runTest {
+        val path = "/storage/emulated/0/Documents"
+        val expected = FolderCounts(folderCount = 2, fileCount = 5)
+        coEvery { fileSystemBrowser.countChildren(path) } returns expected
+
+        val result = repository.getFolderCounts(path)
+
+        assertEquals(expected, result)
+        coVerify(exactly = 1) { fileSystemBrowser.countChildren(path) }
     }
 }

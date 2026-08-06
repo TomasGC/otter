@@ -39,6 +39,7 @@ class FileBrowserViewModelCacheExpansionTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -86,6 +87,7 @@ class FileBrowserViewModelCacheExpansionTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -119,6 +121,7 @@ class FileBrowserViewModelCacheExpansionTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -165,6 +168,7 @@ class FileBrowserViewModelCacheExpansionTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel and scroll to end
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue
@@ -210,6 +214,7 @@ class FileBrowserViewModelCacheExpansionTest : BaseFileBrowserViewModelTest() {
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
             browseItemsUseCase,
+            getFolderCountsUseCase,
             testDispatcher,
             eventBus,
             extractionQueue

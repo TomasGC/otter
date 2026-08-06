@@ -27,7 +27,7 @@ class FileBrowserViewModelSelectionTest : BaseFileBrowserViewModelTest() {
             BrowseResult.Complete(emptyList())
         )
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
     }

@@ -6,6 +6,7 @@ import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.ResourcePath
 import app.otter.domain.usecase.BrowseItemsUseCase
+import app.otter.domain.usecase.GetFolderCountsUseCase
 import app.otter.service.ExtractionEventBus
 import app.otter.service.ExtractionQueue
 import app.otter.ui.viewmodel.FileBrowserUiState
@@ -17,6 +18,7 @@ import io.mockk.mockkObject
 import io.mockk.unmockkAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -37,6 +39,7 @@ class FileBrowserViewModelWindowMockIntegrationTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
     private val browseItemsUseCase = mockk<BrowseItemsUseCase>()
+    private val getFolderCountsUseCase = mockk<GetFolderCountsUseCase>()
     private val eventBus = ExtractionEventBus()
     private val extractionQueue = ExtractionQueue()
     private lateinit var viewModel: FileBrowserViewModel
@@ -57,6 +60,7 @@ class FileBrowserViewModelWindowMockIntegrationTest {
         Dispatchers.setMain(testDispatcher)
         mockkObject(ResourcePathConverter)
         every { ResourcePathConverter.toUri(any()) } returns mockk<Uri>(relaxed = true)
+        every { getFolderCountsUseCase(any()) } returns emptyFlow()
         coEvery { browseItemsUseCase.invoke(any(), any(), any()) } answers {
             val offset = arg<Int>(1)
             val limit = arg<Int>(2)
@@ -72,7 +76,7 @@ class FileBrowserViewModelWindowMockIntegrationTest {
             }
         }
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
     }

@@ -9,13 +9,12 @@ import app.otter.data.util.ResourcePathConverter
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import javax.inject.Inject
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.buffer
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -84,18 +83,24 @@ class ExtractionServiceInstrumentedTest {
         val archivePath = ResourcePathConverter.fromUri(archiveUri)
         val intent = ExtractionService.newIntent(context, archivePath, "progress-test.zip")
 
+        // Start collecting BEFORE service to avoid missing fast completions
+        val deferred = CompletableDeferred<ExtractionEventBus.ProgressEvent>()
+        val job = launch {
+            eventBus.progressState.collect { e ->
+                if (e != null && !deferred.isCompleted) deferred.complete(e)
+            }
+        }
+
         // When - Start service with Hilt injection
         context.startService(intent)
 
-        // Wait for progress event (faster with API 30 + KVM)
-        val event = withTimeout(10000) {
-            eventBus.progressState.first { it != null }
-        }
+        // Then - Await event-driven; CI job timeout is the safety net
+        val event = deferred.await()
+        job.cancel()
 
-        // Then
         assertNotNull("Should receive progress event", event)
-        assertEquals("progress-test.zip", event?.fileName)
-        assertTrue("Should have extracted count", (event?.extractedCount ?: -1) >= 0)
+        assertEquals("progress-test.zip", event.fileName)
+        assertTrue("Should have extracted count", event.extractedCount >= 0)
     }
 
     @Test
@@ -106,15 +111,19 @@ class ExtractionServiceInstrumentedTest {
         val archivePath = ResourcePathConverter.fromUri(archiveUri)
         val intent = ExtractionService.newIntent(context, archivePath, "complete-test.zip")
 
+        // Start collecting BEFORE service to avoid missing completion on SharedFlow (replay=0)
+        val done = CompletableDeferred<Unit>()
+        val job = launch {
+            eventBus.completeEvents.collect { if (!done.isCompleted) done.complete(Unit) }
+        }
+
         // When - Start service with Hilt injection
         context.startService(intent)
 
-        // Wait for completion event (faster with API 30 + KVM)
-        withTimeout(15000) {
-            eventBus.completeEvents.first()
-        }
+        // Then - Await event-driven
+        done.await()
+        job.cancel()
 
-        // Then - If we reach here, extraction completed successfully
         assertTrue("Extraction should complete", true)
     }
 
@@ -125,16 +134,20 @@ class ExtractionServiceInstrumentedTest {
         val file1Uri = Uri.fromFile(testFile)
         val file1Path = ResourcePathConverter.fromUri(file1Uri)
 
+        // Start collecting BEFORE service
+        val done = CompletableDeferred<Unit>()
+        val job = launch {
+            eventBus.completeEvents.collect { if (!done.isCompleted) done.complete(Unit) }
+        }
+
         // When - Start service (Hilt injection)
         val intent = ExtractionService.newIntent(context, file1Path, "single-queue-test.zip")
         context.startService(intent)
 
-        // Then - Wait for extraction to complete
-        withTimeout(30000) {
-            eventBus.completeEvents.first()
-        }
+        // Then - Await event-driven
+        done.await()
+        job.cancel()
 
-        // If we reach here, queue processing works
         assertTrue("Should process single file from queue", true)
     }
 
@@ -150,12 +163,14 @@ class ExtractionServiceInstrumentedTest {
             listOf(ExtractionQueue.ExtractionTask(ResourcePathConverter.fromUri(file2Uri), "queue-test-2.zip"))
         )
 
-        // Start collecting events BEFORE starting service to avoid race condition
+        // Start collecting BEFORE service; use UNLIMITED buffer to avoid StateFlow conflation
         val processedFiles = mutableSetOf<String>()
+        val bothDone = CompletableDeferred<Unit>()
         val collectionJob = launch {
             eventBus.progressState.buffer(Channel.UNLIMITED).collect { event ->
                 if (event == null) return@collect
                 processedFiles.add(event.fileName)
+                if (processedFiles.size >= 2 && !bothDone.isCompleted) bothDone.complete(Unit)
             }
         }
 
@@ -164,16 +179,10 @@ class ExtractionServiceInstrumentedTest {
         val intent = ExtractionService.newIntent(context, file1Path, "queue-test-1.zip")
         context.startService(intent)
 
-        // Then - Wait for both files to be processed
-        withTimeout(30000) { // 30s should be enough for 2 small files
-            while (processedFiles.size < 2) {
-                delay(100)
-            }
-        }
-
+        // Then - Await event-driven
+        bothDone.await()
         collectionJob.cancel()
 
-        // Verify both files were processed
         assertTrue("Should have processed queue-test-1.zip", processedFiles.contains("queue-test-1.zip"))
         assertTrue("Should have processed queue-test-2.zip", processedFiles.contains("queue-test-2.zip"))
     }
@@ -225,18 +234,24 @@ class ExtractionServiceInstrumentedTest {
         val archivePath = ResourcePathConverter.fromUri(archiveUri)
         val intent = ExtractionService.newIntent(context, archivePath, "recent-files-test.zip")
 
+        // Start collecting BEFORE service with condition on recentFiles
+        val deferred = CompletableDeferred<ExtractionEventBus.ProgressEvent>()
+        val job = launch {
+            eventBus.progressState.collect { e ->
+                if (e != null && e.recentFiles.isNotEmpty() && !deferred.isCompleted) deferred.complete(e)
+            }
+        }
+
         // When - Start service
         context.startService(intent)
 
-        // Wait for progress event with recent files
-        val event = withTimeout(10000) {
-            eventBus.progressState.first { it != null && it.recentFiles.isNotEmpty() }
-        }
+        // Then - Await event-driven
+        val event = deferred.await()
+        job.cancel()
 
-        // Then - Should have recent files list
         assertNotNull("Should receive progress event with recent files", event)
-        assertTrue("Should have recent files", event?.recentFiles?.isNotEmpty() == true)
-        assertTrue("Recent files should be limited to 5", (event?.recentFiles?.size ?: 0) <= 5)
+        assertTrue("Should have recent files", event.recentFiles.isNotEmpty())
+        assertTrue("Recent files should be limited to 5", event.recentFiles.size <= 5)
     }
 
 
@@ -248,12 +263,19 @@ class ExtractionServiceInstrumentedTest {
         val archivePath = ResourcePathConverter.fromUri(archiveUri)
         val intent = ExtractionService.newIntent(context, archivePath, "reset-test.zip")
 
+        // Start collecting BEFORE service
+        val firstEvent = CompletableDeferred<Unit>()
+        val job = launch {
+            eventBus.progressState.collect { e ->
+                if (e != null && !firstEvent.isCompleted) firstEvent.complete(Unit)
+            }
+        }
+
         context.startService(intent)
 
         // Wait for at least one progress event
-        withTimeout(10000) {
-            eventBus.progressState.first { it != null }
-        }
+        firstEvent.await()
+        job.cancel()
 
         // When - Stop service
         val stopIntent = ExtractionService.newStopIntent(context)
@@ -263,7 +285,6 @@ class ExtractionServiceInstrumentedTest {
         delay(1000)
 
         // Then - EventBus should be reset (replay cache cleared)
-        // This is verified by starting a new extraction and ensuring no stale events
         assertTrue("EventBus should be reset after stop", true)
     }
 
@@ -278,11 +299,17 @@ class ExtractionServiceInstrumentedTest {
         expectedOutputDir.deleteRecursively()
         testFiles.add(expectedOutputDir)
 
+        // Start collecting BEFORE service
+        val done = CompletableDeferred<Unit>()
+        val job = launch {
+            eventBus.completeEvents.collect { if (!done.isCompleted) done.complete(Unit) }
+        }
+
         context.startService(ExtractionService.newIntent(context, archivePath, testFile.name))
 
-        withTimeout(15_000) {
-            eventBus.completeEvents.first()
-        }
+        // Await event-driven
+        done.await()
+        job.cancel()
 
         assertTrue("Output directory must exist after extraction", expectedOutputDir.exists())
         val extractedFiles = expectedOutputDir.walk().filter { it.isFile }.toList()

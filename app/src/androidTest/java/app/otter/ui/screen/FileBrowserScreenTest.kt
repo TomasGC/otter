@@ -13,6 +13,7 @@ import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.ResourcePath
 import app.otter.domain.usecase.BrowseItemsUseCase
+import app.otter.domain.usecase.GetFolderCountsUseCase
 import app.otter.service.ExtractionEventBus
 import app.otter.service.ExtractionQueue
 import app.otter.ui.theme.OtterTheme
@@ -69,6 +70,7 @@ class FileBrowserScreenTest {
 
         viewModel = FileBrowserViewModel(
             browseItemsUseCase = mockUseCase,
+            getFolderCountsUseCase = mockk(relaxed = true),
             ioDispatcher = testDispatcher,
             eventBus = ExtractionEventBus(),
             extractionQueue = ExtractionQueue()

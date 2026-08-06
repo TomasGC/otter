@@ -4,6 +4,19 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ---
 
+2026-08-05 - [#36] File Type Icons and Folder Content Counts
+- Added file type icon differentiation: FileTypeIconInfo.kt maps MIME types to distinct icons (image, video, audio, PDF, code, archive, etc.)
+- Extended MimeTypeUtil with additional MIME type mappings
+- Added GetFolderCountsUseCase + FolderCounts domain model; FileBrowserViewModel loads folder counts lazily per visible directory
+- Fixed CI failure: BrowsableItemRowTest.folderCountZerosShownWhenFolderCountsNonNull — combinedClickable merges descendant semantics; fixed with useUnmergedTree = true
+- Fixed CI failure: ExtractionServiceInstrumentedTest.serviceShouldEmitProgressEvents — StateFlow race condition; replaced all withTimeout usages with CompletableDeferred (event-driven, no internal timeout)
+- Added coverage: FileTypeIconInfoTest, FileBrowserViewModelFolderCountsTest, GetFolderCountsUseCaseTest, ItemBrowserRepositoryFolderCountsMockIntegrationTest
+tags: #icons #folder-counts #instrumented-tests #compose #stateflow
+Ref: https://github.com/TomasGC/otter/issues/36
+Commits: d2d1ac9, c65d35f, 708b6b5
+
+---
+
 2026-08-05 - [#38] Enable Test Parallelization
 - Added pytest-xdist (-n auto) for unit and integration-mock Python suites; skipped for integration-real, e2e, coverage
 - Added startPath injectable parameter to FileBrowserViewModel + ViewModelModule (@Provides returning null)

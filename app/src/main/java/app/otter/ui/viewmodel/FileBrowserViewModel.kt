@@ -7,18 +7,22 @@ import androidx.lifecycle.viewModelScope
 import app.otter.data.util.ResourcePathConverter
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
+import app.otter.domain.model.FolderCounts
 import app.otter.domain.model.ResourcePath
 import app.otter.domain.usecase.BrowseItemsUseCase
+import app.otter.domain.usecase.GetFolderCountsUseCase
 import app.otter.service.ExtractionEventBus
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Stack
-import kotlinx.coroutines.CoroutineDispatcher
 import javax.inject.Inject
 
 /**
@@ -29,6 +33,7 @@ import javax.inject.Inject
 @HiltViewModel
 class FileBrowserViewModel @Inject constructor(
     private val browseItemsUseCase: BrowseItemsUseCase,
+    private val getFolderCountsUseCase: GetFolderCountsUseCase,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     val eventBus: ExtractionEventBus,
     val extractionQueue: app.otter.service.ExtractionQueue,
@@ -72,6 +77,10 @@ class FileBrowserViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<FileBrowserUiState>(FileBrowserUiState.Loading)
     val uiState: StateFlow<FileBrowserUiState> = _uiState.asStateFlow()
+
+    private val _folderCounts = MutableStateFlow<Map<String, FolderCounts>>(emptyMap())
+    val folderCounts: StateFlow<Map<String, FolderCounts>> = _folderCounts.asStateFlow()
+    private var folderCountJob: Job? = null
 
     private val navigationStack = Stack<ResourcePath>()
     private var currentPath: ResourcePath = startPath ?: getDefaultStartPath()
@@ -457,6 +466,21 @@ class FileBrowserViewModel @Inject constructor(
         _uiState.value = successState
     }
 
+    private fun loadFolderCounts(items: List<BrowsableItem>) {
+        folderCountJob?.cancel()
+        _folderCounts.value = emptyMap()
+
+        val dirs = items.filterIsInstance<BrowsableItem.FileSystemDirectory>()
+        if (dirs.isEmpty()) return
+
+        folderCountJob = viewModelScope.launch(ioDispatcher) {
+            val paths = dirs.map { (it.path as ResourcePath.FileSystem).path }
+            getFolderCountsUseCase(paths).collect { (path, counts) ->
+                _folderCounts.update { current -> current + (path to counts) }
+            }
+        }
+    }
+
     private fun browseDirectory(path: ResourcePath) {
         _uiState.value = FileBrowserUiState.Loading
         viewModelScope.launch {
@@ -484,6 +508,7 @@ class FileBrowserViewModel @Inject constructor(
                             currentWindowEnd = result.items.size
                             isPaginated = false
                             applyFilterAndSort()
+                            loadFolderCounts(result.items)
                         }
                         is BrowseResult.Paginated -> {
                             // Large list - use cache
