@@ -1,7 +1,7 @@
 # Project Architecture - Otter (Android Archive Extractor)
 
 **Purpose**: System architecture and design decisions for Otter (ZIP + RAR + 7z + TAR + RPA extraction with background service)
-**Last Updated**: 2026-08-05
+**Last Updated**: 2026-08-06
 
 ---
 
