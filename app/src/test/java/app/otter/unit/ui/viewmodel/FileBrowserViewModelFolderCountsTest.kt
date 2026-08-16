@@ -4,6 +4,8 @@ import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.FolderCounts
 import app.otter.domain.model.ResourcePath
+import app.otter.domain.usecase.BrowsingUseCases
+import app.otter.service.ExtractionCoordinator
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.verify
@@ -20,11 +22,9 @@ class FileBrowserViewModelFolderCountsTest : BaseFileBrowserViewModelTest() {
 
     private fun createViewModel() {
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue,
+            ExtractionCoordinator(eventBus, extractionQueue),
             startPath = startPath
         )
     }

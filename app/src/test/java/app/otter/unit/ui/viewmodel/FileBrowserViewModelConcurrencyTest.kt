@@ -1,6 +1,10 @@
 package app.otter.ui.viewmodel
 
 import app.otter.domain.model.BrowseResult
+import app.otter.domain.model.FileCategory
+import app.otter.domain.model.FileCategoryFilterState
+import app.otter.domain.usecase.BrowsingUseCases
+import app.otter.service.ExtractionCoordinator
 import io.mockk.coEvery
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -41,11 +45,9 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -88,18 +90,21 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
-        // Simulate rapid filter toggles from UI thread
-        repeat(20) {
-            viewModel.toggleArchiveFilter()
+        // Simulate rapid filter changes from UI thread
+        repeat(20) { index ->
+            val filters = if (index % 2 == 0) {
+                mapOf(FileCategory.ARCHIVE to FileCategoryFilterState.INCLUDE)
+            } else {
+                emptyMap()
+            }
+            viewModel.applyCategoryFilterOverride(filters)
         }
 
         // Assert - State is valid and consistent
@@ -116,11 +121,9 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -143,11 +146,9 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -179,11 +180,9 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -221,11 +220,9 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -264,11 +261,9 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -310,11 +305,9 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -348,11 +341,9 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -365,8 +356,13 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
         }
 
         val filterJob = launch {
-            repeat(10) {
-                viewModel.toggleArchiveFilter()
+            repeat(10) { index ->
+                val filters = if (index % 2 == 0) {
+                    mapOf(FileCategory.ARCHIVE to FileCategoryFilterState.INCLUDE)
+                } else {
+                    emptyMap()
+                }
+                viewModel.applyCategoryFilterOverride(filters)
             }
         }
 
@@ -396,11 +392,9 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -447,11 +441,9 @@ class FileBrowserViewModelConcurrencyTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
