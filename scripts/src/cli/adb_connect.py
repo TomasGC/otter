@@ -258,7 +258,7 @@ class DeviceConnector:
         return None
 
     def _interactive_pair(self) -> Optional[str]:
-        print("\nOn your device: Settings → Developer options → Wireless debugging → Pair device")
+        print("\nOn your device: Settings -> Developer options -> Wireless debugging -> Pair device")
         try:
             code = self._input("Enter the 6-digit pairing code: ").strip()
             address = self._input("Enter pairing address (IP:PORT): ").strip()
