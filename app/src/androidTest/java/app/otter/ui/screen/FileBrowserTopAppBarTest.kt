@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.ResourcePath
@@ -34,22 +35,25 @@ class FileBrowserTopAppBarTest {
         onExitSelectionMode: () -> Unit = {},
         onSelectAll: () -> Unit = {},
         onExtractSelected: () -> Unit = {},
-        onToggleFilter: () -> Unit = {},
+        onCommitCategoryFilters: (Map<app.otter.domain.model.FileCategory, app.otter.domain.model.FileCategoryFilterState>) -> Unit = {},
         onCycleSortOrder: () -> Unit = {},
         onRefresh: () -> Unit = {},
+        onOpenSettings: () -> Unit = {},
     ) {
         composeTestRule.setContent {
             OtterTheme {
                 FileBrowserTopAppBar(
                     uiState = uiState,
+                    defaultFilterCategories = emptyMap(),
                     onExtractAllVisible = onExtractAllVisible,
                     onNavigateUp = onNavigateUp,
                     onExitSelectionMode = onExitSelectionMode,
                     onSelectAll = onSelectAll,
                     onExtractSelected = onExtractSelected,
-                    onToggleFilter = onToggleFilter,
+                    onCommitCategoryFilters = onCommitCategoryFilters,
                     onCycleSortOrder = onCycleSortOrder,
-                    onRefresh = onRefresh
+                    onRefresh = onRefresh,
+                    onOpenSettings = onOpenSettings
                 )
             }
         }
@@ -156,5 +160,29 @@ class FileBrowserTopAppBarTest {
         setBar(successState(canNavigateUp = true))
 
         composeTestRule.onNodeWithContentDescription("Navigate up").assertIsEnabled()
+    }
+
+    @Test
+    fun settingsIcon_isDisplayedInNormalMode() {
+        setBar(successState())
+
+        composeTestRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
+    }
+
+    @Test
+    fun settingsIcon_click_invokesOnOpenSettings() {
+        var opened = false
+        setBar(successState(), onOpenSettings = { opened = true })
+
+        composeTestRule.onNodeWithContentDescription("Settings").performClick()
+
+        org.junit.Assert.assertTrue(opened)
+    }
+
+    @Test
+    fun settingsIcon_hiddenInSelectionMode() {
+        setBar(successState(isSelectionMode = true))
+
+        composeTestRule.onNodeWithContentDescription("Settings").assertDoesNotExist()
     }
 }

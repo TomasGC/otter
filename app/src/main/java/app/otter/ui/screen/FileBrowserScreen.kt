@@ -71,11 +71,13 @@ import app.otter.data.util.ResourcePathConverter
 @Composable
 fun FileBrowserScreen(
     initialArchiveUri: Uri? = null,
+    onOpenSettings: () -> Unit = {},
     viewModel: FileBrowserViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val folderCounts by viewModel.folderCounts.collectAsStateWithLifecycle()
+    val defaultCategoryFilters by viewModel.defaultCategoryFilters.collectAsStateWithLifecycle()
 
     // Navigate directly into archive when opened with "Open with Browser"
     LaunchedEffect(initialArchiveUri) {
@@ -109,6 +111,7 @@ fun FileBrowserScreen(
         topBar = {
             FileBrowserTopAppBar(
                 uiState = uiState,
+                defaultFilterCategories = defaultCategoryFilters,
                 onExtractAllVisible = {
                     val state = uiState as? FileBrowserUiState.Success
                     val archiveFiles = state?.items?.filterIsInstance<BrowsableItem.ArchiveFile>()
@@ -120,13 +123,13 @@ fun FileBrowserScreen(
                                 fileName = file.name
                             )
                         }
-                        viewModel.extractionQueue.enqueueAll(tasks)
+                        viewModel.extraction.extractionQueue.enqueueAll(tasks)
 
                         // Show extraction UI
                         viewModel.startExtraction(fileName = "${archiveFiles.size} files")
 
                         // Start processing queue
-                        viewModel.extractionQueue.processNext(context)
+                        viewModel.extraction.extractionQueue.processNext(context)
                     }
                 },
                 onNavigateUp = { viewModel.navigateUp() },
@@ -170,13 +173,13 @@ fun FileBrowserScreen(
                             }
                         }
 
-                        viewModel.extractionQueue.enqueueAll(tasks)
+                        viewModel.extraction.extractionQueue.enqueueAll(tasks)
                         viewModel.startExtraction(fileName = "${selectedPaths.size} items")
-                        viewModel.extractionQueue.processNext(context)
+                        viewModel.extraction.extractionQueue.processNext(context)
                         viewModel.exitSelectionMode()
                     }
                 },
-                onToggleFilter = { viewModel.toggleArchiveFilter() },
+                onCommitCategoryFilters = { filters -> viewModel.applyCategoryFilterOverride(filters) },
                 onCycleSortOrder = {
                     val state = uiState as? FileBrowserUiState.Success
                     val currentOrder = state?.sortOrder ?: SortOrder.ARCHIVES_FIRST
@@ -189,7 +192,8 @@ fun FileBrowserScreen(
                     }
                     viewModel.setSortOrder(nextOrder)
                 },
-                onRefresh = { viewModel.refresh() }
+                onRefresh = { viewModel.refresh() },
+                onOpenSettings = onOpenSettings
             )
         }
     ) { paddingValues ->
@@ -200,7 +204,7 @@ fun FileBrowserScreen(
         ) {
             FileBrowserContent(
                 uiState = uiState,
-                eventBus = viewModel.eventBus,
+                eventBus = viewModel.extraction.eventBus,
                 isFileSelected = { file -> viewModel.isFileSelected(file) },
                 onMoveExtractionToBackground = { viewModel.moveExtractionToBackground() },
                 onScrollPositionChanged = { firstVisibleIndex -> viewModel.onScrollPositionChanged(firstVisibleIndex) },

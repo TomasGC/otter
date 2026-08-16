@@ -7,9 +7,11 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.otter.domain.model.ResourcePath
 import app.otter.domain.usecase.BrowseItemsUseCase
+import app.otter.domain.usecase.BrowsingUseCases
 import app.otter.domain.usecase.GetFolderCountsUseCase
 import app.otter.domain.usecase.helpers.ArchiveNavigationTestHelper
 import app.otter.domain.usecase.helpers.BaseInstrumentedTest
+import app.otter.service.ExtractionCoordinator
 import app.otter.service.ExtractionEventBus
 import app.otter.service.ExtractionQueue
 import app.otter.ui.theme.OtterTheme
@@ -54,10 +56,8 @@ class FileBrowserScrollStressTest : BaseInstrumentedTest() {
 
         val archivePath = ArchiveNavigationTestHelper.getArchivePath("large_test_archive.zip")
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase = browseItemsUseCase,
-            getFolderCountsUseCase = getFolderCountsUseCase,
-            eventBus = ExtractionEventBus(),
-            extractionQueue = ExtractionQueue()
+            browsingUseCases = BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
+            extraction = ExtractionCoordinator(ExtractionEventBus(), ExtractionQueue())
         )
         viewModel.navigateToPath(ResourcePath.ArchiveEntry(archivePath, "bulk"))
     }

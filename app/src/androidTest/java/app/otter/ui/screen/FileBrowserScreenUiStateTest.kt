@@ -12,7 +12,9 @@ import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.ResourcePath
 import app.otter.domain.usecase.BrowseItemsUseCase
+import app.otter.domain.usecase.BrowsingUseCases
 import app.otter.domain.usecase.GetFolderCountsUseCase
+import app.otter.service.ExtractionCoordinator
 import app.otter.service.ExtractionEventBus
 import app.otter.service.ExtractionQueue
 import app.otter.ui.theme.OtterTheme
@@ -58,11 +60,9 @@ class FileBrowserScreenUiStateTest {
         )
 
         val viewModel = FileBrowserViewModel(
-            browseItemsUseCase = mockUseCase,
-            getFolderCountsUseCase = mockFolderCountsUseCase,
+            browsingUseCases = BrowsingUseCases(mockUseCase, mockFolderCountsUseCase),
             ioDispatcher = testDispatcher,
-            eventBus = ExtractionEventBus(),
-            extractionQueue = ExtractionQueue()
+            extraction = ExtractionCoordinator(ExtractionEventBus(), ExtractionQueue())
         )
 
         composeTestRule.setContent {
@@ -86,11 +86,9 @@ class FileBrowserScreenUiStateTest {
         )
 
         val viewModel = FileBrowserViewModel(
-            browseItemsUseCase = mockUseCase,
-            getFolderCountsUseCase = mockFolderCountsUseCase,
+            browsingUseCases = BrowsingUseCases(mockUseCase, mockFolderCountsUseCase),
             ioDispatcher = testDispatcher,
-            eventBus = ExtractionEventBus(),
-            extractionQueue = ExtractionQueue()
+            extraction = ExtractionCoordinator(ExtractionEventBus(), ExtractionQueue())
         )
 
         composeTestRule.setContent {
@@ -139,11 +137,9 @@ class FileBrowserScreenUiStateTest {
         every { extractionQueue.processNext(any()) } returns false
 
         val viewModel = FileBrowserViewModel(
-            browseItemsUseCase = mockUseCase,
-            getFolderCountsUseCase = mockFolderCountsUseCase,
+            browsingUseCases = BrowsingUseCases(mockUseCase, mockFolderCountsUseCase),
             ioDispatcher = testDispatcher,
-            eventBus = ExtractionEventBus(),
-            extractionQueue = extractionQueue
+            extraction = ExtractionCoordinator(ExtractionEventBus(), extractionQueue)
         )
 
         composeTestRule.setContent {
@@ -170,11 +166,9 @@ class FileBrowserScreenUiStateTest {
         coEvery { mockUseCase.invoke(any(), any(), any()) } coAnswers { neverCompletes.await() }
 
         val viewModel = FileBrowserViewModel(
-            browseItemsUseCase = mockUseCase,
-            getFolderCountsUseCase = mockFolderCountsUseCase,
+            browsingUseCases = BrowsingUseCases(mockUseCase, mockFolderCountsUseCase),
             ioDispatcher = testDispatcher,
-            eventBus = ExtractionEventBus(),
-            extractionQueue = ExtractionQueue()
+            extraction = ExtractionCoordinator(ExtractionEventBus(), ExtractionQueue())
         )
 
         composeTestRule.setContent {
@@ -222,11 +216,9 @@ class FileBrowserScreenUiStateTest {
         )
 
         val viewModel = FileBrowserViewModel(
-            browseItemsUseCase = mockUseCase,
-            getFolderCountsUseCase = mockFolderCountsUseCase,
+            browsingUseCases = BrowsingUseCases(mockUseCase, mockFolderCountsUseCase),
             ioDispatcher = testDispatcher,
-            eventBus = ExtractionEventBus(),
-            extractionQueue = ExtractionQueue()
+            extraction = ExtractionCoordinator(ExtractionEventBus(), ExtractionQueue())
         )
 
         composeTestRule.setContent {
@@ -251,11 +243,9 @@ class FileBrowserScreenUiStateTest {
         )
 
         val viewModel = FileBrowserViewModel(
-            browseItemsUseCase = mockUseCase,
-            getFolderCountsUseCase = mockFolderCountsUseCase,
+            browsingUseCases = BrowsingUseCases(mockUseCase, mockFolderCountsUseCase),
             ioDispatcher = testDispatcher,
-            eventBus = ExtractionEventBus(),
-            extractionQueue = ExtractionQueue()
+            extraction = ExtractionCoordinator(ExtractionEventBus(), ExtractionQueue())
         )
 
         composeTestRule.setContent {
@@ -290,11 +280,9 @@ class FileBrowserScreenUiStateTest {
         )
 
         val viewModel = FileBrowserViewModel(
-            browseItemsUseCase = mockUseCase,
-            getFolderCountsUseCase = mockFolderCountsUseCase,
+            browsingUseCases = BrowsingUseCases(mockUseCase, mockFolderCountsUseCase),
             ioDispatcher = testDispatcher,
-            eventBus = ExtractionEventBus(),
-            extractionQueue = ExtractionQueue()
+            extraction = ExtractionCoordinator(ExtractionEventBus(), ExtractionQueue())
         )
 
         composeTestRule.setContent {

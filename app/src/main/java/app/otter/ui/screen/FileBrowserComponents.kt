@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,17 +31,24 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.otter.domain.model.BrowsableItem
+import app.otter.domain.model.FileCategory
+import app.otter.domain.model.FileCategoryFilterState
 import app.otter.domain.model.FolderCounts
 import app.otter.domain.model.ResourcePath
 import app.otter.service.ExtractionEventBus
 import app.otter.ui.component.BrowsableItemRow
 import app.otter.ui.component.ExtractionScreen
+import app.otter.ui.component.FileTypeFilterPopup
 import app.otter.ui.viewmodel.FileBrowserUiState
 import app.otter.ui.viewmodel.SortOrder
 
@@ -51,14 +59,16 @@ import app.otter.ui.viewmodel.SortOrder
 @Composable
 fun FileBrowserTopAppBar(
     uiState: FileBrowserUiState,
+    defaultFilterCategories: Map<FileCategory, FileCategoryFilterState>,
     onExtractAllVisible: () -> Unit,
     onNavigateUp: () -> Unit,
     onExitSelectionMode: () -> Unit,
     onSelectAll: () -> Unit,
     onExtractSelected: () -> Unit,
-    onToggleFilter: () -> Unit,
+    onCommitCategoryFilters: (Map<FileCategory, FileCategoryFilterState>) -> Unit,
     onCycleSortOrder: () -> Unit,
     onRefresh: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     TopAppBar(
         title = {
@@ -119,14 +129,12 @@ fun FileBrowserTopAppBar(
                     )
                 }
             } else {
-                // Filter archives only
-                val isFilterActive = state?.filterArchivesOnly == true
+                val currentFilters = state?.categoryFilters ?: emptyMap()
+                val isFilterActive = currentFilters.isNotEmpty()
 
                 // Extract All button (only when browsing archive)
-                val isInArchive = state?.let { st ->
-                    (st as? FileBrowserUiState.Success)?.let { success ->
-                        success.items.any { it is BrowsableItem.ArchiveFileEntry || it is BrowsableItem.ArchiveDirectory }
-                    } ?: false
+                val isInArchive = state?.items?.any {
+                    it is BrowsableItem.ArchiveFileEntry || it is BrowsableItem.ArchiveDirectory
                 } ?: false
                 if (isInArchive) {
                     IconButton(onClick = onExtractAllVisible) {
@@ -137,10 +145,11 @@ fun FileBrowserTopAppBar(
                     }
                 }
 
-                IconButton(onClick = onToggleFilter) {
+                var filterPopupExpanded by remember { mutableStateOf(false) }
+                IconButton(onClick = { filterPopupExpanded = true }) {
                     Icon(
                         imageVector = Icons.Default.FilterList,
-                        contentDescription = "Filter archives only",
+                        contentDescription = "File type filter",
                         tint = if (isFilterActive) {
                             MaterialTheme.colorScheme.primary
                         } else {
@@ -148,6 +157,15 @@ fun FileBrowserTopAppBar(
                         }
                     )
                 }
+                FileTypeFilterPopup(
+                    expanded = filterPopupExpanded,
+                    currentFilters = currentFilters,
+                    defaultFilters = defaultFilterCategories,
+                    onDismiss = { staged ->
+                        filterPopupExpanded = false
+                        onCommitCategoryFilters(staged)
+                    }
+                )
 
                 // Sort options
                 IconButton(onClick = onCycleSortOrder) {
@@ -162,6 +180,14 @@ fun FileBrowserTopAppBar(
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = "Refresh"
+                    )
+                }
+
+                // Settings
+                IconButton(onClick = onOpenSettings) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings"
                     )
                 }
             }
