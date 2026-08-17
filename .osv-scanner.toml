@@ -79,3 +79,9 @@ name = "org.jdom:jdom2"
 ecosystem = "Maven"
 ignore = true
 reason = "AGP/Gradle XML parsing library, not shipped in APK"
+
+[[PackageOverrides]]
+name = "org.jetbrains.kotlin:kotlin-gradle-plugin"
+ecosystem = "Maven"
+ignore = true
+reason = "Build-tool dependency, not shipped in APK. GHSA-r937-wjx7-w2jp (CVE-2026-53914, Medium, local-attack-vector-only build-cache deserialization) has no stable fix yet - fix version 2.4.20-Beta1 is a pre-release that breaks Hilt/kapt annotation processing (kotlinx-metadata-jvm version mismatch). Revisit once Kotlin ships a stable 2.4.20+ release and Hilt/Dagger supports its metadata format."
