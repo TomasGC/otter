@@ -1,7 +1,7 @@
 # Design Patterns - Otter
 
 **Purpose**: Design patterns and SOLID principles applied in the Otter codebase
-**Last Updated**: 2026-06-29
+**Last Updated**: 2026-08-17
 
 ---
 
@@ -19,6 +19,8 @@
 10. **Strategy Pattern** - Multiple extractors (ZIP, RAR, 7z, TAR, GZIP, RPA) implementing same interface
 11. **Foreground Service** - Background work with user-visible notifications
 12. **Observer Pattern** - Progress callbacks with throttling
+13. **Facade Pattern (BrowsingUseCases, ExtractionCoordinator)** - Group related dependencies to keep constructor parameter counts in check
+14. **Property Delegate Singleton (Context.settingsDataStore)** - Guarantee a single DataStore instance per file across the process
 
 ---
 
@@ -169,6 +171,48 @@ classDiagram
 - `ExtractionLogger` — Logging with throttling
 - `SevenZipExtractorHelper` — 7-Zip extraction logic
 - `ProgressCalculator` — Progress calculation strategies
+
+---
+
+## Facade Pattern for Constructor Parameter Counts (Issue #37)
+
+`FileBrowserViewModel`'s constructor grew past detekt's `LongParameterList` threshold as settings support was wired in. Rather than raising the threshold, related dependencies were grouped into facades:
+
+```kotlin
+data class BrowsingUseCases(
+    val browseItems: BrowseItemsUseCase,
+    val getFolderCounts: GetFolderCountsUseCase
+)
+
+data class ExtractionCoordinator(
+    val eventBus: ExtractionEventBus,
+    val extractionQueue: ExtractionQueue
+)
+```
+
+**Benefits**:
+- Reduces constructor parameter count without weakening the type system (`Any`, loose maps) or suppressing the lint rule
+- Groups genuinely related collaborators — each facade answers "what does this ViewModel need to browse" / "what does it need to coordinate extraction", not an arbitrary bucket
+- New settings-related dependencies (`SettingsRepository`) stayed as a direct constructor parameter rather than forcing them into an unrelated facade — grouping is by cohesion, not by "reduce the count at any cost"
+
+---
+
+## Property Delegate Singleton for DataStore (Issue #37)
+
+A `@Provides` method that calls `PreferenceDataStoreFactory.create()` directly can produce two live `DataStore` instances backed by the same file if Hilt resolves the provider more than once in certain scopes, crashing with "There are multiple DataStores active for this file". Fixed via the standard Jetpack `preferencesDataStore` property delegate, which guarantees a single instance per file across the process:
+
+```kotlin
+private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "user_settings")
+
+@Provides
+@Singleton
+fun provideSettingsDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
+    context.settingsDataStore
+```
+
+**Benefits**:
+- The delegate, not the DI container, owns instance uniqueness — safe regardless of how many times Hilt calls the provider
+- Same pattern applies to any future DataStore-backed repository in the app
 
 ---
 
