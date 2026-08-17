@@ -1,6 +1,8 @@
 package app.otter.ui.viewmodel
 
 import app.otter.domain.model.BrowseResult
+import app.otter.domain.usecase.BrowsingUseCases
+import app.otter.service.ExtractionCoordinator
 import io.mockk.coEvery
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -38,11 +40,9 @@ class FileBrowserViewModelCacheExpansionTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -86,11 +86,9 @@ class FileBrowserViewModelCacheExpansionTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -120,11 +118,9 @@ class FileBrowserViewModelCacheExpansionTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -167,11 +163,9 @@ class FileBrowserViewModelCacheExpansionTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel and scroll to end
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -213,11 +207,9 @@ class FileBrowserViewModelCacheExpansionTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )

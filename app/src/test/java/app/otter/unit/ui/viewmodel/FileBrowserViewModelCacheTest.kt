@@ -2,6 +2,8 @@ package app.otter.ui.viewmodel
 
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
+import app.otter.domain.usecase.BrowsingUseCases
+import app.otter.service.ExtractionCoordinator
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -34,11 +36,9 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel (which will browse and populate cache)
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -60,11 +60,9 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -85,11 +83,9 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -114,11 +110,9 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -143,11 +137,9 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -169,11 +161,9 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
@@ -196,11 +186,9 @@ class FileBrowserViewModelCacheTest : BaseFileBrowserViewModelTest() {
 
         // Act - Create ViewModel
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase,
-            getFolderCountsUseCase,
+            BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
             testDispatcher,
-            eventBus,
-            extractionQueue
+            ExtractionCoordinator(eventBus, extractionQueue)
         ,
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )

@@ -26,6 +26,11 @@ import app.otter.domain.repository.ArchiveRepository
 import app.otter.domain.repository.ItemBrowserRepository
 import app.otter.domain.usecase.BrowseItemsUseCase
 import app.otter.domain.usecase.ExtractArchiveUseCase
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStore
+import app.otter.data.repository.DataStoreSettingsRepository
+import app.otter.domain.repository.SettingsRepository
 import app.otter.util.PathValidator
 import dagger.Module
 import dagger.Provides
@@ -102,4 +107,19 @@ object AppModule {
         inspectorFactory: ArchiveInspectorFactory
     ): ItemBrowserRepository =
         ItemBrowserRepositoryImpl(fileSystemBrowser, inspectorFactory)
+
+    @Provides
+    @Singleton
+    fun provideSettingsDataStore(context: Context): DataStore<Preferences> =
+        context.settingsDataStore
+
+    @Provides
+    @Singleton
+    fun provideSettingsRepository(dataStore: DataStore<Preferences>): SettingsRepository =
+        DataStoreSettingsRepository(dataStore)
 }
+
+// Property delegate deduplicates DataStore instances per Context+name at the process level,
+// independent of Hilt's own singleton scoping — the recommended way to avoid "multiple
+// DataStores active for the same file" if the @Provides method is ever invoked more than once.
+private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "user_settings")

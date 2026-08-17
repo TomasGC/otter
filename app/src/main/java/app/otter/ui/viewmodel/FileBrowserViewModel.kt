@@ -9,9 +9,12 @@ import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.FolderCounts
 import app.otter.domain.model.ResourcePath
-import app.otter.domain.usecase.BrowseItemsUseCase
-import app.otter.domain.usecase.GetFolderCountsUseCase
-import app.otter.service.ExtractionEventBus
+import app.otter.domain.usecase.BrowsingUseCases
+import app.otter.domain.model.FileCategory
+import app.otter.domain.model.FileCategoryFilterState
+import app.otter.domain.model.UserSettings
+import app.otter.domain.repository.SettingsRepository
+import app.otter.service.ExtractionCoordinator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +22,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -32,17 +36,19 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class FileBrowserViewModel @Inject constructor(
-    private val browseItemsUseCase: BrowseItemsUseCase,
-    private val getFolderCountsUseCase: GetFolderCountsUseCase,
+    private val browsingUseCases: BrowsingUseCases,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    val eventBus: ExtractionEventBus,
-    val extractionQueue: app.otter.service.ExtractionQueue,
+    val extraction: ExtractionCoordinator,
+    private val settingsRepository: SettingsRepository = NoOpSettingsRepository,
     startPath: ResourcePath? = null,
 ) : ViewModel() {
 
     companion object {
-        const val HALF_WINDOW = 100   // items kept before and after current position
-        const val LOAD_TRIGGER = 60   // load next/prev when within this many items of the cache edge
+        const val DEFAULT_HALF_WINDOW = 100   // items kept before and after current position
+        const val DEFAULT_LOAD_TRIGGER = 60   // load next/prev when within this many items of the cache edge
+        private const val LOAD_TRIGGER_RATIO = 0.6
+
+        private fun computeLoadTrigger(halfWindow: Int): Int = (halfWindow * LOAD_TRIGGER_RATIO).toInt()
 
         // Natural sort comparator: "file_2" < "file_10" (not "file_10" < "file_2")
         val NATURAL_ORDER: Comparator<String> = Comparator { a, b ->
@@ -85,7 +91,11 @@ class FileBrowserViewModel @Inject constructor(
     private val navigationStack = Stack<ResourcePath>()
     private var currentPath: ResourcePath = startPath ?: getDefaultStartPath()
     private var allItems: List<BrowsableItem> = emptyList()
-    private var filterArchivesOnly: Boolean = false
+    private var halfWindow: Int = DEFAULT_HALF_WINDOW
+    private var loadTrigger: Int = DEFAULT_LOAD_TRIGGER
+    private val _defaultCategoryFilters = MutableStateFlow<Map<FileCategory, FileCategoryFilterState>>(emptyMap())
+    val defaultCategoryFilters: StateFlow<Map<FileCategory, FileCategoryFilterState>> = _defaultCategoryFilters.asStateFlow()
+    private var sessionCategoryOverride: Map<FileCategory, FileCategoryFilterState>? = null
     private var sortOrder: SortOrder = SortOrder.ARCHIVES_FIRST
     private var isSelectionMode: Boolean = false
     private val selectedFiles = mutableSetOf<ResourcePath>()
@@ -111,6 +121,23 @@ class FileBrowserViewModel @Inject constructor(
     init {
         navigationStack.push(currentPath)
         browseDirectory(currentPath)
+        viewModelScope.launch {
+            settingsRepository.settings.collect { settings ->
+                halfWindow = settings.cacheWindowSize
+                loadTrigger = computeLoadTrigger(halfWindow)
+                val previousDefault = _defaultCategoryFilters.value
+                _defaultCategoryFilters.value = settings.fileCategoryFilters
+                // A persisted default change always wins over an active session override —
+                // editing Settings mid-session replaces whatever temporary filter was picked
+                // from the popup, it does not just get silently ignored for the rest of the app run.
+                if (sessionCategoryOverride != null && settings.fileCategoryFilters != previousDefault) {
+                    sessionCategoryOverride = null
+                }
+                if (_uiState.value is FileBrowserUiState.Success) {
+                    applyFilterAndSort()
+                }
+            }
+        }
     }
 
 
@@ -132,11 +159,31 @@ class FileBrowserViewModel @Inject constructor(
 
 
     /**
-     * Toggles archive-only filter.
+     * Replaces the session-scoped category filter override (committed when the filter
+     * popup is dismissed, or called directly). Pass an empty map to clear all filtering.
      */
-    fun toggleArchiveFilter() {
-        filterArchivesOnly = !filterArchivesOnly
+    fun applyCategoryFilterOverride(filters: Map<FileCategory, FileCategoryFilterState>) {
+        sessionCategoryOverride = filters
         applyFilterAndSort()
+    }
+
+    private fun effectiveCategoryFilters(): Map<FileCategory, FileCategoryFilterState> =
+        sessionCategoryOverride ?: _defaultCategoryFilters.value
+
+    private fun categoryOf(item: BrowsableItem): FileCategory? = when (item) {
+        is BrowsableItem.FileSystemFile -> FileCategory.forMimeType(item.mimeType)
+        is BrowsableItem.ArchiveFileEntry -> FileCategory.forMimeType(item.mimeType)
+        is BrowsableItem.ArchiveFile -> FileCategory.forMimeType(item.mimeType)
+        is BrowsableItem.FileSystemDirectory, is BrowsableItem.ArchiveDirectory -> null
+    }
+
+    private fun matchesCategoryFilter(item: BrowsableItem): Boolean {
+        val category = categoryOf(item) ?: return true
+        val filters = effectiveCategoryFilters()
+        val includeSet = filters.filterValues { it == FileCategoryFilterState.INCLUDE }.keys
+        if (includeSet.isNotEmpty()) return category in includeSet
+        val excludeSet = filters.filterValues { it == FileCategoryFilterState.EXCLUDE }.keys
+        return category !in excludeSet
     }
 
     /**
@@ -274,7 +321,7 @@ class FileBrowserViewModel @Inject constructor(
     internal suspend fun loadAllItemsInCurrentDirectory(): List<BrowsableItem> {
         return if (isPaginated) {
             // Load ALL items from current directory (not just cache)
-            browseItemsUseCase(currentPath, offset = 0, limit = Int.MAX_VALUE)
+            browsingUseCases.browseItems(currentPath, offset = 0, limit = Int.MAX_VALUE)
                 .getOrNull()?.items ?: emptyList()
         } else {
             allItems
@@ -310,13 +357,24 @@ class FileBrowserViewModel @Inject constructor(
         val minCached = cachedItems.keys.minOrNull() ?: absoluteIndex
         val maxCached = cachedItems.keys.maxOrNull() ?: absoluteIndex
 
+        // A category filter can thin the raw cache down to a short displayed list whose items
+        // sit far (in raw index) from the cache edges — e.g. all matches concentrated near the
+        // start of a large raw page. Raw-index proximity alone would then never trigger a load
+        // even though the user has scrolled to the end of what's currently visible, so also
+        // check proximity to the DISPLAYED list's own edges.
+        val displayedSize = lastDisplayedAbsoluteIndices.size
+        val nearDisplayedEnd = displayedSize > 0 && (displayedSize - 1 - firstVisibleItemIndex) < loadTrigger
+        val nearDisplayedStart = firstVisibleItemIndex < loadTrigger
+
         // Load NEXT: fewer than LOAD_TRIGGER items remain between current position and end of cache
-        if (maxCached - absoluteIndex < LOAD_TRIGGER && hasMore) {
+        // (by raw index or by displayed position)
+        if ((maxCached - absoluteIndex < loadTrigger || nearDisplayedEnd) && hasMore) {
             loadNextPage()
         }
 
         // Load PREVIOUS: fewer than LOAD_TRIGGER items remain between start of cache and current position
-        if (absoluteIndex - minCached < LOAD_TRIGGER && currentWindowStart > 0) {
+        // (by raw index or by displayed position)
+        if ((absoluteIndex - minCached < loadTrigger || nearDisplayedStart) && currentWindowStart > 0) {
             loadPreviousPage()
         }
 
@@ -334,7 +392,7 @@ class FileBrowserViewModel @Inject constructor(
 
         viewModelScope.launch {
             val result: Result<BrowseResult> = withContext(ioDispatcher) {
-                browseItemsUseCase(currentPath, offset = nextOffset, limit = 100)
+                browsingUseCases.browseItems(currentPath, offset = nextOffset, limit = 100)
             }
             // State mutations on Main thread — no race with cleanupCache
             result.onSuccess { browseResult ->
@@ -374,7 +432,7 @@ class FileBrowserViewModel @Inject constructor(
 
         viewModelScope.launch {
             val result: Result<BrowseResult> = withContext(ioDispatcher) {
-                browseItemsUseCase(currentPath, offset = offset, limit = 100)
+                browsingUseCases.browseItems(currentPath, offset = offset, limit = 100)
             }
             // State mutations on Main thread — no race with cleanupCache
             result.onSuccess { browseResult ->
@@ -398,8 +456,8 @@ class FileBrowserViewModel @Inject constructor(
     }
 
     private fun cleanupCache(center: Int) {
-        val keepStart = (center - HALF_WINDOW).coerceAtLeast(0)
-        val keepEnd = center + HALF_WINDOW
+        val keepStart = (center - halfWindow).coerceAtLeast(0)
+        val keepEnd = center + halfWindow
 
         // Remove items outside the ±HALF_WINDOW around current position.
         // Never remove from the back when hasMore=false — the archive end must stay reachable.
@@ -430,11 +488,7 @@ class FileBrowserViewModel @Inject constructor(
         // new position that swaps the window again, forever. LazyColumn is already lazy — it
         // only composes on-screen rows regardless of how many items are in the backing list — so
         // exposing the full ~2*HALF_WINDOW window costs nothing extra.
-        val filteredPairs = if (filterArchivesOnly) {
-            allSortedPairs.filter { (_, item) -> item is BrowsableItem.ArchiveFile }
-        } else {
-            allSortedPairs
-        }
+        val filteredPairs = allSortedPairs.filter { (_, item) -> matchesCategoryFilter(item) }
 
         // Kept as (rawIndex, item) pairs through sorting so the displayed position can be
         // mapped back to its raw cache index (see lastDisplayedAbsoluteIndices).
@@ -457,7 +511,7 @@ class FileBrowserViewModel @Inject constructor(
             items = sorted,
             currentPath = getCurrentPathDisplay(currentPath),
             canNavigateUp = canNavigateUp(),
-            filterArchivesOnly = filterArchivesOnly,
+            categoryFilters = effectiveCategoryFilters(),
             sortOrder = sortOrder,
             isSelectionMode = isSelectionMode,
             selectedCount = selectedFiles.size
@@ -475,7 +529,7 @@ class FileBrowserViewModel @Inject constructor(
 
         folderCountJob = viewModelScope.launch(ioDispatcher) {
             val paths = dirs.map { (it.path as ResourcePath.FileSystem).path }
-            getFolderCountsUseCase(paths).collect { (path, counts) ->
+            browsingUseCases.getFolderCounts(paths).collect { (path, counts) ->
                 _folderCounts.update { current -> current + (path to counts) }
             }
         }
@@ -495,7 +549,7 @@ class FileBrowserViewModel @Inject constructor(
             nextOffset = 0
             hasMore = true
 
-            browseItemsUseCase(path, offset = 0, limit = 100)
+            browsingUseCases.browseItems(path, offset = 0, limit = 100)
                 .onSuccess { result ->
                     when (result) {
                         is BrowseResult.Complete -> {
@@ -542,11 +596,7 @@ class FileBrowserViewModel @Inject constructor(
         }
 
         // For complete results, filter and sort all items
-        val filtered = if (filterArchivesOnly) {
-            allItems.filterIsInstance<BrowsableItem.ArchiveFile>()
-        } else {
-            allItems
-        }
+        val filtered = allItems.filter { matchesCategoryFilter(it) }
 
         val sorted = when (sortOrder) {
             SortOrder.ARCHIVES_FIRST -> filtered.sortedWith(
@@ -564,7 +614,7 @@ class FileBrowserViewModel @Inject constructor(
             items = sorted,
             currentPath = getCurrentPathDisplay(currentPath),
             canNavigateUp = canNavigateUp(),
-            filterArchivesOnly = filterArchivesOnly,
+            categoryFilters = effectiveCategoryFilters(),
             sortOrder = sortOrder,
             isSelectionMode = isSelectionMode,
             selectedCount = selectedFiles.size
@@ -604,7 +654,7 @@ sealed class FileBrowserUiState {
         val items: List<BrowsableItem>,
         val currentPath: String,
         val canNavigateUp: Boolean,
-        val filterArchivesOnly: Boolean = false,
+        val categoryFilters: Map<FileCategory, FileCategoryFilterState> = emptyMap(),
         val sortOrder: SortOrder = SortOrder.ARCHIVES_FIRST,
         val isSelectionMode: Boolean = false,
         val selectedCount: Int = 0,
@@ -617,6 +667,12 @@ sealed class FileBrowserUiState {
     data class Error(
         val message: String,
     ) : FileBrowserUiState()
+}
+
+private val NoOpSettingsRepository: SettingsRepository = object : SettingsRepository {
+    override val settings: kotlinx.coroutines.flow.Flow<UserSettings> = flowOf(UserSettings())
+    override suspend fun setCacheWindowSize(size: Int) {}
+    override suspend fun setFileCategoryFilter(category: FileCategory, state: FileCategoryFilterState?) {}
 }
 
 /**

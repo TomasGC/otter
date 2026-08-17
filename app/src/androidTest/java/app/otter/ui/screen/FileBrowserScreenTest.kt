@@ -8,12 +8,15 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.ResourcePath
 import app.otter.domain.usecase.BrowseItemsUseCase
+import app.otter.domain.usecase.BrowsingUseCases
 import app.otter.domain.usecase.GetFolderCountsUseCase
+import app.otter.service.ExtractionCoordinator
 import app.otter.service.ExtractionEventBus
 import app.otter.service.ExtractionQueue
 import app.otter.ui.theme.OtterTheme
@@ -69,11 +72,9 @@ class FileBrowserScreenTest {
         )
 
         viewModel = FileBrowserViewModel(
-            browseItemsUseCase = mockUseCase,
-            getFolderCountsUseCase = mockk(relaxed = true),
+            browsingUseCases = BrowsingUseCases(mockUseCase, mockk(relaxed = true)),
             ioDispatcher = testDispatcher,
-            eventBus = ExtractionEventBus(),
-            extractionQueue = ExtractionQueue()
+            extraction = ExtractionCoordinator(ExtractionEventBus(), ExtractionQueue())
         )
     }
 
@@ -194,7 +195,7 @@ class FileBrowserScreenTest {
     }
 
     @Test
-    fun toggleFilter_displaysOnlyArchives() {
+    fun categoryFilter_archiveIncludeDisplaysOnlyArchives() {
         composeTestRule.setContent {
             OtterTheme {
                 FileBrowserScreen(viewModel = viewModel)
@@ -202,9 +203,15 @@ class FileBrowserScreenTest {
         }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithContentDescription("Filter archives only").performClick()
+        // Open the filter popup, cycle Archive to INCLUDE, then dismiss (commits the override).
+        composeTestRule.onNodeWithContentDescription("File type filter").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Archive").performClick()
+        composeTestRule.waitForIdle()
+        Espresso.pressBack()
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("test.zip").assertIsDisplayed()
+        composeTestRule.onNodeWithText("document.txt").assertDoesNotExist()
     }
 }

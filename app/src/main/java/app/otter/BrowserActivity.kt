@@ -10,10 +10,16 @@ import android.os.Environment
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import app.otter.ui.screen.FileBrowserScreen
+import app.otter.ui.screen.SettingsScreen
 import app.otter.ui.theme.OtterTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -75,7 +81,16 @@ class BrowserActivity : ComponentActivity() {
 
         setContent {
             OtterTheme {
-                FileBrowserScreen(initialArchiveUri = archiveUri)
+                var showSettings by remember { mutableStateOf(false) }
+                BackHandler(enabled = showSettings) { showSettings = false }
+                if (showSettings) {
+                    SettingsScreen(onNavigateBack = { showSettings = false })
+                } else {
+                    FileBrowserScreen(
+                        initialArchiveUri = archiveUri,
+                        onOpenSettings = { showSettings = true }
+                    )
+                }
             }
         }
     }

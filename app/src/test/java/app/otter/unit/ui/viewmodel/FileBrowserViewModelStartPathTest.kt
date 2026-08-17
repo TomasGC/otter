@@ -3,6 +3,8 @@ package app.otter.ui.viewmodel
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.ResourcePath
+import app.otter.domain.usecase.BrowsingUseCases
+import app.otter.service.ExtractionCoordinator
 import io.mockk.coEvery
 import io.mockk.coVerify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -21,7 +23,10 @@ class FileBrowserViewModelStartPathTest : BaseFileBrowserViewModelTest() {
     }
 
     private fun createViewModel(startPath: ResourcePath) = FileBrowserViewModel(
-        browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue, startPath = startPath
+        BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase),
+        testDispatcher,
+        ExtractionCoordinator(eventBus, extractionQueue),
+        startPath = startPath
     )
 
     // ========== startPath routing ==========

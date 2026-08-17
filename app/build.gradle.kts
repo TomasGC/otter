@@ -16,8 +16,8 @@ android {
         applicationId = "app.otter"
         minSdk = 26
         targetSdk = 35
-        versionCode = 278
-        versionName = "0.0.278"
+        versionCode = 332
+        versionName = "0.0.332"
 
         testInstrumentationRunner = "app.otter.HiltTestRunner"
         vectorDrawables {
@@ -149,6 +149,9 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+
+    // DataStore Preferences - settings persistence
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // DocumentFile for accessing parent folder
     implementation("androidx.documentfile:documentfile:1.0.1")

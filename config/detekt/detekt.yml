@@ -66,6 +66,12 @@ coroutines:
 
 empty-blocks:
   active: true
+  EmptyFunctionBlock:
+    active: true
+    # Intentional no-op overrides of an interface contract (e.g. a default no-op
+    # SettingsRepository used before real settings are injected) are a legitimate
+    # pattern, not dead code.
+    ignoreOverridden: true
 
 exceptions:
   active: true

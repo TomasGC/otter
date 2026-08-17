@@ -6,7 +6,9 @@ import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
 import app.otter.domain.model.ResourcePath
 import app.otter.domain.usecase.BrowseItemsUseCase
+import app.otter.domain.usecase.BrowsingUseCases
 import app.otter.domain.usecase.GetFolderCountsUseCase
+import app.otter.service.ExtractionCoordinator
 import app.otter.service.ExtractionEventBus
 import app.otter.service.ExtractionQueue
 import app.otter.ui.viewmodel.FileBrowserUiState
@@ -76,7 +78,7 @@ class FileBrowserViewModelWindowMockIntegrationTest {
             }
         }
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase), testDispatcher, ExtractionCoordinator(eventBus, extractionQueue),
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
     }
@@ -145,7 +147,7 @@ class FileBrowserViewModelWindowMockIntegrationTest {
         // Window count ≤ 2 * HALF_WINDOW + page_size (one extra page may be loaded ahead)
         assertTrue("Displayed items should be present", state.items.isNotEmpty())
         assertTrue("Window should not exceed 2*HALF_WINDOW + 2*batch_size",
-            state.items.size <= 2 * FileBrowserViewModel.HALF_WINDOW + 200)
+            state.items.size <= 2 * FileBrowserViewModel.DEFAULT_HALF_WINDOW + 200)
     }
 
     @Test

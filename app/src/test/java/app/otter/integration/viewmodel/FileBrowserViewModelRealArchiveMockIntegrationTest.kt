@@ -7,9 +7,13 @@ import app.otter.data.inspector.ArchiveInspectorFactory
 import app.otter.data.util.ResourcePathConverter
 import app.otter.domain.model.BrowsableItem
 import app.otter.domain.model.BrowseResult
+import app.otter.domain.model.FileCategory
+import app.otter.domain.model.FileCategoryFilterState
 import app.otter.domain.model.ResourcePath
 import app.otter.domain.usecase.BrowseItemsUseCase
+import app.otter.domain.usecase.BrowsingUseCases
 import app.otter.domain.usecase.GetFolderCountsUseCase
+import app.otter.service.ExtractionCoordinator
 import app.otter.service.ExtractionEventBus
 import app.otter.service.ExtractionQueue
 import app.otter.ui.viewmodel.FileBrowserUiState
@@ -90,7 +94,7 @@ class FileBrowserViewModelRealArchiveMockIntegrationTest {
             }
         }
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase), testDispatcher, ExtractionCoordinator(eventBus, extractionQueue),
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
     }
@@ -242,12 +246,12 @@ class FileBrowserViewModelRealArchiveMockIntegrationTest {
         coEvery { browseItemsUseCase.invoke(any(), any(), any()) } returns
             Result.success(BrowseResult.Complete(listOf(dirItem, archiveItem, fileItem)))
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase), testDispatcher, ExtractionCoordinator(eventBus, extractionQueue),
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
 
-        // Apply archives-only filter
-        viewModel.toggleArchiveFilter()
+        // Apply ARCHIVE-only category filter
+        viewModel.applyCategoryFilterOverride(mapOf(FileCategory.ARCHIVE to FileCategoryFilterState.INCLUDE))
 
         val state = successState()!!
         assertTrue("Archives-only filter must keep at least one archive", state.items.isNotEmpty())
@@ -279,7 +283,7 @@ class FileBrowserViewModelRealArchiveMockIntegrationTest {
         coEvery { browseItemsUseCase.invoke(any(), any(), any()) } returns
             Result.success(BrowseResult.Complete(numericItems))
 
-        viewModel = FileBrowserViewModel(browseItemsUseCase, getFolderCountsUseCase, testDispatcher, eventBus, extractionQueue,
+        viewModel = FileBrowserViewModel(BrowsingUseCases(browseItemsUseCase, getFolderCountsUseCase), testDispatcher, ExtractionCoordinator(eventBus, extractionQueue),
             startPath = ResourcePath.FileSystem("/storage/emulated/0")
         )
         viewModel.setSortOrder(app.otter.ui.viewmodel.SortOrder.NAME_ASC)
