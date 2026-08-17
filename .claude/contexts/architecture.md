@@ -1,7 +1,7 @@
 # Project Architecture - Otter (Android Archive Extractor)
 
 **Purpose**: System architecture and design decisions for Otter (ZIP + RAR + 7z + TAR + RPA extraction with background service)
-**Last Updated**: 2026-08-06
+**Last Updated**: 2026-08-17
 
 ---
 
@@ -26,6 +26,7 @@
 | **RPA Extraction** | Custom (RpaPickleParser) | Ren'Py Archive (binary protocol 2) |
 | **Archive Inspection** | ZipInspector, RpaInspector, TarInspector, GzipInspector, SevenZipBasedInspector | Lazy streaming entry enumeration for all supported formats |
 | **Background Work** | Foreground Service + ExtractionQueue | Progress notifications, FIFO queue |
+| **Settings Persistence** | Jetpack DataStore Preferences | Cache window size + per-category filter map, `preferencesDataStore` property delegate |
 
 ---
 
@@ -468,6 +469,65 @@ FileBrowserViewModel.selectedItems
 
 ---
 
+## Settings Persistence (#37)
+
+### Domain Model
+
+```kotlin
+data class UserSettings(
+    val cacheWindowSize: Int = DEFAULT_CACHE_WINDOW_SIZE,
+    val fileCategoryFilters: Map<FileCategory, FileCategoryFilterState> = emptyMap()
+) {
+    companion object {
+        const val DEFAULT_CACHE_WINDOW_SIZE = 100
+        const val MIN_CACHE_WINDOW_SIZE = 50
+        const val MAX_CACHE_WINDOW_SIZE = 500
+    }
+}
+
+enum class FileCategory { IMAGE, VIDEO, AUDIO, DOCUMENT, SPREADSHEET, PRESENTATION, ARCHIVE, OTHER }
+enum class FileCategoryFilterState { INCLUDE, EXCLUDE }
+```
+
+`FileCategory.forMimeType()` shares its MIME-prefix lists with `FileTypeIconInfo` via the internal `MimeGroups` object (single source of truth for MIME classification).
+
+### DataStore-Backed Repository
+
+`SettingsRepository` (domain interface) is implemented by `DataStoreSettingsRepository`, backed by Jetpack DataStore Preferences. Wired into Hilt via a property-delegated `DataStore<Preferences>` instance:
+
+```kotlin
+private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "user_settings")
+```
+
+The `preferencesDataStore` delegate guarantees a single DataStore instance per file across the process — a raw `PreferenceDataStoreFactory.create()` call in a `@Provides` method can produce two live instances and crash with "multiple DataStores active for the same file". Malformed or legacy persisted category values fall back to unset (not a crash), and cache window size is clamped on both read and write, in the repository — the single source of truth.
+
+### Session Override vs. Persisted Default
+
+Category filtering has two layers in `FileBrowserViewModel`:
+- **`defaultCategoryFilters`** — a `StateFlow` that live-tracks `SettingsRepository.settings`
+- **`sessionCategoryOverride`** — a nullable `Map<FileCategory, FileCategoryFilterState>` set by the filter popup on the browsing screen (`null` = track the default live; non-null, including an empty map from "Clear" = a session-scoped override)
+
+**Rule**: a persisted default change always replaces an active session override, the moment it changes — the override never freezes permanently for the rest of the app run:
+
+```kotlin
+settingsRepository.settings.collect { settings ->
+    val previousDefault = _defaultCategoryFilters.value
+    _defaultCategoryFilters.value = settings.fileCategoryFilters
+    if (sessionCategoryOverride != null && settings.fileCategoryFilters != previousDefault) {
+        sessionCategoryOverride = null
+    }
+    ...
+}
+```
+
+Filter combine rule: if any category is `INCLUDE`, filtering is whitelist-mode (only those categories show); otherwise `EXCLUDE` entries are hidden. Folders are always visible regardless of filter state.
+
+### Cache Window Size
+
+`halfWindow`/`loadTrigger` (sliding-window cache constants, see Archive Browsing above) track `UserSettings.cacheWindowSize` live via the same settings collector, replacing the previous fixed `DEFAULT_HALF_WINDOW = 100` constant.
+
+---
+
 ## Security Model
 
 ### Path Traversal Protection
@@ -571,6 +631,8 @@ GitHub Actions with language-prefixed workflows (GitHub does not support subdire
 | `ViewModelModule` | `ViewModelComponent` | `startPath: ResourcePath?` — injectable initial navigation path (default `null` = file system root) |
 
 `ViewModelModule` uses `@Provides fun provideStartPath(): ResourcePath? = null` so the start path can be overridden in tests or future deep-link flows without touching `FileBrowserViewModel`.
+
+`AppModule` also provides the settings DataStore (`Context.settingsDataStore` property delegate → `DataStoreSettingsRepository`) and the `BrowsingUseCases`/`ExtractionCoordinator` facades (see Design Patterns doc) that `FileBrowserViewModel` depends on instead of their individual constituent types.
 
 ---
 

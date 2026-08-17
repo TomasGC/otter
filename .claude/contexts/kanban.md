@@ -4,6 +4,19 @@ Track of work sessions and completed tasks linked to GitHub issues.
 
 ---
 
+2026-08-17 - [#37] Settings Screen with Cache Size and File-Category Filtering
+- Added Settings screen with persisted cache-window-size slider (50-500) and tri-state (INCLUDE/EXCLUDE) per-category filter across 8 file categories, backed by DataStore-backed SettingsRepository
+- Added session-scoped filter popup on browsing screen (staged locally, committed on dismiss); a persisted default change always replaces an active session override, at any time
+- Introduced BrowsingUseCases + ExtractionCoordinator facades to keep FileBrowserViewModel's constructor param count in check as settings wiring was added
+- Hardened via 3 rounds of black-box test analysis: fixed a DataStore crash on malformed persisted values, unenforced cache-size bounds, and stuck pagination under a restrictive filter
+- Rewrote 15 WIP commits into 5 clean, reviewable commits before opening the PR; suppressed a pre-existing kotlin-gradle-plugin CVE with no stable fix (the fix version is a Kotlin beta that breaks Hilt/kapt annotation processing)
+- Comprehensive coverage across unit/integration-mock/instrumented tiers (95.5% line coverage)
+tags: #settings #datastore #viewmodel #testing #black-box-analysis #ci-cd
+Ref: https://github.com/TomasGC/otter/issues/37
+Commits: b7291f2, 0456210, 02e8428, 02ff782, f97f90a
+
+---
+
 2026-08-06 - [#36] File Type Icons and Folder Content Counts
 - Added file type icon differentiation: FileTypeIconInfo.kt maps MIME types to distinct icons (image, video, audio, PDF, code, archive, etc.)
 - Extended MimeTypeUtil with additional MIME type mappings
